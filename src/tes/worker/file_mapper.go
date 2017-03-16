@@ -1,4 +1,4 @@
-package tesTaskEngineWorker
+package worker
 
 import (
 	"fmt"
@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	pbe "tes/ga4gh"
+	"tes/util"
 )
 
 // FileMapper is responsible for mapping paths into a working directory on the
@@ -27,13 +28,13 @@ type FileMapper struct {
 // Volume represents a volume mounted into a docker container.
 // This includes a HostPath, the path on the host file system,
 // and a ContainerPath, the path on the container file system,
-// and the mode ("rw" = read-only, "ro" = read-write).
+// and whether the volume is read-only.
 type Volume struct {
 	// The path in tes worker.
 	HostPath string
 	// The path in Docker.
 	ContainerPath string
-	Mode          string
+	Readonly      bool
 }
 
 // NewJobFileMapper returns a new FileMapper configured to map files for a job.
@@ -45,37 +46,70 @@ func NewJobFileMapper(jobID string, baseDir string) *FileMapper {
 	dir := path.Join(baseDir, jobID)
 	// TODO error handling
 	dir, _ = filepath.Abs(dir)
-	return &FileMapper{dir: dir}
+	return &FileMapper{
+		Volumes: []Volume{},
+		Inputs:  []*pbe.TaskParameter{},
+		Outputs: []*pbe.TaskParameter{},
+		dir:     dir,
+	}
+}
+
+// MapTask adds all the volumes, inputs, and outputs in the given Task to the FileMapper.
+func (mapper *FileMapper) MapTask(task *pbe.Task) error {
+
+	// Add all the volumes to the mapper
+	for _, vol := range task.Resources.Volumes {
+		err := mapper.AddVolume(vol)
+		if err != nil {
+			return err
+		}
+	}
+
+	// Add all the inputs to the mapper
+	for _, input := range task.Inputs {
+		err := mapper.AddInput(input)
+		if err != nil {
+			return err
+		}
+	}
+
+	// Add all the outputs to the mapper
+	for _, output := range task.Outputs {
+		err := mapper.AddOutput(output)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 // AddVolume adds a mapped volume to the mapper. A corresponding Volume record
 // is added to mapper.Volumes.
 //
-// Currently, volumes are hard-coded to "rw" (read-write).
-//
 // If the volume paths are invalid or can't be mapped, an error is returned.
-func (mapper *FileMapper) AddVolume(source string, mountPoint string) error {
-	if source != "" {
-		return fmt.Errorf("Could not create a volume: 'source' is not supported for %s", source)
+func (mapper *FileMapper) AddVolume(vol *pbe.Volume) error {
+
+	if vol.Source != "" {
+		return fmt.Errorf("Could not create a volume: 'source' is not supported for %s", vol.Source)
 	}
-	if mountPoint == "" {
-		return fmt.Errorf("Could not create a volume: 'mountPoint' is required for %s", mountPoint)
+	if vol.MountPoint == "" {
+		return fmt.Errorf("Could not create a volume: 'mountPoint' is required for %s", vol.MountPoint)
 	}
 
-	hostPath, err := mapper.HostPath(mountPoint)
+	hostPath, err := mapper.HostPath(vol.MountPoint)
 	if err != nil {
 		return err
 	}
 
 	v := Volume{
 		HostPath:      hostPath,
-		ContainerPath: mountPoint,
-		// TODO should be read only?
-		Mode: "rw",
+		ContainerPath: vol.MountPoint,
+		Readonly:      vol.Readonly,
 	}
 
 	// Ensure that the volume directory exists on the host
-	perr := ensureDir(hostPath)
+	perr := util.EnsureDir(hostPath)
 	if perr != nil {
 		return perr
 	}
@@ -130,7 +164,7 @@ func (mapper *FileMapper) CreateHostFile(src string) (*os.File, error) {
 	if perr != nil {
 		return nil, perr
 	}
-	err := ensurePath(p)
+	err := util.EnsurePath(p)
 	if err != nil {
 		return nil, err
 	}
@@ -152,12 +186,13 @@ func (mapper *FileMapper) AddInput(input *pbe.TaskParameter) error {
 	if err != nil {
 		return err
 	}
+
 	// Require that the path be in a defined volume
-	if !mapper.IsInVolume(p) {
+	if _, ok := mapper.FindVolume(p); !ok {
 		return fmt.Errorf("Input path is required to be in a volume: %s", input.Path)
 	}
 
-	perr := ensurePath(p)
+	perr := util.EnsurePath(p)
 	if perr != nil {
 		return perr
 	}
@@ -183,13 +218,20 @@ func (mapper *FileMapper) AddOutput(output *pbe.TaskParameter) error {
 	if err != nil {
 		return err
 	}
+
+	vol, ok := mapper.FindVolume(p)
 	// Require that the path be in a defined volume
-	if !mapper.IsInVolume(p) {
+	if !ok {
 		return fmt.Errorf("Output path is required to be in a volume: %s", output.Path)
 	}
+
+	if vol.Readonly {
+		return fmt.Errorf("Output path is in read-only volume: %s", output.Path)
+	}
+
 	// Create the file if needed, as per the TES spec
 	if output.Create {
-		err := ensureFile(p, output.Class)
+		err := util.EnsureFile(p, output.Class)
 		if err != nil {
 			return err
 		}
@@ -206,12 +248,12 @@ func (mapper *FileMapper) IsSubpath(p string, base string) bool {
 	return strings.HasPrefix(p, base)
 }
 
-// IsInVolume checks whether a given path is in a mapped volume.
-func (mapper *FileMapper) IsInVolume(p string) bool {
+// FindVolume find the the volume that contains the given path.
+func (mapper *FileMapper) FindVolume(p string) (*Volume, bool) {
 	for _, vol := range mapper.Volumes {
 		if mapper.IsSubpath(p, vol.HostPath) {
-			return true
+			return &vol, true
 		}
 	}
-	return false
+	return nil, false
 }

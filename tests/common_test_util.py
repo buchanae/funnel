@@ -1,4 +1,3 @@
-
 import logging
 import os
 import py_tes
@@ -8,7 +7,10 @@ import subprocess
 import tempfile
 import time
 import unittest
+import requests
+import polling
 import yaml
+import docker
 
 
 S3_ENDPOINT = "localhost:9000"
@@ -49,6 +51,12 @@ def temp_config(config):
     return configFile
 
 
+def config_seconds(sec):
+    # The funnel config is currently parsed as nanoseconds
+    # this helper makes that manageale
+    return int(sec * 1000000000)
+
+
 class SimpleServerTest(unittest.TestCase):
 
     def setUp(self):
@@ -62,28 +70,40 @@ class SimpleServerTest(unittest.TestCase):
         os.mkdir(self.storage_dir)
 
         # Build server config file (YAML)
+        rate = config_seconds(0.05)
         configFile = temp_config({
             "ServerAddress": "localhost:9090",
             "DBPath": db_path,
             "WorkDir": "test_tmp",
             "Storage": [{
-                "local": {
-                    "allowed_dirs": [self.storage_dir]
+                "Local": {
+                    "AllowedDirs": [self.storage_dir]
                 }
-            }]
+            }],
+            "LogLevel": "debug",
+            "Worker": {
+                "Timeout": -1,
+                "StatusPollRate": rate,
+                "LogUpdateRate": rate,
+                "NewJobPollRate": rate,
+                "UpdateRate": rate,
+                "TrackerRate": rate,
+            },
+            "ScheduleRate": rate,
         })
 
         # Start server
         cmd = ["./bin/tes-server", "-config", configFile.name]
         logging.info("Running %s" % (" ".join(cmd)))
         self.task_server = popen(cmd)
-        time.sleep(3)
+        signal.signal(signal.SIGINT, self.cleanup)
+        time.sleep(1)
         self.tes = py_tes.TES("http://localhost:8000")
 
     # We're using this instead of tearDown because python doesn't call tearDown
     # if setUp fails. Since our setUp is complex, that means things don't get
     # properly cleaned up (e.g. processes are orphaned).
-    def cleanup(self):
+    def cleanup(self, *args):
         if self.task_server is not None:
             kill(self.task_server)
 
@@ -98,6 +118,47 @@ class SimpleServerTest(unittest.TestCase):
     def get_from_storage(self, loc):
         dst = os.path.join(self.storage_dir, loc)
         return dst
+
+    def wait_for_container(self, name, timeout=5):
+        dclient = docker.from_env()
+
+        def on_poll():
+            try:
+                dclient.containers.get(name)
+                return True
+            except:
+                return False
+        polling.poll(on_poll, timeout=timeout, step=0.1)
+
+    def wait_for_container_stop(self, name, timeout=5):
+        dclient = docker.from_env()
+
+        def on_poll():
+            try:
+                dclient.containers.get(name)
+                return False
+            except:
+                return True
+        polling.poll(on_poll, timeout=timeout, step=0.1)
+
+    def wait(self, key, timeout=5):
+        """
+        Waits for tes-wait to return <key>
+        """
+        def on_poll():
+            try:
+                r = requests.get("http://127.0.0.1:5000/")
+                return r.status_code == 200 and r.text == key
+            except requests.ConnectionError:
+                return False
+
+        polling.poll(on_poll, timeout=timeout, step=0.1)
+
+    def resume(self):
+        """
+        Continue from tes-wait
+        """
+        requests.get("http://127.0.0.1:5000/shutdown")
 
 
 class S3ServerTest(unittest.TestCase):
@@ -171,6 +232,8 @@ class S3ServerTest(unittest.TestCase):
             kill(self.s3_server)
             cmd = ["docker", "kill", "tes_minio_test"]
             logging.info("Running %s" % (" ".join(cmd)))
+
+            popen(cmd).communicate()
 
             cmd = ["docker", "rm", "-fv", "tes_minio_test"]
             logging.info("Running %s" % (" ".join(cmd)))

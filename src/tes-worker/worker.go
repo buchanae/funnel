@@ -2,70 +2,63 @@ package main
 
 import (
 	"flag"
+	"github.com/imdario/mergo"
 	"os"
-	"tes"
+	"tes/config"
 	"tes/logger"
-	worker "tes/worker"
-	"tes/worker/slot"
+	"tes/scheduler"
+	"tes/worker"
 )
 
 var log = logger.New("tes-worker")
 
 func main() {
-	config := worker.DefaultConfig()
-
-	var configArg string
-	flag.StringVar(&configArg, "config", "", "Config File")
-	flag.StringVar(&config.ID, "id", config.ID, "Worker ID")
-	flag.StringVar(&config.ServerAddress, "server-address", config.ServerAddress, "Server address")
-	flag.StringVar(&config.WorkDir, "work-dir", config.WorkDir, "Working Directory")
-	flag.IntVar(&config.Timeout, "timeout", config.Timeout, "Timeout in seconds")
-	flag.IntVar(&config.NumWorkers, "num-workers", config.NumWorkers, "Worker Count")
-	flag.StringVar(&config.LogPath, "log-path", config.LogPath, "File path to write logs to")
-
+	var cliconf config.Worker
+	var confArg string
+	flag.StringVar(&confArg, "config", "", "Config File")
+	flag.StringVar(&cliconf.ID, "id", cliconf.ID, "Worker ID")
+	flag.StringVar(&cliconf.ServerAddress, "server-address", cliconf.ServerAddress, "Server address")
+	flag.StringVar(&cliconf.WorkDir, "work-dir", cliconf.WorkDir, "Working Directory")
+	flag.DurationVar(&cliconf.Timeout, "timeout", cliconf.Timeout, "Timeout in seconds")
+	flag.StringVar(&cliconf.LogPath, "log-path", cliconf.LogPath, "File path to write logs to")
 	flag.Parse()
-	tes.LoadConfigOrExit(configArg, &config)
-	start(config)
+
+	dconf := config.DefaultConfig()
+	conf := config.WorkerDefaultConfig(dconf)
+	config.LoadConfigOrExit(confArg, &conf)
+
+	// file vals <- cli val
+	err := mergo.MergeWithOverwrite(&conf, cliconf)
+	if err != nil {
+		panic(err)
+	}
+
+	logger.SetLevel(conf.LogLevel)
+	start(conf)
 }
 
-func start(config worker.Config) {
-
+func start(conf config.Worker) {
 	// TODO Good defaults, configuration, and reusable way to configure logging.
 	//      Also, how do we get this to default to /var/log/tes/worker.log
 	//      without having file permission problems?
 	// Configure logging
-	if config.LogPath != "" {
-		logFile, err := os.OpenFile(config.LogPath, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
+	if conf.LogPath != "" {
+		logFile, err := os.OpenFile(conf.LogPath, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
 		if err != nil {
-			log.Error("Can't open log output file", "path", config.LogPath)
+			log.Error("Can't open log output file", "path", conf.LogPath)
 		} else {
 			logger.SetOutput(logFile)
 		}
 	}
 
-	// Create the job engine
-	eng, err := worker.NewEngine(config)
+	if conf.ID == "" {
+		conf.ID = scheduler.GenWorkerID()
+	}
+
+	w, err := worker.NewWorker(conf)
 	if err != nil {
-		log.Error("Couldn't create engine", err)
+		log.Error("Can't create worker", err)
 		return
 	}
-
-	// Configure the slot timeout
-	idleTimeout := slot.NoIdleTimeout()
-	if config.Timeout != -1 {
-		idleTimeout = slot.IdleTimeoutAfterSeconds(config.Timeout)
-	}
-
-	// Create the slot pool
-	slots := make([]*slot.Slot, config.NumWorkers)
-	p := slot.NewPool(slots, idleTimeout)
-
-	// Create the slots
-	for i := 0; i < config.NumWorkers; i++ {
-		// TODO handle error
-		slots[i], _ = slot.NewSlot(config.ID, config.ServerAddress, eng)
-	}
-
-	// Start the pool
-	p.Start()
+	w.Run()
 }

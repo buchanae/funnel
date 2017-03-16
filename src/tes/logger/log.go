@@ -4,12 +4,15 @@ import (
 	"fmt"
 	"github.com/Sirupsen/logrus"
 	"io"
+	"strings"
 )
 
+var formatter = &textFormatter{
+	DisableTimestamp: true,
+}
+
 func init() {
-	logrus.SetFormatter(&textFormatter{
-		DisableTimestamp: true,
-	})
+	logrus.SetFormatter(formatter)
 	// TODO hard-coded level
 	logrus.SetLevel(logrus.DebugLevel)
 }
@@ -20,6 +23,27 @@ type Logger interface {
 	Info(string, ...interface{})
 	Error(string, ...interface{})
 	WithFields(...interface{}) Logger
+}
+
+// SetLevel sets the level of logging
+func SetLevel(l string) {
+	switch strings.ToLower(l) {
+	case "debug":
+		logrus.SetLevel(logrus.DebugLevel)
+	case "info":
+		logrus.SetLevel(logrus.InfoLevel)
+	case "warn":
+		logrus.SetLevel(logrus.WarnLevel)
+	case "error":
+		logrus.SetLevel(logrus.ErrorLevel)
+	default:
+		logrus.SetLevel(logrus.InfoLevel)
+	}
+}
+
+// ForceColors forces the log output formatter to use color. Useful during testing.
+func ForceColors() {
+	formatter.ForceColors = true
 }
 
 // New returns a new Logger instance.
@@ -114,6 +138,10 @@ func recoverLogErr() {
 
 func fields(args ...interface{}) map[string]interface{} {
 	f := make(map[string]interface{}, len(args)/2)
+	if len(args) == 1 {
+		f["unknown"] = args[0]
+		return f
+	}
 	for i := 0; i < len(args); i += 2 {
 		k := args[i].(string)
 		v := args[i+1]

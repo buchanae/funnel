@@ -4,149 +4,361 @@ package server
 //      so that users can import pluggable backends
 
 import (
+	"errors"
 	"fmt"
 	"github.com/boltdb/bolt"
 	proto "github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
-	"tes/ga4gh"
-	"tes/server/proto"
+	pbe "tes/ga4gh"
+	pbr "tes/server/proto"
+	"time"
 )
 
-// GetJobToRun returns a queued job for a worker to run.
-// This is an RPC endpoint.
-// This is used by workers to request work.
-func (taskBolt *TaskBolt) GetJobToRun(ctx context.Context, request *ga4gh_task_ref.JobRequest) (*ga4gh_task_ref.JobResponse, error) {
-	var task *ga4gh_task_exec.Task
-	var jobID string
-	authToken := ""
+// State variables for convenience
+const (
+	Unknown      = pbe.State_Unknown
+	Queued       = pbe.State_Queued
+	Running      = pbe.State_Running
+	Paused       = pbe.State_Paused
+	Complete     = pbe.State_Complete
+	Error        = pbe.State_Error
+	SystemError  = pbe.State_SystemError
+	Canceled     = pbe.State_Canceled
+	Initializing = pbe.State_Initializing
+)
 
-	taskBolt.db.Update(func(tx *bolt.Tx) error {
-		bOp := tx.Bucket(TaskBucket)
-		bw := tx.Bucket(WorkerJobs)
-		authBkt := tx.Bucket(TaskAuthBucket)
-
-		k := bw.Get([]byte(request.Worker.Id))
-		if k != nil {
-			// Get the task
-			v := bOp.Get(k)
-			task = &ga4gh_task_exec.Task{}
-			jobID = string(k)
-			proto.Unmarshal(v, task)
-			// Update the job state to "Running"
-
-			// Look for an auth token related to this task
-			tok := authBkt.Get([]byte(k))
-			if tok != nil {
-				authToken = string(tok)
-			}
-		}
-		return nil
+// UpdateWorker is an RPC endpoint that is used by workers to send heartbeats
+// and status updates, such as completed jobs. The server responds with updated
+// information for the worker, such as canceled jobs.
+func (taskBolt *TaskBolt) UpdateWorker(ctx context.Context, req *pbr.Worker) (*pbr.UpdateWorkerResponse, error) {
+	err := taskBolt.db.Update(func(tx *bolt.Tx) error {
+		return updateWorker(tx, req)
 	})
-	// No task was found. Respond accordingly.
-	if task == nil {
-		return &ga4gh_task_ref.JobResponse{}, nil
-	}
-
-	job := &ga4gh_task_exec.Job{
-		JobID: jobID,
-		Task:  task,
-	}
-
-	return &ga4gh_task_ref.JobResponse{Job: job, Auth: authToken}, nil
+	resp := &pbr.UpdateWorkerResponse{}
+	return resp, err
 }
 
-// AssignJob assigns a job to a worker.
-// This is NOT an RPC endpoint.
-func (taskBolt *TaskBolt) AssignJob(id string, workerID string) error {
-	running := []byte(ga4gh_task_exec.State_Running.String())
-	taskBolt.db.Update(func(tx *bolt.Tx) error {
-		ba := tx.Bucket(JobsActive)
-		bc := tx.Bucket(JobsComplete)
-		bq := tx.Bucket(JobsQueued)
-		bw := tx.Bucket(WorkerJobs)
-		bjw := tx.Bucket(JobWorker)
-		k := []byte(id)
-		w := []byte(workerID)
-		bc.Delete(k)
-		bq.Delete(k)
-		ba.Put(k, running)
-		bjw.Put(k, w)
-		bw.Put(w, k)
-		return nil
-	})
+func updateWorker(tx *bolt.Tx, req *pbr.Worker) error {
+	// Get worker
+	worker := getWorker(tx, req.Id)
+
+	if worker.Version != 0 && req.Version != 0 && worker.Version != req.Version {
+		return errors.New("Version outdated")
+	}
+
+	worker.LastPing = time.Now().Unix()
+	worker.State = req.GetState()
+
+	if req.Resources != nil {
+		if worker.Resources == nil {
+			worker.Resources = &pbr.Resources{}
+		}
+		// Merge resources
+		if req.Resources.Cpus > 0 {
+			worker.Resources.Cpus = req.Resources.Cpus
+		}
+		if req.Resources.Ram > 0 {
+			worker.Resources.Ram = req.Resources.Ram
+		}
+		if req.Resources.Disk > 0 {
+			worker.Resources.Disk = req.Resources.Disk
+		}
+	}
+
+	// Reconcile worker's job states with database
+	for _, wrapper := range req.Jobs {
+		// TODO test transition to self a noop
+		job := wrapper.Job
+		err := transitionJobState(tx, job.JobID, job.State)
+		// TODO what's the proper behavior of an error?
+		//      this is just ignoring the error, but it will happen again
+		//      on the next update.
+		//      need to resolve the conflicting states.
+		//      Additionally, returning an error here will fail the db transaction,
+		//      preventing all updates to this worker for all jobs.
+		if err != nil {
+			return err
+		}
+
+		// If the worker has acknowledged that the job is complete,
+		// unlink the job from the worker.
+		switch job.State {
+		case Canceled, Complete, Error, SystemError:
+			key := append([]byte(req.Id), []byte(job.JobID)...)
+			tx.Bucket(WorkerJobs).Delete(key)
+		}
+	}
+
+	for k, v := range req.Metadata {
+		worker.Metadata[k] = v
+	}
+
+	// TODO move to on-demand helper. i.e. don't store in DB
+	updateAvailableResources(tx, worker)
+	worker.Version = time.Now().Unix()
+	putWorker(tx, worker)
 	return nil
 }
 
-// UpdateJobStatus updates the status of a job, including state and logs.
-// This is an RPC endpoint.
-// This is used by workers to communicate job updates to the server.
-func (taskBolt *TaskBolt) UpdateJobStatus(ctx context.Context, stat *ga4gh_task_ref.UpdateStatusRequest) (*ga4gh_task_exec.JobID, error) {
-	log := log.WithFields("jobID", stat.Id)
-
+// AssignJob assigns a job to a worker. This updates the job state to Initializing,
+// and updates the worker (calls UpdateWorker()).
+func (taskBolt *TaskBolt) AssignJob(j *pbe.Job, w *pbr.Worker) {
 	taskBolt.db.Update(func(tx *bolt.Tx) error {
-		ba := tx.Bucket(JobsActive)
-		bc := tx.Bucket(JobsComplete)
-		bL := tx.Bucket(JobsLog)
-		bw := tx.Bucket(WorkerJobs)
-		bjw := tx.Bucket(JobWorker)
+		// TODO this is important! write a test for this line.
+		//      when a job is assigned, its state is immediately Initializing
+		//      even before the worker has received it.
+		transitionJobState(tx, j.JobID, pbe.State_Initializing)
+		jobIDBytes := []byte(j.JobID)
+		workerIDBytes := []byte(w.Id)
+		// TODO the database needs tests for this stuff. Getting errors during dev
+		//      because it's easy to forget to link everything.
+		key := append(workerIDBytes, jobIDBytes...)
+		tx.Bucket(WorkerJobs).Put(key, jobIDBytes)
+		tx.Bucket(JobWorker).Put(jobIDBytes, workerIDBytes)
 
-		// max size (bytes) for stderr and stdout streams to keep in db
-		max := 100000
-		if stat.Log != nil {
-			out := &ga4gh_task_exec.JobLog{}
-			o := bL.Get([]byte(fmt.Sprint(stat.Id, stat.Step)))
-			if o != nil {
-				var jlog ga4gh_task_exec.JobLog
-				// max bytes to be stored in the db
-				proto.Unmarshal(o, &jlog)
-				out = &jlog
-				stdout := []byte(out.Stdout + stat.Log.Stdout)
-				stderr := []byte(out.Stderr + stat.Log.Stderr)
-				if len(stdout) > max {
-					stdout = stdout[len(stdout)-max:]
-				}
-				if len(stderr) > max {
-					stderr = stderr[len(stderr)-max:]
-				}
-				out.Stdout = string(stdout)
-				out.Stderr = string(stderr)
-			} else {
-				out = stat.Log
-			}
-			dL, _ := proto.Marshal(out)
-			bL.Put([]byte(fmt.Sprint(stat.Id, stat.Step)), dL)
-		}
-
-		switch stat.State {
-		case ga4gh_task_exec.State_Complete, ga4gh_task_exec.State_Error:
-			log.Debug("Job state change", "state", stat.State)
-			workerID := bjw.Get([]byte(stat.Id))
-			bjw.Delete([]byte(stat.Id))
-			ba.Delete([]byte(stat.Id))
-			bw.Delete([]byte(workerID))
-			bc.Put([]byte(stat.Id), []byte(stat.State.String()))
-		case ga4gh_task_exec.State_Initializing, ga4gh_task_exec.State_Running:
-			log.Debug("Job state", "state", stat.State)
+		err := updateWorker(tx, w)
+		if err != nil {
+			return err
 		}
 		return nil
 	})
-	return &ga4gh_task_exec.JobID{Value: stat.Id}, nil
 }
 
-// WorkerPing tells the server that a worker is alive.
-// This is an RPC endpoint.
-// This is currently unimplemented. TODO
-func (taskBolt *TaskBolt) WorkerPing(ctx context.Context, info *ga4gh_task_ref.WorkerInfo) (*ga4gh_task_ref.WorkerInfo, error) {
-	log.Debug("Worker ping")
-	return info, nil
+// TODO include active ports. maybe move Available out of the protobuf message
+//      and expect this helper to be used?
+func updateAvailableResources(tx *bolt.Tx, worker *pbr.Worker) {
+	// Calculate available resources
+	a := pbr.Resources{
+		Cpus: worker.GetResources().GetCpus(),
+		Ram:  worker.GetResources().GetRam(),
+		Disk: worker.GetResources().GetDisk(),
+	}
+	for jobID := range worker.Jobs {
+		j := getJob(tx, jobID)
+		res := j.Task.GetResources()
+
+		// Cpus are represented by an unsigned int, and if we blindly
+		// subtract it will rollover to a very large number. So check first.
+		rcpus := res.GetMinimumCpuCores()
+		if rcpus >= a.Cpus {
+			a.Cpus = 0
+		} else {
+			a.Cpus -= rcpus
+		}
+
+		a.Ram -= res.GetMinimumRamGb()
+
+		if a.Cpus < 0 {
+			a.Cpus = 0
+		}
+		if a.Ram < 0.0 {
+			a.Ram = 0.0
+		}
+	}
+	worker.Available = &a
+}
+
+// GetWorker gets a worker
+func (taskBolt *TaskBolt) GetWorker(ctx context.Context, req *pbr.GetWorkerRequest) (*pbr.Worker, error) {
+	var worker *pbr.Worker
+	err := taskBolt.db.View(func(tx *bolt.Tx) error {
+		worker = getWorker(tx, req.Id)
+		return nil
+	})
+	return worker, err
+}
+
+// CheckWorkers is used by the scheduler to check for dead/gone workers.
+// This is not an RPC endpoint
+func (taskBolt *TaskBolt) CheckWorkers() error {
+	err := taskBolt.db.Update(func(tx *bolt.Tx) error {
+		bucket := tx.Bucket(Workers)
+		c := bucket.Cursor()
+
+		for k, v := c.First(); k != nil; k, v = c.Next() {
+			worker := &pbr.Worker{}
+			proto.Unmarshal(v, worker)
+
+			if worker.State == pbr.WorkerState_Gone {
+				tx.Bucket(Workers).Delete(k)
+				continue
+			}
+
+			if worker.LastPing == 0 {
+				// This shouldn't be happening, because workers should be
+				// created with LastPing, but give it the benefit of the doubt
+				// and leave it alone.
+				continue
+			}
+
+			lastPing := time.Unix(worker.LastPing, 0)
+			d := time.Since(lastPing)
+
+			if worker.State == pbr.WorkerState_Uninitialized ||
+				worker.State == pbr.WorkerState_Initializing {
+
+				// The worker is initializing, which has a more liberal timeout.
+				if d > taskBolt.conf.WorkerInitTimeout {
+					// Looks like the worker failed to initialize. Mark it dead
+					worker.State = pbr.WorkerState_Dead
+				}
+			} else if d > taskBolt.conf.WorkerPingTimeout {
+				// The worker is stale/dead
+				worker.State = pbr.WorkerState_Dead
+			} else {
+				worker.State = pbr.WorkerState_Alive
+			}
+			// TODO when to delete workers from the database?
+			//      is dead worker deletion an automatic garbage collection process?
+			putWorker(tx, worker)
+		}
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// GetWorkers is an API endpoint that returns a list of workers.
+func (taskBolt *TaskBolt) GetWorkers(ctx context.Context, req *pbr.GetWorkersRequest) (*pbr.GetWorkersResponse, error) {
+	resp := &pbr.GetWorkersResponse{}
+	resp.Workers = []*pbr.Worker{}
+
+	err := taskBolt.db.Update(func(tx *bolt.Tx) error {
+
+		bucket := tx.Bucket(Workers)
+		c := bucket.Cursor()
+
+		for k, _ := c.First(); k != nil; k, _ = c.Next() {
+			worker := getWorker(tx, string(k))
+			resp.Workers = append(resp.Workers, worker)
+		}
+		return nil
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	return resp, nil
+}
+
+// Look for an auth token related to the given job ID.
+func getJobAuth(tx *bolt.Tx, jobID string) string {
+	idBytes := []byte(jobID)
+	var auth string
+	data := tx.Bucket(TaskAuthBucket).Get(idBytes)
+	if data != nil {
+		auth = string(data)
+	}
+	return auth
+}
+
+func transitionJobState(tx *bolt.Tx, id string, state pbe.State) error {
+	idBytes := []byte(id)
+	current := getJobState(tx, id)
+
+	switch current {
+	case state:
+		// Current state matches target state. Do nothing.
+		return nil
+
+	case Complete, Error, SystemError, Canceled:
+		// Current state is a terminal state, can't do that.
+		err := errors.New("Invalid state change")
+		log.Error("Cannot change state of a job already in a terminal state",
+			"error", err,
+			"current", current,
+			"requested", state)
+		return err
+	}
+
+	switch state {
+	case Canceled, Complete, Error, SystemError:
+		// Remove from queue
+		tx.Bucket(JobsQueued).Delete(idBytes)
+
+	case Running, Initializing:
+		if current != Unknown && current != Queued && current != Initializing {
+			log.Error("Unexpected transition", "current", current, "requested", state)
+			return errors.New("Unexpected transition to Initializing")
+		}
+		tx.Bucket(JobsQueued).Delete(idBytes)
+
+	case Unknown, Paused:
+		log.Error("Unimplemented job state", "state", state)
+		return errors.New("Unimplemented job state")
+
+	case Queued:
+		log.Error("Can't transition to Queued state")
+		return errors.New("Can't transition to Queued state")
+	default:
+		log.Error("Unknown job state", "state", state)
+		return errors.New("Unknown job state")
+	}
+
+	tx.Bucket(JobState).Put(idBytes, []byte(state.String()))
+	log.Info("Set job state", "jobID", id, "state", state.String())
+	return nil
+}
+
+// UpdateJobLogs is an API endpoint that updates the logs of a job.
+// This is used by workers to communicate job updates to the server.
+func (taskBolt *TaskBolt) UpdateJobLogs(ctx context.Context, req *pbr.UpdateJobLogsRequest) (*pbr.UpdateJobLogsResponse, error) {
+
+	taskBolt.db.Update(func(tx *bolt.Tx) error {
+		bL := tx.Bucket(JobsLog)
+
+		// max size (bytes) for stderr and stdout streams to keep in db
+		max := taskBolt.conf.MaxJobLogSize
+		key := []byte(fmt.Sprint(req.Id, req.Step))
+
+		if req.Log != nil {
+			// Check if there is an existing job log
+			o := bL.Get(key)
+			if o != nil {
+				// There is an existing log in the DB, load it
+				existing := &pbe.JobLog{}
+				// max bytes to be stored in the db
+				proto.Unmarshal(o, existing)
+
+				stdout := []byte(existing.Stdout + req.Log.Stdout)
+				stderr := []byte(existing.Stderr + req.Log.Stderr)
+
+				// Trim the stdout/err logs to the max size if needed
+				if len(stdout) > max {
+					stdout = stdout[:max]
+				}
+				if len(stderr) > max {
+					stderr = stderr[:max]
+				}
+
+				req.Log.Stdout = string(stdout)
+				req.Log.Stderr = string(stderr)
+
+				// Merge the updates into the existing.
+				proto.Merge(existing, req.Log)
+				// existing is updated, so set that to req.Log which will get saved below.
+				req.Log = existing
+			}
+
+			// Save the updated log
+			logbytes, _ := proto.Marshal(req.Log)
+			tx.Bucket(JobsLog).Put(key, logbytes)
+		}
+
+		return nil
+	})
+	return &pbr.UpdateJobLogsResponse{}, nil
 }
 
 // GetQueueInfo returns a stream of queue info
 // This is an RPC endpoint.
 // TODO why doesn't this take Context as the first argument?
 // TODO I don't think this is actually used.
-func (taskBolt *TaskBolt) GetQueueInfo(request *ga4gh_task_ref.QueuedTaskInfoRequest, server ga4gh_task_ref.Scheduler_GetQueueInfoServer) error {
-	ch := make(chan *ga4gh_task_exec.Task)
+func (taskBolt *TaskBolt) GetQueueInfo(request *pbr.QueuedTaskInfoRequest, server pbr.Scheduler_GetQueueInfoServer) error {
+	ch := make(chan *pbe.Task)
 	log.Debug("GetQueueInfo called")
 
 	// TODO handle DB errors
@@ -158,9 +370,9 @@ func (taskBolt *TaskBolt) GetQueueInfo(request *ga4gh_task_ref.QueuedTaskInfoReq
 		c := bq.Cursor()
 		var count int32
 		for k, v := c.First(); k != nil && count < request.MaxTasks; k, v = c.Next() {
-			if string(v) == ga4gh_task_exec.State_Queued.String() {
+			if string(v) == pbe.State_Queued.String() {
 				v := bt.Get(k)
-				out := ga4gh_task_exec.Task{}
+				out := pbe.Task{}
 				proto.Unmarshal(v, &out)
 				ch <- &out
 			}
@@ -174,31 +386,8 @@ func (taskBolt *TaskBolt) GetQueueInfo(request *ga4gh_task_ref.QueuedTaskInfoReq
 		for _, i := range m.Inputs {
 			inputs = append(inputs, i.Location)
 		}
-		server.Send(&ga4gh_task_ref.QueuedTaskInfo{Inputs: inputs, Resources: m.Resources})
+		server.Send(&pbr.QueuedTaskInfo{Inputs: inputs, Resources: m.Resources})
 	}
 
 	return nil
-}
-
-// GetServerConfig returns information about the server configuration.
-// This is an RPC endpoint.
-func (taskBolt *TaskBolt) GetServerConfig(ctx context.Context, info *ga4gh_task_ref.WorkerInfo) (*ga4gh_task_ref.ServerConfig, error) {
-	return &taskBolt.serverConfig, nil
-}
-
-// GetJobState returns the state of a job, given a job ID.
-// This is an RPC endpoint.
-func (taskBolt *TaskBolt) GetJobState(ctx context.Context, id *ga4gh_task_exec.JobID) (*ga4gh_task_exec.JobDesc, error) {
-	log.Debug("GetJobState called")
-	var state ga4gh_task_exec.State
-	err := taskBolt.db.View(func(tx *bolt.Tx) error {
-		//TODO address err
-		state, _ = taskBolt.getJobState(id.Value)
-		return nil
-	})
-	jobDesc := &ga4gh_task_exec.JobDesc{
-		JobID: id.Value,
-		State: state,
-	}
-	return jobDesc, err
 }

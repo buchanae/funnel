@@ -40,3 +40,39 @@
 [submodule "src/vendor/github.com/docker/docker"]
 	path = src/vendor/github.com/docker/docker
 	url = https://github.com/docker/docker
+[submodule "src/vendor/github.com/Sirupsen/logrus"]
+	path = src/vendor/github.com/Sirupsen/logrus
+	url = https://github.com/Sirupsen/logrus
+[submodule "src/vendor/github.com/kr/pretty"]
+	path = src/vendor/github.com/kr/pretty
+	url = https://github.com/kr/pretty
+[submodule "src/vendor/github.com/kr/text"]
+	path = src/vendor/github.com/kr/text
+	url = https://github.com/kr/text
+[submodule "src/vendor/golang.org/x/oauth2"]
+	path = src/vendor/golang.org/x/oauth2
+	url = https://go.googlesource.com/oauth2
+[submodule "src/vendor/cloud.google.com/go"]
+	path = src/vendor/cloud.google.com/go
+	url = https://code.googlesource.com/gocloud
+[submodule "src/vendor/github.com/googleapis/gax-go"]
+	path = src/vendor/github.com/googleapis/gax-go
+	url = https://github.com/googleapis/gax-go
+[submodule "src/vendor/google.golang.org/api"]
+	path = src/vendor/google.golang.org/api
+	url = https://code.googlesource.com/google-api-go-client
+[submodule "src/vendor/github.com/shirou/gopsutil"]
+	path = src/vendor/github.com/shirou/gopsutil
+	url = https://github.com/shirou/gopsutil
+[submodule "src/vendor/github.com/mitchellh/copystructure"]
+	path = src/vendor/github.com/mitchellh/copystructure
+	url = https://github.com/mitchellh/copystructure
+[submodule "src/vendor/github.com/mitchellh/reflectwalk"]
+	path = src/vendor/github.com/mitchellh/reflectwalk
+	url = https://github.com/mitchellh/reflectwalk
+[submodule "src/vendor/github.com/stretchr/testify"]
+	path = src/vendor/github.com/stretchr/testify
+	url = https://github.com/stretchr/testify
+[submodule "src/vendor/github.com/imdario/mergo"]
+	path = src/vendor/github.com/imdario/mergo
+	url = https://github.com/imdario/mergo
