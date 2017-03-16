@@ -1,22 +1,20 @@
 package storage
 
+// NOTE!
+// It's important that Storage instances be immutable!
+// We don't want storage authentication to be accidentally shared between jobs.
+// If they are mutable, there's more chance that storage config can leak
+// between separate processes.
+
 import (
 	"context"
 	"fmt"
 	"tes/config"
 )
 
-// NOTE!
-// It's important that Storage instances be immutable!
-// We dont want storage authentication to be accidentally shared between jobs.
-// If they are mutable, there's more chance that storage config can leak
-// between separate processes.
-
 const (
 	// File represents the file type
 	File string = "File"
-	// ReadOnlyFile represents a file in a read only volume
-	ReadOnlyFile string = "ReadOnlyFile"
 	// Directory represents the directory type
 	Directory = "Directory"
 )
@@ -24,7 +22,7 @@ const (
 // Backend provides an interface for a storage backend.
 // New storage backends must support this interface.
 type Backend interface {
-	Get(ctx context.Context, url string, path string, class string) error
+	Get(ctx context.Context, url string, path string, class string, readonly bool) error
 	Put(ctx context.Context, url string, path string, class string) error
 	// Determines whether this backends supports the given request (url/path/class).
 	// A backend normally uses this to match the url prefix (e.g. "s3://")
@@ -33,7 +31,7 @@ type Backend interface {
 }
 
 // Storage provides a client for accessing multiple storage systems,
-// i.e. for downloading/uploading job files from multiple S3, NFS, local disk, etc.
+// i.e. for downloading/uploading job files from S3, GS, local disk, etc.
 //
 // For a given storage url, the storage backend is usually determined by the url prefix,
 // e.g. "s3://my-bucket/file" will access the S3 backend.
@@ -43,13 +41,13 @@ type Storage struct {
 
 // Get downloads a file from a storage system at the given "url".
 // The file is downloaded to the given local "path".
-// "class" is either "File", "ReadOnlyFile" or "Directory".
-func (storage Storage) Get(ctx context.Context, url string, path string, class string) error {
+// "class" is either "File" or "Directory".
+func (storage Storage) Get(ctx context.Context, url string, path string, class string, readonly bool) error {
 	backend, err := storage.findBackend(url, path, class)
 	if err != nil {
 		return err
 	}
-	return backend.Get(ctx, url, path, class)
+	return backend.Get(ctx, url, path, class, readonly)
 }
 
 // Put uploads a file to a storage system at the given "url".
