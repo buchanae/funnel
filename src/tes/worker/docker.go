@@ -29,7 +29,7 @@ type DockerCmd struct {
 }
 
 // Run runs the Docker command and blocks until done.
-func (dcmd DockerCmd) Run() error {
+func (dcmd DockerCmd) Execute() error {
 	args := []string{"run", "-i"}
 
 	if dcmd.RemoveContainer {
@@ -80,9 +80,14 @@ func (dcmd DockerCmd) Run() error {
 	return cmd.Run()
 }
 
+type ExecutorMetadata struct {
+  Ports []*pbe.Ports
+}
+
 // Inspect returns metadata about the container (calls "docker inspect").
-func (dcmd DockerCmd) Inspect(ctx context.Context) ([]*pbe.Ports, error) {
+func (j *jobRunner) Inspect() ExecutorMeta {
 	log.Info("Fetching container metadata")
+
 	dclient := setupDockerClient()
 	// close the docker client connection
 	defer dclient.Close()
@@ -91,7 +96,7 @@ func (dcmd DockerCmd) Inspect(ctx context.Context) ([]*pbe.Ports, error) {
 		case <-ctx.Done():
 			return nil, nil
 		default:
-			metadata, err := dclient.ContainerInspect(ctx, dcmd.ContainerName)
+			metadata, err := dclient.ContainerInspect(ctx, name)
 			if client.IsErrContainerNotFound(err) {
 				break
 			}

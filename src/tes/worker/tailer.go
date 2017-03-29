@@ -5,16 +5,15 @@ import (
 	"tes/util/ring"
 )
 
-func newTailer(size int64, out func(string)) (*tailer, error) {
+func newTailer(size int64) (*tailer, error) {
 	buf, err := ring.NewBuffer(size)
 	if err != nil {
 		return nil, err
 	}
-	return &tailer{buf: buf, out: out}, nil
+	return &tailer{buf: buf}, nil
 }
 
 type tailer struct {
-	out func(string)
 	buf *ring.Buffer
 	mtx sync.Mutex
 }
@@ -32,11 +31,12 @@ func (t *tailer) Write(b []byte) (int, error) {
 	return w, nil
 }
 
-func (t *tailer) Flush() {
+func (t *tailer) Flush() string {
 	t.mtx.Lock()
 	t.mtx.Unlock()
 	if t.buf.TotalWritten() > 0 {
-		t.out(t.buf.String())
+    return t.buf.String()
 		t.buf.Reset()
 	}
+  return ""
 }

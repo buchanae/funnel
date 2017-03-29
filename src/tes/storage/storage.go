@@ -19,9 +19,9 @@ const (
 	Directory = "Directory"
 )
 
-// Backend provides an interface for a storage backend.
+// Storage provides an interface for a storage backend.
 // New storage backends must support this interface.
-type Backend interface {
+type Storage interface {
 	Get(ctx context.Context, url string, path string, class string, readonly bool) error
 	Put(ctx context.Context, url string, path string, class string) error
 	// Determines whether this backends supports the given request (url/path/class).
@@ -35,14 +35,14 @@ type Backend interface {
 //
 // For a given storage url, the storage backend is usually determined by the url prefix,
 // e.g. "s3://my-bucket/file" will access the S3 backend.
-type Storage struct {
+type storage struct {
 	backends []Backend
 }
 
 // Get downloads a file from a storage system at the given "url".
 // The file is downloaded to the given local "path".
 // "class" is either "File" or "Directory".
-func (storage Storage) Get(ctx context.Context, url string, path string, class string, readonly bool) error {
+func (storage Storage) Get(ctx context.Context, url, path, class string, readonly bool) error {
 	backend, err := storage.findBackend(url, path, class)
 	if err != nil {
 		return err
@@ -53,7 +53,7 @@ func (storage Storage) Get(ctx context.Context, url string, path string, class s
 // Put uploads a file to a storage system at the given "url".
 // The file is uploaded from the given local "path".
 // "class" is either "File" or "Directory".
-func (storage Storage) Put(ctx context.Context, url string, path string, class string) error {
+func (storage Storage) Put(ctx context.Context, url, path, class string) error {
 	backend, err := storage.findBackend(url, path, class)
 	if err != nil {
 		return err
@@ -78,49 +78,39 @@ func (storage Storage) findBackend(url string, path string, class string) (Backe
 	return nil, fmt.Errorf("Could not find matching storage system for %s", url)
 }
 
-// WithBackend returns a new child Storage instance with the given backend added.
-func (storage Storage) WithBackend(b Backend) (*Storage, error) {
-	backends := append(storage.backends, b)
-	return &Storage{backends}, nil
-}
+// FromConfig returns a new Storage instance with the given backend configurations.
+func FromConfig(conf []*config.StorageConfig) (*Storage, error) {
+  backends := []Backend
 
-// WithConfig returns a new Storage instance with the given additional configuration.
-func (storage Storage) WithConfig(conf *config.StorageConfig) (*Storage, error) {
-	var err error
-	var out *Storage
+	for _, conf := range r.conf.Storage {
+    if conf.Local.Valid() {
+      local, err := NewLocalBackend(conf.Local)
+      if err != nil {
+        return nil, err
+      }
+      backends = append(backends, local)
+    }
 
-	if conf.Local.Valid() {
-		local, err := NewLocalBackend(conf.Local)
-		if err != nil {
-			return nil, err
-		}
-		out, err = storage.WithBackend(local)
+    if conf.S3.Valid() {
+      s3, err := NewS3Backend(conf.S3)
+      if err != nil {
+        return nil, err
+      }
+      backends = append(backends, s3)
+    }
+
+    if conf.GS.Valid() {
+      gs, err := NewGSBackend(conf.GS)
+      if err != nil {
+        return nil, err
+      }
+      backends = append(backends, gs)
+    }
 	}
 
-	if conf.S3.Valid() {
-		s3, err := NewS3Backend(conf.S3)
-		if err != nil {
-			return nil, err
-		}
-		out, err = storage.WithBackend(s3)
-	}
-
-	if conf.GS.Valid() {
-		gs, nerr := NewGSBackend(conf.GS)
-		if nerr != nil {
-			return nil, nerr
-		}
-		out, err = storage.WithBackend(gs)
-	}
-
-	if err != nil {
-		return nil, err
-	}
-
-	// If the configuration did nothing, return the initial storage instance
-	if out == nil {
-		return &storage, nil
-	}
-
-	return out, nil
+  // If no valid backends were found, return an error.
+  if len(backends) == 0 {
+    return nil, fmt.Error("No valid storage backends could be configured.")
+  }
+  return &Storage{backends}, nil
 }

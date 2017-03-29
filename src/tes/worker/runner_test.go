@@ -6,36 +6,38 @@ import (
 	"path"
 	pbe "tes/ga4gh"
 	"testing"
+  "tes/config"
+  "tes/logger"
+  "tes/storage"
 )
 
-func TestResolveLinks(t *testing.T) {
-	// Setup
+func newTestJobRunner() *jobRunner {
 	f, _ := ioutil.TempDir("", "funnel-test-resolve-links-")
+  c := config.WorkerDefaultConfig()
+  c.Storage.Local.AllowedDirs = append(c.Storage.Local.AllowedDirs, f)
 	m := NewFileMapper(f)
 	r := jobRunner{
 		mapper: m,
+    conf: c,
+    store: &storage.Storage{},
+    log: logger,
+    ctrl: JobControl{},
+    updates: make(logUpdateChan),
 	}
+  return &r
+}
 
-	// Create file in container which
-	ioutil.WriteFile(path.Join(f, "test-file"), []byte("foo\n"), 0777)
+func TestResolveLinks(t *testing.T) {
+  r := newTestJobRunner()
 
-	// Create broken symlink. Simulates broken symlink from container
-	// filesystem.
-	os.Symlink("/mnt/foo/test-file", path.Join(f, "test-sym"))
-
-	m.Volumes = append(m.Volumes, Volume{
-		HostPath:      f,
-		ContainerPath: "/mnt/foo",
-	})
-
-	m.Outputs = append(m.Outputs, &pbe.TaskParameter{
-		Path: path.Join(f, "test-sym"),
-	})
-	// Include normal file in order to test that they are ignored
-	m.Outputs = append(m.Outputs, &pbe.TaskParameter{
-		Path: path.Join(f, "test-file"),
-	})
-	r.resolveLinks()
+  r.wrapper = &pbr.JobWrapper{
+    Job: &pbe.Job{
+      Task: &pbe.Task{
+        Outputs: []*pbe.TaskParameter{
+        },
+      },
+    },
+  }
 
 	c, e := ioutil.ReadFile(m.Outputs[0].Path)
 

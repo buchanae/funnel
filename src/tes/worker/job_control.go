@@ -37,18 +37,26 @@ type jobControl struct {
 	cancelFunc context.CancelFunc
 }
 
+// TODO pass in base context
 func (r *jobControl) Context() context.Context {
 	return r.ctx
 }
 
-func (r *jobControl) SetResult(err error) {
+func (r *jobControl) SetError(err error) {
 	r.mtx.Lock()
 	defer r.mtx.Unlock()
+  // TODO cancel context on err?
+  //      cacnel even on no error? Just always cancel when the job is complete
+  //      so that all dependents always get cleaned up.
 	// Don't set the result twice
 	if !r.complete {
 		r.complete = true
 		r.err = err
 	}
+}
+
+func (r *jobControl) SetSuccess() {
+  r.SetError(nil)
 }
 
 func (r *jobControl) SetRunning() {
@@ -95,4 +103,19 @@ func (r *jobControl) State() pbe.State {
 	default:
 		return pbe.State_Initializing
 	}
+}
+
+func (ctrl *jobControl) Run(runfunc func() error) error {
+	// If the runner is already complete (perhaps because a previous step failed)
+	// skip the step.
+	if !ctrl.Complete() {
+    err := runfunc()
+		// If the step failed, set the runner to failed. All the following steps
+		// will be skipped.
+		if err != nil {
+			// TODO r.log.Error("Job runner step failed", "error", err, "step", name)
+			ctrl.SetError(err)
+		}
+	}
+  return ctrl.Err()
 }
