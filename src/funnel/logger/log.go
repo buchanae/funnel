@@ -7,13 +7,19 @@ import (
 	"strings"
 )
 
+const (
+  DebugLevel string = "debug"
+  InfoLevel = "info"
+  ErrorLevel = "error"
+)
+
 var formatter = &textFormatter{
 	DisableTimestamp: true,
 }
 
 func init() {
 	logrus.SetFormatter(formatter)
-	logrus.SetLevel(logrus.DebugLevel)
+	logrus.SetLevel(logrus.InfoLevel)
 }
 
 // Logger is repsonsible for logging messages from code.
@@ -27,13 +33,11 @@ type Logger interface {
 // SetLevel sets the level of logging
 func SetLevel(l string) {
 	switch strings.ToLower(l) {
-	case "debug":
+	case DebugLevel:
 		logrus.SetLevel(logrus.DebugLevel)
-	case "info":
+	case InfoLevel:
 		logrus.SetLevel(logrus.InfoLevel)
-	case "warn":
-		logrus.SetLevel(logrus.WarnLevel)
-	case "error":
+	case ErrorLevel:
 		logrus.SetLevel(logrus.ErrorLevel)
 	default:
 		logrus.SetLevel(logrus.InfoLevel)

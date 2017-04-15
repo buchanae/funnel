@@ -1,0 +1,125 @@
+Database:
+  # Path to the database file
+  Path: ./funnel-work-dir/funnel_task.db
+  LogLevel: debug
+
+Server:
+  # TODO fully discoverable?
+  HostName: localhost
+  # Port which HTTP traffic will be served on.
+  HTTPPort: 8000
+  # Port which RPC traffic will be served on.
+  RPCPort: 9090
+  LogLevel: debug
+
+Scheduler:
+  LogLevel: debug
+  # How often to schedule a chunk of tasks.
+  # @low-level
+  Rate: 1 second
+  # How many tasks to schedule with each iteration.
+  # @low-level
+  ChunkSize: 10
+  # How long to wait for a worker to start before it's considered dead.
+  # @low-level
+  WorkerInitTimeout: 5 minutes
+  # How long between pings before a worker is considered dead.
+  # @low-level
+  WorkerPingTimeout: 1 minute
+  # The tails of stdout and stderr logs are streamed back from
+  # the worker to the server. This the max. size stored for
+  # each task, in bytes.
+  # TODO duplicated with Worker
+  # @low-level
+  MaxLogTailSize: 10 KB
+  # The name of the active scheduler backend.
+  # Options: local, htcondor, gce, openstack
+  Backend: Local
+  # Scheduler backends provide support for scheduling tasks
+  # on a variety of infrastructures.
+  Backends:
+
+    # The local scheduler backend runs tasks on the local computer
+    # (in the same process as the server/scheduler)
+    Local:
+
+    # HTCondor scheduler backend
+    # https://research.cs.wisc.edu/htcondor/
+   HTCondor:
+      # The scheduler will stage some per-task files in this directory,
+      # e.g. such as the worker config file, HTCondor submission script,
+      # logs, and more.
+      WorkDir: ./funnel-work-dir
+      # It's usually preferred that HTCondor workers only handle a single
+      # task then then immediately shut down, so that workers don't stay
+      # in the HTCondor queue, taking up valuable resources.
+      #
+      # This can disable that behavior.
+      OneWorkerPerTask: true
+
+    # Google Compute Engine (GCE) scheduler backend
+    # https://cloud.google.com/compute/
+    GCE:
+      # GCE project name.
+      # @required
+      #
+      # See the GCE docs for more information:
+      # https://cloud.google.com/docs/authentication#projects_and_resources
+      Project: ""
+      # Path to a GCE credentials file.
+      #
+      # This is only necessary when running Funnel outside of GCE.
+      # When running on a GCE VM, the credentials can be automatially detected.
+      #
+      # See the GCE docs for more information:
+      # https://cloud.google.com/docs/authentication#getting_credentials_for_server-centric_flow
+      CredentialsFile: ""
+      # See the GCE docs for more information:
+      # https://cloud.google.com/compute/docs/regions-zones/regions-zones
+      Zone: "us-west-1a"
+      # Weights provide tuning of the scheduling policies
+      # by weighting the score for each possible worker.
+      #
+      # Weights range from 0.0 (no effect) to 1.0 (full effect).
+      Weights:
+        # Workers with a lower startup time will be preferred.
+        # Workers which are already running have the lowest startup time.
+        PreferQuickStartup: 1.0
+      # How long before cached GCE metadata is expired.
+      #
+      # The GCE backend needs to query GCE APIs to look for instance templates,
+      # machine types, and other metadata. This info is temporarily cached for efficiency.
+      CacheTTL: 1 minute
+
+    # The OpenStack scheduler backend 
+    # https://www.openstack.org/software/
+    # TODO
+    OpenStack:
+      KeyPair:
+      ConfigPath: ""
+      Server:
+      # @type map[string]float32
+      Weights:
+
+Worker:
+  # Address of the server.
+  # @required
+  ServerAddress: ""
+  # When the worker has been idle for this duration, it will shut down.
+  Timeout: never
+  # TODO Override or minimum? I can't remember
+  Resources:
+    Disk: 100 GB
+  # How often to sync with the server.
+  # @low-level
+  UpdateRate: 5 seconds
+  # How often to send log updates to the server.
+  # @low-level
+  LogUpdateRate: 5 seconds
+  # The tails of stdout and stderr logs are streamed back from
+  # the worker to the server. This the max. size stored for
+  # each task, in bytes.
+  # @low-level
+  LogTailSize: 10 KB
+  # @low-level
+  UpdateTimeout: 1 seconds

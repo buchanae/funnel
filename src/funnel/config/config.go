@@ -84,94 +84,65 @@ type SchedulerBackends struct {
 	Condor    LocalSchedulerBackend
 	OpenStack OpenStackSchedulerBackend
 	GCE       GCESchedulerBackend
+	LogPath       string
 }
 
-// Config describes configuration for Funnel.
-type Config struct {
-	Storage            []*StorageConfig
-	HostName           string
-	Scheduler          string
-	Backends           SchedulerBackends
-	Worker             Worker
-	DBPath             string
-	HTTPPort           string
-	RPCPort            string
-	WorkDir            string
-	LogLevel           string
-	LogPath            string
-	MaxExecutorLogSize int
-	ScheduleRate       time.Duration
-	ScheduleChunk      int
+type Server struct {
+	HTTPPort      string
+	RPCPort       string
+	DisableHTTPCache  bool
+	LogPath       string
+}
+
+type Scheduler struct {
+  Backend string
+	Backends      SchedulerBackends
+	MaxJobLogSize int
+	ScheduleRate  time.Duration
+	ScheduleChunk int
 	// How long to wait for a worker ping before marking it as dead
 	WorkerPingTimeout time.Duration
 	// How long to wait for worker initialization before marking it dead
 	WorkerInitTimeout time.Duration
-	DisableHTTPCache  bool
+	LogPath       string
+}
+
+type Database struct {
+  Path string
+	LogPath       string
+}
+
+// Config describes configuration for Funnel.
+type Config struct {
+	worker        Worker
+  Server        Server
+  Scheduler     Scheduler
+  Database      Database
+	WorkDir       string
+}
+
+func (c Config) Worker() Worker {
+  if c.worker.ServerAddress == "" {
+    c.worker.ServerAddress = c.Server.HostName + ":" + c.Server.RPCPort
+  }
+  return c.worker
 }
 
 // HTTPAddress returns the HTTP address based on HostName and HTTPPort
-func (c Config) HTTPAddress() string {
+func (c Server) HTTPAddress() string {
 	return "http://" + c.HostName + ":" + c.HTTPPort
 }
 
 // RPCAddress returns the RPC address based on HostName and RPCPort
-func (c Config) RPCAddress() string {
+func (c Server) RPCAddress() string {
 	return c.HostName + ":" + c.RPCPort
-}
-
-// DefaultConfig returns configuration with simple defaults.
-func DefaultConfig() Config {
-	workDir := "funnel-work-dir"
-	hostName := "localhost"
-	rpcPort := "9090"
-	c := Config{
-		HostName:  hostName,
-		DBPath:    path.Join(workDir, "funnel.db"),
-		HTTPPort:  "8000",
-		RPCPort:   rpcPort,
-		WorkDir:   workDir,
-		LogLevel:  "debug",
-		Scheduler: "local",
-		Backends: SchedulerBackends{
-			Local: LocalSchedulerBackend{},
-			GCE: GCESchedulerBackend{
-				Weights: Weights{
-					"startup time": 1.0,
-				},
-				CacheTTL: time.Minute,
-			},
-		},
-		MaxExecutorLogSize: 10000,
-		ScheduleRate:       time.Second,
-		ScheduleChunk:      10,
-		WorkerPingTimeout:  time.Minute,
-		WorkerInitTimeout:  time.Minute * 5,
-		Worker: Worker{
-			ServerAddress: hostName + ":" + rpcPort,
-			WorkDir:       workDir,
-			Timeout:       -1,
-			// TODO these get reset to zero when not found in yaml?
-			UpdateRate:    time.Second * 5,
-			LogUpdateRate: time.Second * 5,
-			TrackerRate:   time.Second * 5,
-			LogTailSize:   10000,
-			LogLevel:      "debug",
-			UpdateTimeout: time.Second,
-			Resources: &pbf.Resources{
-				Disk: 100.0,
-			},
-			Metadata: map[string]string{},
-		},
-		DisableHTTPCache: true,
-	}
-	return c
 }
 
 // Worker contains worker configuration.
 type Worker struct {
 	ID string
 	// Address of the scheduler, e.g. "1.2.3.4:9090"
-	ServerAddress string
+  ServerAddress string
 	// Directory to write task files to
 	WorkDir string
 	// How long (seconds) to wait before tearing down an inactive worker
@@ -193,43 +164,12 @@ type Worker struct {
 	Metadata      map[string]string
 }
 
-// WorkerInheritConfigVals is a utility to help ensure the Worker inherits the proper config values from the parent Config
-func WorkerInheritConfigVals(c Config) Worker {
-	if (c.HostName != "") && (c.RPCPort != "") {
-		c.Worker.ServerAddress = c.HostName + ":" + c.RPCPort
-	}
-	c.Worker.Storage = c.Storage
-	c.Worker.WorkDir = c.WorkDir
-	c.Worker.LogLevel = c.LogLevel
-	return c.Worker
-}
 
 // ToYaml formats the configuration into YAML and returns the bytes.
 func (c Config) ToYaml() []byte {
 	// TODO handle error
 	yamlstr, _ := yaml.Marshal(c)
 	return yamlstr
-}
-
-// ToYamlFile writes the configuration to a YAML file.
-func (c Config) ToYamlFile(p string) {
-	// TODO handle error
-	ioutil.WriteFile(p, c.ToYaml(), 0600)
-}
-
-// ToYamlTempFile writes the configuration to a YAML temp. file.
-func (c Config) ToYamlTempFile(name string) (string, func()) {
-	// I'm creating a temp. directory instead of a temp. file so that
-	// the file can have an expected name. This is helpful for the HTCondor scheduler.
-	tmpdir, _ := ioutil.TempDir("", "")
-
-	cleanup := func() {
-		os.RemoveAll(tmpdir)
-	}
-
-	p := filepath.Join(tmpdir, name)
-	c.ToYamlFile(p)
-	return p, cleanup
 }
 
 // Parse parses a YAML doc into the given Config instance.
