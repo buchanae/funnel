@@ -17,9 +17,24 @@ var formatter = &textFormatter{
 	DisableTimestamp: true,
 }
 
-func init() {
+func Configure(conf config.Config) {
 	logrus.SetFormatter(formatter)
-	logrus.SetLevel(logrus.InfoLevel)
+	logger.SetLevel(conf.LogLevel)
+
+	// TODO Good defaults, configuration, and reusable way to configure logging.
+	//      Also, how do we get this to default to /var/log/tes/worker.log
+	//      without having file permission problems? syslog?
+	// Configure logging
+	if conf.LogPath != "" {
+		logFile, err := os.OpenFile(
+			conf.LogPath, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666,
+		)
+		if err != nil {
+			logger.Error("Can't open log output file", "path", conf.LogPath)
+		} else {
+			logger.SetOutput(logFile)
+		}
+	}
 }
 
 // Logger is repsonsible for logging messages from code.
