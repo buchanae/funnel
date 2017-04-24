@@ -1,25 +1,12 @@
 package config
 
 import (
-	"funnel/logger"
-	pbf "funnel/proto/funnel"
-	"github.com/ghodss/yaml"
 	os_servers "github.com/rackspace/gophercloud/openstack/compute/v2/servers"
-	"io/ioutil"
-	"os"
-	"path"
-	"path/filepath"
 	"time"
 )
 
-// Weights describes the scheduler score weights.
-// All fields should be float32 type.
-type Weight float32
-
 // Config describes configuration for Funnel.
 type Config struct {
-	Root string
-
 	Database struct {
 		// Path to database file
 		Path     string
@@ -53,13 +40,13 @@ type Config struct {
 		// -1 means the worker will never shut down.
 		Timeout time.Duration
 		// How often the worker syncs with the server.
-		UpdateRate time.Duration `advanced`
+		UpdateRate time.Duration
 		// How often the worker sends log updates to the server.
-		LogUpdateRate time.Duration `advanced`
+		LogUpdateRate time.Duration
 		// The tails of stdout and stderr logs are streamed back from
 		// the worker to the server. This the max. size stored for
 		// each task, in bytes.
-		LogTailSize size.Bytes `advanced`
+		LogTailSize size.Bytes
 		LogPath     string
 		LogLevel    string
 		// TODO override or minimum?
@@ -67,25 +54,36 @@ type Config struct {
 			Disk size.Bytes
 		}
 		// How long to wait for RPC calls before timing out.
-		RPCTimeout time.Duration `advanced`
+		RPCTimeout time.Duration
 		// TODO used?
 		Metadata map[string]string
 	}
 
 	Storage struct {
-		Local struct {
-			AllowedDirs []string
+		// Local filesystem.
+		Local []struct {
+			// Path to local directory
+			Path string
 		}
-		// TODO allow multiple S3
-		S3 struct {
+		// S3 (Amazon-specific?
+		S3 []struct {
+			// S3 server endpoint
 			Endpoint string
-			Key      string
-			Secret   string
+			// S3 authentication key
+			Key string
+			// S3 authentication secret
+			Secret string
+			// Use SSL?
+			SSL bool
 		}
-		// TODO allow multiple GS
-		GS struct {
+
+		// Google Cloud Storage
+		GCS []struct {
+			// Path to auth. credentials file.
 			CredentialsFile string
-			FromEnv         bool
+			// Look for auth. credentials in the environment?
+			// TODO probably should always be true.
+			FromEnv bool
 		}
 	}
 
@@ -150,9 +148,9 @@ type Config struct {
 				//
 				// Weights range from 0.0 (no effect) to 1.0 (full effect).
 				Weights struct {
-					// Workers with a lower startup time will be preferred.
-					// Workers which are already running have the lowest startup time.
-					PreferLowStartupTime Weight
+					// Workers with a quicker startup time will be preferred.
+					// Workers which are already running have a startup time of 0 (quickest).
+					PreferQuickerStartupTime float32
 				}
 				// How long before cached GCE metadata is expired.
 				//
@@ -167,126 +165,14 @@ type Config struct {
 		// the worker to the server. This the max. size stored for
 		// each task, in bytes.
 		// TODO duplicated with Worker
-		MaxJobLogSize int `advanced`
+		MaxJobLogSize int
 		// How often to schedule a chunk of tasks.
-		Rate time.Duration `advanced`
+		Rate time.Duration
 		// How many tasks to schedule with each iteration.
-		ChunkSize int `advanced`
+		ChunkSize int
 		// How long between pings before a worker is considered dead.
-		WorkerPingTimeout time.Duration `advanced`
+		WorkerPingTimeout time.Duration
 		// How long to wait for a worker to start before it's considered dead.
-		WorkerInitTimeout time.Duration `advanced`
+		WorkerInitTimeout time.Duration
 	}
-}
-
-// HTTPAddress returns the HTTP address based on HostName and HTTPPort
-func (c Config) HTTPAddress() string {
-	return "http://" + c.Server.HostName + ":" + c.Server.HTTPPort
-}
-
-// RPCAddress returns the RPC address based on HostName and RPCPort
-func (c Config) RPCAddress() string {
-	return c.Server.HostName + ":" + c.Server.RPCPort
-}
-
-func WithDebug(c config.Config) Config {
-	c.Server.LogLevel = logger.DebugLevel
-	c.Database.LogLevel = logger.DebugLevel
-	c.Scheduler.LogLevel = logger.DebugLevel
-	c.Worker.LogLevel = logger.DebugLevel
-	return c
-}
-
-// DefaultConfig returns configuration with simple defaults.
-func WithDefaults(c config.Config) Config {
-	srv := &c.Server
-	db := &c.Database
-	sched := &c.Scheduler
-	store := &c.Storage
-	w := &c.Worker
-
-	srv.HostName = "localhost"
-	srv.RPCPort = 9090
-	srv.HTTPPort = 8000
-
-	db.Path = "./funnel-work-dir/funnel.db"
-	db.LogLevel = logger.InfoLevel
-
-	sched.Backend = "local"
-
-	gce := &sched.Backends.GCE
-	gce.Weights.PreferLowStartupTime = 1.0
-	gce.Zone = "us-west-1a"
-	gce.CacheTTL = time.Minute
-
-	sched.CacheTTL = time.Minute
-	sched.LogLevel = logger.InfoLevel
-	sched.MaxJobLogSize = size.KB * 10
-	sched.Rate = time.Second
-	sched.ChunkSize = 10
-	sched.WorkerPingTimeout = time.Minute
-	sched.WorkerInitTimeout = time.Minute * 5
-
-	w.WorkDir = "./funnel-work-dir"
-	w.Timeout = Never
-	w.UpdateRate = time.Second * 5
-	w.UpdateTimeout = time.Second
-	w.LogUpdateRate = time.Second * 5
-	w.LogLevel = logger.InfoLevel
-	w.LogTailSize = size.KB * 10
-	w.Resources.Disk = 100.0
-
-	return c
-}
-
-func InheritWorkerConfig(c Config) Config {
-	if c.Worker.ServerAddress == "" {
-		c.Worker.ServerAddress = c.RPCAddress()
-	}
-	return c
-}
-
-// ToYaml formats the configuration into YAML and returns the bytes.
-func (c Config) ToYaml() []byte {
-	// TODO handle error
-	yamlstr, _ := yaml.Marshal(c)
-	return yamlstr
-}
-
-// Parse parses a YAML doc into the given Config instance.
-func Parse(raw []byte, conf *Config) error {
-	err := yaml.Unmarshal(raw, conf)
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-// ParseFile parses a Funnel config file, which is formatted in YAML,
-// and returns a Config struct.
-func ParseFile(relpath string, conf *Config) error {
-	if relpath == "" {
-		return nil
-	}
-
-	// Try to get absolute path. If it fails, fall back to relative path.
-	path, abserr := filepath.Abs(relpath)
-	if abserr != nil {
-		path = relpath
-	}
-
-	// Read file
-	source, err := ioutil.ReadFile(path)
-	if err != nil {
-		logger.Error("Failure reading config", "path", path, "error", err)
-		return err
-	}
-
-	// Parse file
-	perr := Parse(source, conf)
-	if perr != nil {
-		logger.Error("Failure reading config", "path", path, "error", perr)
-		return perr
-	}
-	return nil
 }

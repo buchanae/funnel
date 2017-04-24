@@ -8,9 +8,9 @@ import (
 )
 
 const (
-  DebugLevel string = "debug"
-  InfoLevel = "info"
-  ErrorLevel = "error"
+	DebugLevel string = "debug"
+	InfoLevel         = "info"
+	ErrorLevel        = "error"
 )
 
 var formatter = &textFormatter{

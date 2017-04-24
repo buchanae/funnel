@@ -13,22 +13,22 @@ import (
 )
 
 func WithDebugMode(c config.Config) config.Config {
-  c.Server.LogLevel = logger.DebugLevel
-  c.Database.LogLevel = logger.DebugLevel
-  c.Scheduler.LogLevel = logger.DebugLevel
-  c.worker.LogLevel = logger.DebugLevel
-  return c
+	c.Server.LogLevel = logger.DebugLevel
+	c.Database.LogLevel = logger.DebugLevel
+	c.Scheduler.LogLevel = logger.DebugLevel
+	c.worker.LogLevel = logger.DebugLevel
+	return c
 }
 
 func Default() Config {
-  return Config{
-		HostName:   "localhost",
-		DBPath:     "funnel-work-dir/funnel.db",
-		HTTPPort:   "8000",
-		RPCPort:    "9090",
-		WorkDir:    "funnel-work-dir",
-		LogLevel:   logger.InfoLevel,
-		Scheduler:  "local",
+	return Config{
+		HostName:  "localhost",
+		DBPath:    "funnel-work-dir/funnel.db",
+		HTTPPort:  "8000",
+		RPCPort:   "9090",
+		WorkDir:   "funnel-work-dir",
+		LogLevel:  logger.InfoLevel,
+		Scheduler: "local",
 		Backends: SchedulerBackends{
 			Local: LocalSchedulerBackend{},
 			GCE: GCESchedulerBackend{
