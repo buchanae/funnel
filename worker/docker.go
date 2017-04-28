@@ -13,8 +13,8 @@ import (
 	"time"
 )
 
-// DockerCmd is responsible for configuring and running a docker container.
-type DockerCmd struct {
+// DockerExecutor is responsible for configuring and running a docker container.
+type DockerExecutor struct {
 	ImageName       string
 	Cmd             []string
 	Volumes         []Volume
@@ -29,7 +29,7 @@ type DockerCmd struct {
 }
 
 // Run runs the Docker command and blocks until done.
-func (dcmd DockerCmd) Run() error {
+func (dcmd DockerExecutor) Run(ctx context.Context) error {
 	args := []string{"run", "-i"}
 
 	if dcmd.RemoveContainer {
@@ -87,7 +87,7 @@ func (dcmd DockerCmd) Run() error {
 }
 
 // Inspect returns metadata about the container (calls "docker inspect").
-func (dcmd DockerCmd) Inspect(ctx context.Context) ([]*tes.Ports, error) {
+func (dcmd DockerExecutor) Inspect(ctx context.Context) []*tes.Ports {
 	log.Info("Fetching container metadata")
 	dclient, derr := util.NewDockerClient()
 	if derr != nil {
@@ -138,7 +138,7 @@ func (dcmd DockerCmd) Inspect(ctx context.Context) ([]*tes.Ports, error) {
 }
 
 // Stop stops the container.
-func (dcmd DockerCmd) Stop() error {
+func (dcmd DockerExecutor) stop() error {
 	log.Info("Stopping container", "container", dcmd.ContainerName)
 	dclient, derr := util.NewDockerClient()
 	if derr != nil {

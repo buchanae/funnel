@@ -11,268 +11,103 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+  "time"
 )
 
-// TaskRunner is a function that does the work of running a task on a worker,
-// including download inputs, executing commands, uploading outputs, etc.
-type TaskRunner func(TaskControl, config.Worker, *pbf.TaskWrapper, logUpdateChan)
+func RunTask(ctx context.Context, tw *pbr.TaskWrapper) {
+  // Create a backend of the given name.
+  // Backends are created per-task.
+  backend, err := 
+	task := tw.Task
 
-// Default TaskRunner
-func runTask(ctrl TaskControl, conf config.Worker, t *pbf.TaskWrapper, up logUpdateChan) {
-	// Map files into this baseDir
-	baseDir := path.Join(conf.WorkDir, t.Task.Id)
-
-	r := &taskRunner{
-		ctrl:    ctrl,
-		wrapper: t,
-		mapper:  NewFileMapper(baseDir),
-		store:   &storage.Storage{},
-		conf:    conf,
-		updates: up,
-		log:     logger.New("runner", "workerID", conf.ID, "taskID", t.Task.Id),
-	}
-	go r.Run()
-}
-
-// taskRunner helps collect data used across many helper methods.
-type taskRunner struct {
-	ctrl    TaskControl
-	wrapper *pbf.TaskWrapper
-	conf    config.Worker
-	updates logUpdateChan
-	log     logger.Logger
-	mapper  *FileMapper
-	store   *storage.Storage
-	ip      string
-}
-
-// TODO document behavior of slow consumer of task log updates
-func (r *taskRunner) Run() {
-	r.log.Debug("TaskRunner.Run")
-	task := r.wrapper.Task
 	// The code here is verbose, but simple; mainly loops and simple error checking.
 	//
 	// The steps are:
 	// 1. validate input and output mappings
 	// 2. download inputs
-	// 3. run the steps (docker)
+	// 3. run the executors
 	// 4. upload the outputs
 
-	r.step("prepareDir", r.prepareDir)
-	r.step("prepareMapper", r.prepareMapper)
-	r.step("prepareStorage", r.prepareStorage)
-	r.step("prepareIP", r.prepareIP)
-	r.step("validateInputs", r.validateInputs)
-	r.step("validateOutputs", r.validateOutputs)
+  // Validate the input and outputs
+  // TODO concat?
+  params := append(task.Inputs[:], task.Outputs)
+  for _, param := range params {
+    r.Add(func() error {
+      return backend.Supports(param.Url, param.Path, param.Type) {
+    })
+  })
+
+  // TODO validate stdin/out/err?
 
 	// Download inputs
-	for _, input := range r.mapper.Inputs {
-		r.step("store.Get", func() error {
-			return r.store.Get(
-				r.ctrl.Context(),
-				input.Url,
-				input.Path,
-				input.Type,
-			)
+	for _, input := range task.Inputs {
+		r.Add(func() error {
+			return backend.Get(ctx, input.Url, input.Path, input.Type)
 		})
 	}
 
-	r.ctrl.SetRunning()
+  // Set task to running state
+  r.Add(backend.Running)
 
-	// Run steps
+	// Run executors
 	for i, d := range task.Executors {
-		stepName := fmt.Sprintf("step-%d", i)
-		r.step(stepName, func() error {
-			s := &stepRunner{
-				TaskID:  task.Id,
-				Conf:    r.conf,
-				Num:     i,
-				Log:     r.log.WithFields("step", i),
-				Updates: r.updates,
-				IP:      r.ip,
-				Cmd: &DockerCmd{
-					ImageName:     d.ImageName,
-					Cmd:           d.Cmd,
-					Environ:       d.Environ,
-					Volumes:       r.mapper.Volumes,
-					Workdir:       d.Workdir,
-					Ports:         d.Ports,
-					ContainerName: fmt.Sprintf("%s-%d", task.Id, i),
-					// TODO make RemoveContainer configurable
-					RemoveContainer: true,
-				},
-			}
+		r.Add(func() error {
+      backend.Debug("Running executor", "i", i)
+      backend.StartTime(i, time.Now().Format(time.RFC3339))
 
-			// Opens stdin/out/err files and updates those fields on "cmd".
-			err := r.openStepLogs(s, d)
-			if err != nil {
-				s.Log.Error("Couldn't prepare log files", err)
-				return err
-			}
-			return s.Run(r.ctrl.Context())
+      // subctx ensures goroutines are cleaned up when the step exits.
+      subctx, cleanup := context.WithCancel(ctx)
+      defer cleanup()
+
+      executor, err := backend.Executor(i)
+      if err != nil {
+        return err
+      }
+
+      // Run the executor
+      done := make(chan error)
+      go func() {
+        done <- executor.Run(subctx)
+      }()
+
+      // Inspect the executor for metadata
+      go func() {
+        meta := s.Inspect(subctx)
+        b.Ports(i, meta.ports)
+        b.IP(i, meta.IP)
+      }()
+
+      // Wait for executor to exit
+      res := <-done
+      backend.EndTime(i, time.Now().Format(time.RFC3339))
+      backend.ExitCode(i, getExitCode(res))
+      return res
 		})
+
 	}
 
 	// Upload outputs
-	log.Debug("Outputs", r.mapper.Outputs)
-	for _, output := range r.mapper.Outputs {
-		r.step("store.Put", func() error {
-			r.fixLinks(output.Path)
-			return r.store.Put(r.ctrl.Context(), output.Url, output.Path, output.Type)
+	for _, output := range task.Outputs {
+		r.Add(func() error {
+      // TODO move to storage wrapper
+			//r.fixLinks(output.Path)
+			return backend.Put(ctx, output.Url, output.Path, output.Type)
 		})
 	}
 
-	r.ctrl.SetResult(nil)
+  return r.Run()
 }
 
-// fixLinks walks the output paths, fixing cases where a symlink is
-// broken because it's pointing to a path inside a container volume.
-func (r *taskRunner) fixLinks(basepath string) {
-	filepath.Walk(basepath, func(p string, f os.FileInfo, err error) error {
-		if err != nil {
-			// There's an error, so be safe and give up on this file
-			return nil
-		}
-
-		// Only bother to check symlinks
-		if f.Mode()&os.ModeSymlink != 0 {
-			// Test if the file can be opened because it doesn't exist
-			fh, rerr := os.Open(p)
-			fh.Close()
-
-			if rerr != nil && os.IsNotExist(rerr) {
-
-				// Get symlink source path
-				src, err := os.Readlink(p)
-				if err != nil {
-					return nil
-				}
-				// Map symlink source (possible container path) to host path
-				mapped, err := r.mapper.HostPath(src)
-				if err != nil {
-					return nil
-				}
-
-				// Check whether the mapped path exists
-				fh, err := os.Open(mapped)
-				fh.Close()
-
-				// If the mapped path exists, fix the symlink
-				if err == nil {
-					err := os.Remove(p)
-					if err != nil {
-						return nil
-					}
-					os.Symlink(mapped, p)
-				}
-			}
-		}
-		return nil
-	})
+type dolist []func() error
+func (dl *dolist) Add(f func() error) {
+  *dolist = append(dolist, f)
 }
-
-// openLogs opens/creates the logs files for a step and updates those fields.
-func (r *taskRunner) openStepLogs(s *stepRunner, d *tes.Executor) error {
-
-	// Find the path for task stdin
-	var err error
-	if d.Stdin != "" {
-		s.Cmd.Stdin, err = r.mapper.OpenHostFile(d.Stdin)
-		if err != nil {
-			return err
-		}
-	}
-
-	// Create file for task stdout
-	if d.Stdout != "" {
-		s.Cmd.Stdout, err = r.mapper.CreateHostFile(d.Stdout)
-		if err != nil {
-			return err
-		}
-	}
-
-	// Create file for task stderr
-	if d.Stderr != "" {
-		s.Cmd.Stderr, err = r.mapper.CreateHostFile(d.Stderr)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-// Create working dir
-func (r *taskRunner) prepareDir() error {
-	dir, err := filepath.Abs(r.conf.WorkDir)
-	if err != nil {
-		return err
-	}
-	return util.EnsureDir(dir)
-}
-
-// Prepare file mapper, which maps task file URLs to host filesystem paths
-func (r *taskRunner) prepareMapper() error {
-	// Map task paths to working dir paths
-	return r.mapper.MapTask(r.wrapper.Task)
-}
-
-// Grab the IP address of this host. Used to send task metadata updates.
-func (r *taskRunner) prepareIP() error {
-	var err error
-	r.ip, err = externalIP()
-	return err
-}
-
-// Configure a task-specific storage backend.
-// This provides download/upload for inputs/outputs.
-func (r *taskRunner) prepareStorage() error {
-	var err error
-
-	for _, conf := range r.conf.Storage {
-		r.store, err = r.store.WithConfig(conf)
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-// Validate the input downloads
-func (r *taskRunner) validateInputs() error {
-	for _, input := range r.mapper.Inputs {
-		if !r.store.Supports(input.Url, input.Path, input.Type) {
-			return fmt.Errorf("Input download not supported by storage: %v", input)
-		}
-	}
-	return nil
-}
-
-// Validate the output uploads
-func (r *taskRunner) validateOutputs() error {
-	for _, output := range r.mapper.Outputs {
-		if !r.store.Supports(output.Url, output.Path, output.Type) {
-			return fmt.Errorf("Output upload not supported by storage: %v", output)
-		}
-	}
-	return nil
-}
-
-// step helps clean up the frequent context and error checking code.
-//
-// Every operation in the runner needs to check if the context is done,
-// and handle errors appropriately. This helper removes that duplicated, verbose code.
-func (r *taskRunner) step(name string, stepfunc func() error) {
-	// If the runner is already complete (perhaps because a previous step failed)
-	// skip the step.
-	if !r.ctrl.Complete() {
-		// Run the step
-		err := stepfunc()
-		// If the step failed, set the runner to failed. All the following steps
-		// will be skipped.
-		if err != nil {
-			r.log.Error("Task runner step failed", "error", err, "step", name)
-			r.ctrl.SetResult(err)
-		}
-	}
+func (dl *dolist) Run() error {
+  for _, f := range dl {
+    err := f()
+    if err != nil {
+      return err
+    }
+  }
+  return nil
 }
