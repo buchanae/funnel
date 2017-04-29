@@ -52,11 +52,11 @@ func externalIP() (string, error) {
 
 // getExitCode gets the exit status (i.e. exit code) from the result of an executed command.
 // The exit code is zero if the command completed without error.
-func getExitCode(err error) int32 {
+func getExitCode(err error) int {
 	if err != nil {
 		if exiterr, exitOk := err.(*exec.ExitError); exitOk {
 			if status, statusOk := exiterr.Sys().(syscall.WaitStatus); statusOk {
-				return int32(status.ExitStatus())
+				return status.ExitStatus()
 			}
 		} else {
 			log.Info("Could not determine exit code. Using default -999")
@@ -94,9 +94,4 @@ func detectResources(conf *pbf.Resources) *pbf.Resources {
 	}
 
 	return res
-}
-
-// NoopTaskRunner is useful during testing for creating a worker with a TaskRunner
-// that doesn't do anything.
-func NoopTaskRunner(l TaskControl, c config.Worker, j *pbf.TaskWrapper, u logUpdateChan) {
 }

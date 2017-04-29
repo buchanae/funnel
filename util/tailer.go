@@ -1,4 +1,4 @@
-package worker
+package util
 
 import (
 	"github.com/ohsu-comp-bio/funnel/util/ring"
