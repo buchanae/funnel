@@ -62,6 +62,9 @@ func (r *RPCTaskLogger) Result(err error) {
 func (r *RPCTaskLogger) Close() {}
 
 
+
+
+
 type RPCExecutorLogger struct {
   client
   taskID string
@@ -120,9 +123,7 @@ func (r *RPCExecutorLogger) Stderr() io.Writer {
 
 
 func NewDefaultBackend(conf config.Worker, taskID string) (*DefaultBackend, error) {
-	// Map files into this baseDir
-	baseDir := path.Join(conf.WorkDir, t.Task.Id)
-	prepareDir(baseDir)
+  workspace, err := NewWorkspace(conf.WorkDir, taskID)
   NewTaskState()
 
   task, err := b.client.GetTask(ctx, &tes.GetTaskRequest{
@@ -141,6 +142,7 @@ type DefaultBackend struct {
   *RPCTaskLogger
   task *tes.Task
   client
+  workspace *Workspace
 }
 
 func (b *DefaultBackend) Task() *tes.Task {
@@ -177,7 +179,7 @@ func (b *DefaultBackend) WithContext(ctx context.Context) context.Context {
 
 func (b *DefaultBackend) Executor(i int, d *tes.Executor) Executor {
   return &DefaultBackendExecutor{
-    &DockerExecutor{
+    Docker: &Docker{
       ImageName:       d.ImageName,
       Cmd:             d.Cmd,
       Volumes:         r.mapper.Volumes,
@@ -187,27 +189,45 @@ func (b *DefaultBackend) Executor(i int, d *tes.Executor) Executor {
       RemoveContainer: r.conf.RemoveContainer,
       Environ:         d.Environ,
     },
-    &RPCExecutorLogger{
+    ExecutorLogger: &RPCExecutorLogger{
       client: b.client,
       taskID: b.task.Id,
       executor: i,
     },
+    executor: i,
+    workspace: b.workspace,
   }
 }
 
 
-type DefaultBackendExecutor struct {
+type DefaultExecutor struct {
   ExecutorLogger
   *Docker
+  executor int
+  workspace *Workspace
 }
 
-func (b *DefaultBackendExecutor) Run(ctx context.Context) error {
+func (b *DefaultExecutor) Run(ctx context.Context) error {
   var err error
-	if d.Stdin != "" {
-		exec.Stdin, err = b.mapper.OpenHostFile(d.Stdin)
-	}
-  exec.Stdout, err = b.teeLogFile(d.Stdout, log.Stdout(i))
-  exec.Stderr, err = b.teeLogFile(d.Stderr, log.Stderr(i))
+  i := b.executor
+
+	exec.Stdin, err = b.workspace.Reader(d.Stdin)
+  if err != nil {
+    return err
+  }
+
+  exec.Stdout, err = b.workspace.Writer(d.Stdout)
+  exec.Stdout = io.MultiWriter(exec.Stdout, b.ExecutorLogger.Stdout(i))
+  if err != nil {
+    return err
+  }
+
+  exec.Stderr, err = b.workspace.Writer(d.Stderr)
+  exec.Stderr = io.MultiWriter(exec.Stderr, b.ExecutorLogger.Stderr(i))
+  if err != nil {
+    return err
+  }
+
   return b.Docker.Run(ctx)
 }
 
@@ -216,28 +236,32 @@ func (b *DefaultBackendExecutor) Close() {
   // TODO ?b.DockerExecutor.Close()
 }
 
-func (b *DefaultBackend) teeLogFile(p string, rpc io.Writer) (io.Writer, error) {
-  if p == "" {
-    nil, nil
-  }
-  f, err := b.mapper.CreateHostFile(p)
-  if err != nil {
-    return nil, err
-  }
-  return io.MultiWriter(f, rpc), nil
-}
 
 
-
-
-// Create working dir
-func prepareDir(path string) error {
+func NewWorkspace(root string, taskID string) (*Workspace, error) {
+	baseDir := path.Join(conf.WorkDir, t.Task.Id)
 	dir, err := filepath.Abs(path)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	return util.EnsureDir(dir)
+  util.EnsureDir(dir)
 }
+
+type Workspace struct {}
+
+func (w *Workspace) Writer(p string) (io.Writer, error) {
+  if p == "" {
+    return nil, nil
+  }
+}
+
+func (w *Workspace) Reader(p string) (io.Reader, error) {
+  if p == "" {
+    return nil, nil
+  }
+}
+
+
 
 // Configure a task-specific storage backend.
 // This provides download/upload for inputs/outputs.

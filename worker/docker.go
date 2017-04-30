@@ -15,17 +15,18 @@ import (
 
 // Docker is responsible for configuring and running a docker container.
 type Docker struct {
+	ContainerName   string
 	ImageName       string
 	Cmd             []string
 	Volumes         []Volume
 	Workdir         string
 	Ports           []*tes.Ports
-	ContainerName   string
 	RemoveContainer bool
 	Environ         map[string]string
 	Stdin           io.Reader
 	Stdout          io.Writer
 	Stderr          io.Writer
+  Log             logger.Logger
 }
 
 // Run runs the Docker command and blocks until done.
@@ -71,7 +72,7 @@ func (dcmd Docker) Run(ctx context.Context) error {
 	args = append(args, dcmd.Cmd...)
 
 	// Roughly: `docker run --rm -i -w [workdir] -v [bindings] [imageName] [cmd]`
-	log.Info("Running command", "cmd", "docker "+strings.Join(args, " "))
+	d.Log.Info("Running command", "cmd", "docker "+strings.Join(args, " "))
 	cmd := exec.Command("docker", args...)
 
 	if dcmd.Stdin != nil {
@@ -87,8 +88,8 @@ func (dcmd Docker) Run(ctx context.Context) error {
 }
 
 // Inspect returns metadata about the container (calls "docker inspect").
-func (dcmd Docker) Inspect(ctx context.Context) []*tes.Ports {
-	log.Info("Fetching container metadata")
+func (dcmd Docker) Inspect(ctx context.Context) ExecutorMetadata {
+	d.Log.Info("Fetching container metadata")
 	dclient, derr := util.NewDockerClient()
 	if derr != nil {
 		return nil, derr
@@ -105,7 +106,7 @@ func (dcmd Docker) Inspect(ctx context.Context) []*tes.Ports {
 				break
 			}
 			if err != nil {
-				log.Error("Error inspecting container", err)
+				d.Log.Error("Error inspecting container", err)
 				break
 			}
 			if metadata.State.Running == true {
@@ -128,7 +129,7 @@ func (dcmd Docker) Inspect(ctx context.Context) []*tes.Ports {
 							Container: uint32(containerPort),
 							Host:      uint32(hostPort),
 						})
-						log.Debug("Found port mapping:", "host", hostPort, "container", containerPort)
+						d.Log.Debug("Found port mapping:", "host", hostPort, "container", containerPort)
 					}
 				}
 				return portMap, nil
