@@ -133,46 +133,6 @@ func (mapper *FileMapper) HostPath(src string) (string, error) {
 	return p, nil
 }
 
-// OpenHostFile opens a file on the host file system at a mapped path.
-// "src" is an unmapped path. This function will handle mapping the path.
-//
-// This function calls os.Open
-//
-// If the path can't be mapped or the file can't be opened, an error is returned.
-func (mapper *FileMapper) OpenHostFile(src string) (*os.File, error) {
-	p, perr := mapper.HostPath(src)
-	if perr != nil {
-		return nil, perr
-	}
-	f, oerr := os.Open(p)
-	if oerr != nil {
-		return nil, oerr
-	}
-	return f, nil
-}
-
-// CreateHostFile creates a file on the host file system at a mapped path.
-// "src" is an unmapped path. This function will handle mapping the path.
-//
-// This function calls os.Create
-//
-// If the path can't be mapped or the file can't be created, an error is returned.
-func (mapper *FileMapper) CreateHostFile(src string) (*os.File, error) {
-	p, perr := mapper.HostPath(src)
-	if perr != nil {
-		return nil, perr
-	}
-	err := util.EnsurePath(p)
-	if err != nil {
-		return nil, err
-	}
-	f, oerr := os.Create(p)
-	if oerr != nil {
-		return nil, oerr
-	}
-	return f, nil
-}
-
 // AddTmpVolume creates a directory on the host based on the delcared path in
 // the container and adds it to mapper.Volumes.
 //

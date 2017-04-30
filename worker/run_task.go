@@ -11,8 +11,9 @@ import (
   // defer backend.Close()
 
 func RunTask(ctx context.Context, backend Backend) {
-  task := backend.Task()
   l := util.CallList{}
+  task := backend.Task()
+  ctx = backend.WatchForCancel(ctx)
 
   l.AddUnchecked(func() {
     backend.TaskLogger.StartTime(util.Now())
@@ -47,6 +48,7 @@ func RunTask(ctx context.Context, backend Backend) {
 
       exec := backend.Executor(i, d)
       defer exec.Close()
+
       exec.Logger.Info("Running")
       exec.ExecutorLogger.StartTime(util.Now())
 
@@ -84,7 +86,6 @@ func RunTask(ctx context.Context, backend Backend) {
     backend.TaskLogger.EndTime(util.Now())
   })
 
-  taskctx := backend.WithContext(ctx)
-  result := l.Run(taskctx)
+  result := l.Run(ctx)
   backend.TaskLogger.Result(result)
 }

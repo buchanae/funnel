@@ -7,56 +7,6 @@ import (
 )
 
 
-type ExecutorMetadata struct {
-	HostIP string
-	Ports  []*tes.Ports
-}
-
-type Executor interface {
-  ExecutorLogger
-
-	Run(context.Context) error
-	Inspect(context.Context) ExecutorMetadata
-  Close()
-}
-
-type ExecutorLogger interface {
-  logger.Logger
-
-	ExitCode(int)
-	Ports([]*tes.Ports)
-	HostIP(string)
-	StartTime(t string)
-	EndTime(t string)
-  Close()
-}
-
-type TaskLogger interface {
-	logger.Logger
-
-	StartTime(t string)
-	EndTime(t string)
-	OutputFile(f string)
-	Metadata(map[string]string)
-  Running()
-  Result(error)
-  Close()
-}
-
-// TODO document behavior of slow consumer of task log updates
-type Backend interface {
-	TaskLogger
-	storage.Storage
-
-  Task(id string)
-  Executor(int, *tes.Executor) Executor
-  WithContext(context.Context) context.Context
-  Close()
-}
-
-
-      // TODO move to storage wrapper
-			//r.fixLinks(output.Path)
 
 
 
