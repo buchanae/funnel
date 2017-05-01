@@ -116,23 +116,6 @@ func (mapper *FileMapper) AddVolume(hostPath string, mountPoint string, readonly
 	return nil
 }
 
-// HostPath returns a mapped path.
-//
-// The path is concatenated to the mapper's base dir.
-// e.g. If the mapper is configured with a base dir of "/tmp/mapped_files", then
-// mapper.HostPath("/home/ubuntu/myfile") will return "/tmp/mapped_files/home/ubuntu/myfile".
-//
-// The mapped path is required to be a subpath of the mapper's base directory.
-// e.g. mapper.HostPath("../../foo") should fail with an error.
-func (mapper *FileMapper) HostPath(src string) (string, error) {
-	p := path.Join(mapper.dir, src)
-	p = path.Clean(p)
-	if !mapper.IsSubpath(p, mapper.dir) {
-		return "", fmt.Errorf("Invalid path: %s is not a valid subpath of %s", p, mapper.dir)
-	}
-	return p, nil
-}
-
 // AddTmpVolume creates a directory on the host based on the delcared path in
 // the container and adds it to mapper.Volumes.
 //
