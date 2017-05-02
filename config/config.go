@@ -52,6 +52,10 @@ type Config struct {
 	// How long to wait for worker initialization before marking it dead
 	WorkerInitTimeout time.Duration
 	DisableHTTPCache  bool
+  CCC struct{
+    DTSAddress string
+    Sites []string
+  }
 }
 
 // HTTPAddress returns the HTTP address based on HostName and HTTPPort

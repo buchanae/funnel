@@ -5,26 +5,34 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+  "github.com/ohsu-comp-bio/funnel/logger"
+  "time"
+  "encoding/json"
+  "io/ioutil"
 )
 
-var log = logger.New("CCC DTS Client")
+var log = logger.New("CCC DTS")
+
+type Client interface {
+  GetFile(id string) (*Entry, error)
+}
 
 // NewClient returns a new HTTP client for accessing
 // Create/List/Get/Cancel Task endpoints. "address" is the address
 // of the CCC Central Function server.
-func NewClient(address string) (*Client, error) {
+func NewClient(address string) (Client, error) {
 	u, err := url.Parse(address)
 	if err != nil {
-		log.Error(err)
+		log.Error("Can't parse DTS address", err)
 		return nil, err
 	}
 	if u.Scheme != "http" || u.Scheme != "https" {
 		errors.New("Invalid URL scheme.")
-		log.Error(err)
+		log.Error("Invalid DTS URL scheme", err)
 		return nil, err
 	}
-	c := &Client{
-		address: address,
+	c := &client{
+		address: u,
 		client: &http.Client{
 			Timeout: 10 * time.Second,
 		},
@@ -33,7 +41,7 @@ func NewClient(address string) (*Client, error) {
 }
 
 // Client represents the HTTP Task client.
-type Client struct {
+type client struct {
 	address *url.URL
 	client  *http.Client
 }
@@ -57,7 +65,7 @@ type Location struct {
 }
 
 // Get returns the raw bytes from GET /api/v1/dts/file/<id>
-func (c *Client) GetFile(id string) (*DTSEntry, error) {
+func (c *client) GetFile(id string) (*Entry, error) {
 	// Send request
 	body, err := check(c.client.Get("api/v1/dts/file/" + id))
 	if err != nil {
