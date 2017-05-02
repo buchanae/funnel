@@ -28,6 +28,7 @@ func NewDefaultBackend(conf config.Worker, taskID string) (*DefaultBackend, erro
   return &DefaultBackend{
     Logger: log.WithFields("task", taskID),
     RPCTaskLogger: &RPCTaskLogger{client, taskID},
+    RPCTaskReader: &RPCTaskReader{client, taskID},
     Storage: store,
     task: task,
     client: client
@@ -38,27 +39,18 @@ func NewDefaultBackend(conf config.Worker, taskID string) (*DefaultBackend, erro
 type DefaultBackend struct {
   logger.Logger
   *RPCTaskLogger
+  *RPCTaskReader
   storage.Storage
-  task *tes.Task
   client
   workspace *Workspace
 }
 
-func (b *DefaultBackend) Task() *tes.Task {
-  return b.task
-}
-
 func (b *DefaultBackend) Close() {
+  b.RPCTaskLogger.Close()
   b.client.Close()
 }
 
 func (b *DefaultBackend) Executor(i int, d *tes.Executor) Executor {
-  log := &RPCExecutorLogger{
-    client: b.client,
-    taskID: b.task.Id,
-    executor: i,
-  }
-
   stdin, ierr := b.workspace.Reader(d.Stdin)
   stdout, oerr := b.workspace.Writer(d.Stdout)
   stderr, eerr := b.workspace.Writer(d.Stderr)
@@ -68,7 +60,6 @@ func (b *DefaultBackend) Executor(i int, d *tes.Executor) Executor {
   }
 
   return &Docker{
-    log,
     ImageName:       d.ImageName,
     Cmd:             d.Cmd,
     Volumes:         r.mapper.Volumes,

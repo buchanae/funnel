@@ -6,8 +6,6 @@ type ExecutorMetadata struct {
 }
 
 type Executor interface {
-  ExecutorLogger
-
 	Run(context.Context) error
 	Inspect(context.Context) ExecutorMetadata
   Close()
@@ -19,7 +17,6 @@ type ExecutorLogger interface {
 	HostIP(string)
 	StartTime(t string)
 	EndTime(t string)
-  Close()
 }
 
 type TaskLogger interface {
@@ -29,23 +26,26 @@ type TaskLogger interface {
 	Metadata(map[string]string)
   Running()
   Result(error)
-  Close()
+  ExecutorExitCode(int, int)
+  ExecutorPorts(int, []*tes.Ports)
+  ExecutorHostIP(int, string)
+  ExecutorStartTime(int, string)
+  ExecutorEndTime(int, string)
 }
 
-type TaskCanceler interface {
-  WatchForCancel(context.Context) context.Context
+type TaskReader interface {
+  Task() *tes.Task
+  State() tes.State
 }
 
 // TODO document behavior of slow consumer of task log updates
 type Backend interface {
   logger.Logger
 	TaskLogger
-  TaskCanceler
+  TaskReader
 	storage.Storage
 
-  Task(id string)
   Executor(int, *tes.Executor) (Executor, error)
-  WithContext(context.Context) context.Context
   Close()
 }
 

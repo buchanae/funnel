@@ -15,7 +15,6 @@ import (
 
 // Docker is responsible for configuring and running a docker container.
 type Docker struct {
-  ExecutorLogger
 	ContainerName   string
 	ImageName       string
 	Cmd             []string
@@ -27,10 +26,6 @@ type Docker struct {
 	Stdin           io.Reader
 	Stdout          io.Writer
 	Stderr          io.Writer
-}
-
-func (d Docker) Close() {
-  d.ExecutorLogger.Close()
 }
 
 // Run runs the Docker command and blocks until done.

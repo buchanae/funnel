@@ -13,7 +13,7 @@ import (
 func RunTask(ctx context.Context, backend Backend) {
   l := util.CallList{}
   task := backend.Task()
-  ctx = backend.WatchForCancel(ctx)
+  ctx = PollForCancel(ctx, conf.PollRate, backend)
 
   l.AddUnchecked(func() {
     backend.TaskLogger.StartTime(util.Now())
@@ -50,7 +50,8 @@ func RunTask(ctx context.Context, backend Backend) {
       defer exec.Close()
 
       exec.Logger.Info("Running")
-      exec.ExecutorLogger.StartTime(util.Now())
+      backend.TaskLogger.ExecutorStartTime(i, util.Now())
+      exec.Stdout(backend.TaskLogger.ExecutorStdout(i))
 
       // Run the executor
       done := make(chan error)
@@ -61,14 +62,14 @@ func RunTask(ctx context.Context, backend Backend) {
       // Inspect the executor for metadata
       go func() {
         meta := exec.Inspect(subctx, d)
-        exec.ExecutorLogger.Ports(meta.Ports)
-        exec.ExecutorLogger.HostIP(meta.HostIP)
+        backend.TaskLogger.ExecutorPorts(i, meta.Ports)
+        backend.TaskLogger.ExecutorHostIP(i, meta.HostIP)
       }()
 
       // Wait for executor to exit
       res := <-done
-      exec.ExecutorLogger.EndTime(util.Now())
-      exec.ExecutorLogger.ExitCode(getExitCode(res))
+      backend.TaskLogger.ExecutorEndTime(i, util.Now())
+      backend.TaskLogger.ExecutorExitCode(i, getExitCode(res))
       return res
 		})
 	}
