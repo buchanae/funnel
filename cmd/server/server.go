@@ -7,6 +7,7 @@ import (
 	"github.com/ohsu-comp-bio/funnel/logger"
 	"github.com/ohsu-comp-bio/funnel/logger/logutils"
 	"github.com/ohsu-comp-bio/funnel/scheduler"
+	"github.com/ohsu-comp-bio/funnel/scheduler/ccc"
 	"github.com/ohsu-comp-bio/funnel/scheduler/condor"
 	"github.com/ohsu-comp-bio/funnel/scheduler/gce"
 	"github.com/ohsu-comp-bio/funnel/scheduler/local"
@@ -84,6 +85,7 @@ func Run(conf config.Config) error {
 	sched.AddBackend(condor.Plugin)
 	sched.AddBackend(openstack.Plugin)
 	sched.AddBackend(local.Plugin)
+	sched.AddBackend(ccc.Plugin)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

@@ -163,16 +163,21 @@ func (l LocalStorage) Valid() bool {
 	return len(l.AllowedDirs) > 0
 }
 
-// CCCStorage describes the directories Funnel can read from and write to
+// CCCStorage describes the directories Funnel can read from and write to and
+// the sites it can access
 type CCCStorage struct {
 	AllowedDirs []string
-	Site        string
+	Strategy    string
 	DTSUrl      string
+	SiteMap     struct {
+		Central string
+		Local   string
+	}
 }
 
 // Valid validates the CCCStorage configuration
 func (l CCCStorage) Valid() bool {
-	return len(l.AllowedDirs) > 0 && l.Site != "" && l.DTSUrl != ""
+	return len(l.AllowedDirs) > 0 && l.DTSUrl != "" && l.SiteMap.Central != "" && l.SiteMap.Local != ""
 }
 
 // GSStorage describes configuration for the Google Cloud storage backend.

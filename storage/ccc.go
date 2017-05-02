@@ -18,7 +18,9 @@ const CCCProtocol = "ccc://"
 // CCCBackend provides access to a ccc-disk storage system.
 type CCCBackend struct {
 	allowedDirs []string
-	site        string
+	localSite   string
+	remoteSites []string
+	outputSite  string
 	dtsURL      string
 }
 
@@ -27,9 +29,24 @@ type CCCBackend struct {
 func NewCCCBackend(conf config.CCCStorage) (*CCCBackend, error) {
 	b := &CCCBackend{
 		allowedDirs: conf.AllowedDirs,
-		site:        conf.Site,
 		dtsURL:      conf.DTSUrl,
+		localSite:   conf.SiteMap.Local,
 	}
+
+	local := conf.SiteMap.Local
+	central := conf.SiteMap.Central
+	switch conf.Strategy {
+	case "fetch_file":
+		b.remoteSites = []string{central}
+		b.outputSite = local
+	case "push_file":
+		b.remoteSites = nil
+		b.outputSite = central
+	default: // AKA "routed_file"
+		b.remoteSites = nil
+		b.outputSite = local
+	}
+
 	return b, nil
 }
 
@@ -38,7 +55,7 @@ func (ccc *CCCBackend) Get(ctx context.Context, url string, hostPath string, cla
 	log.Info("Starting download", "url", url, "hostPath", hostPath)
 
 	path := strings.TrimPrefix(url, CCCProtocol)
-	path, rerr := resolveCCCID(path, ccc.site, ccc.dtsURL)
+	path, rerr := ccc.resolveCCCID(path)
 	log.Info("Resolved DTS url", "url", url, "sitePath", path)
 	if rerr != nil {
 		return rerr
@@ -67,7 +84,7 @@ func (ccc *CCCBackend) Put(ctx context.Context, url string, hostPath string, cla
 	log.Info("Starting upload", "url", url, "hostPath", hostPath)
 
 	path := strings.TrimPrefix(url, CCCProtocol)
-	record, rerr := resolveCCCID(path, ccc.site, ccc.dtsURL)
+	record, rerr := ccc.resolveCCCID(path)
 	if rerr == nil {
 		return fmt.Errorf("CCCID %s conflicts with an existing record: %+v", path, record)
 	}
@@ -87,7 +104,7 @@ func (ccc *CCCBackend) Put(ctx context.Context, url string, hostPath string, cla
 		return fmt.Errorf("Failed to upload %s: %v", url, err)
 	}
 
-	r, cerr := createDTSRecord(path, ccc.site, ccc.dtsURL)
+	r, cerr := ccc.createDTSRecord(path)
 	if cerr != nil {
 		return fmt.Errorf("Failed to create DTS Record for output %s. %v", url, cerr)
 	}
@@ -104,8 +121,8 @@ func (ccc *CCCBackend) Supports(url string, hostPath string, class tes.FileType)
 	return strings.HasPrefix(url, CCCProtocol)
 }
 
-func resolveCCCID(path string, site string, dtsURL string) (string, error) {
-	cli, err := dts.NewClient(dtsURL)
+func (ccc *CCCBackend) resolveCCCID(path string) (string, error) {
+	cli, err := dts.NewClient(ccc.dtsURL)
 	if err != nil {
 		return "", err
 	}
@@ -115,20 +132,24 @@ func resolveCCCID(path string, site string, dtsURL string) (string, error) {
 	}
 	log.Debug("DTS Record", "record", fmt.Sprintf("%+v", entry))
 	for _, location := range entry.Location {
-		if site == location.Site {
+		if ccc.localSite == location.Site {
 			return filepath.Join(location.Path, entry.Name), nil
 		}
+		for _, r := range ccc.remoteSites {
+			if r == location.Site {
+				return filepath.Join(location.Path, entry.Name), nil
+			}
+		}
 	}
-	err = fmt.Errorf("No DTS record for %s on site %s", path, site)
-	return "", err
+	return "", fmt.Errorf("%s is not located at an accessible site", path)
 }
 
-func createDTSRecord(path string, site string, dtsURL string) (*dts.Record, error) {
-	r, err := dts.GenerateRecord(path, site)
+func (ccc *CCCBackend) createDTSRecord(path string) (*dts.Record, error) {
+	r, err := dts.GenerateRecord(path, ccc.outputSite)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to generate DTS Record for output %s. %v", path, err)
 	}
-	cli, err := dts.NewClient(dtsURL)
+	cli, err := dts.NewClient(ccc.dtsURL)
 	if err != nil {
 		return nil, err
 	}
