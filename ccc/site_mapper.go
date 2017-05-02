@@ -6,6 +6,7 @@ import (
 	"github.com/ohsu-comp-bio/funnel/proto/tes"
 	"google.golang.org/grpc"
   "net/url"
+  "strings"
 )
 
 type SiteMapper interface {
@@ -78,5 +79,6 @@ func parse(gid string) (string, string, error) {
     return "", "", errors.New("can't parse task URL")
   }
 
-  return u.Hostname(), u.Path, nil
+  p := strings.TrimPrefix(u.Path, "/")
+  return u.Hostname(), p, nil
 }

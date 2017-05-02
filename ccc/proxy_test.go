@@ -100,7 +100,67 @@ func TestCreateNoSharedSite(t *testing.T) {
 }
 
 func TestGetTask(t *testing.T) {
-  t.Error("FUU")
+
+  getSiteClient := func(address string) (tes.TaskServiceClient, error) {
+    if address != "site-one:9090" {
+      log.Debug("SITE CONN", address)
+      t.Fatal("Unexpected site connection")
+    }
+    c := new(tesmocks.TaskServiceClient)
+
+    request := &tes.GetTaskRequest{Id: "ccc-task-id"}
+    c.On("GetTask", mock.Anything, request, mock.Anything).
+      Return(&tes.Task{
+        Id: "ccc-task-id",
+      }, nil)
+
+    return c, nil
+  }
+
+  conf := config.DefaultConfig()
+  m := &siteMapper{conf, getSiteClient}
+  dtsMock := new(dtsmocks.Client)
+  p := TaskProxy{dtsMock, m}
+
+  req := &tes.GetTaskRequest{Id: "http://site-one/ccc-task-id"}
+  resp, err := p.GetTask(context.Background(), req)
+
+  if err != nil {
+    t.Fatal(err)
+  }
+  if resp.Id != "http://site-one/ccc-task-id" {
+    log.Debug("TASK ID", resp.Id)
+    t.Fatal("Unexpected task id")
+  }
+}
+
+func TestCancelTask(t *testing.T) {
+
+  getSiteClient := func(address string) (tes.TaskServiceClient, error) {
+    if address != "site-one:9090" {
+      log.Debug("SITE CONN", address)
+      t.Fatal("Unexpected site connection")
+    }
+    c := new(tesmocks.TaskServiceClient)
+
+    request := &tes.CancelTaskRequest{Id: "ccc-task-id"}
+    c.On("CancelTask", mock.Anything, request, mock.Anything).
+      Return(&tes.CancelTaskResponse{}, nil)
+
+    return c, nil
+  }
+
+  conf := config.DefaultConfig()
+  m := &siteMapper{conf, getSiteClient}
+  dtsMock := new(dtsmocks.Client)
+  p := TaskProxy{dtsMock, m}
+
+  req := &tes.CancelTaskRequest{Id: "http://site-one/ccc-task-id"}
+  _, err := p.CancelTask(context.Background(), req)
+
+  if err != nil {
+    t.Fatal(err)
+  }
 }
 
 func taskWithInputs(urls ...string) *tes.Task {
