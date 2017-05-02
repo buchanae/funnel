@@ -245,11 +245,11 @@ func AssetNames() []string {
 
 // _bindata is a table, holding each asset generator, mapped to its name.
 var _bindata = map[string]func() (*asset, error){
-	"web-dashboard/bundle.js": webDashboardBundleJs,
-	"web-dashboard/index.html": webDashboardIndexHtml,
-	"web-dashboard/list.html": webDashboardListHtml,
-	"web-dashboard/style.css": webDashboardStyleCss,
-	"web-dashboard/task.html": webDashboardTaskHtml,
+	"web-dashboard/bundle.js":        webDashboardBundleJs,
+	"web-dashboard/index.html":       webDashboardIndexHtml,
+	"web-dashboard/list.html":        webDashboardListHtml,
+	"web-dashboard/style.css":        webDashboardStyleCss,
+	"web-dashboard/task.html":        webDashboardTaskHtml,
 	"web-dashboard/worker-list.html": webDashboardWorkerListHtml,
 }
 
@@ -292,14 +292,15 @@ type bintree struct {
 	Func     func() (*asset, error)
 	Children map[string]*bintree
 }
+
 var _bintree = &bintree{nil, map[string]*bintree{
-	"web-dashboard": &bintree{nil, map[string]*bintree{
-		"bundle.js": &bintree{webDashboardBundleJs, map[string]*bintree{}},
-		"index.html": &bintree{webDashboardIndexHtml, map[string]*bintree{}},
-		"list.html": &bintree{webDashboardListHtml, map[string]*bintree{}},
-		"style.css": &bintree{webDashboardStyleCss, map[string]*bintree{}},
-		"task.html": &bintree{webDashboardTaskHtml, map[string]*bintree{}},
-		"worker-list.html": &bintree{webDashboardWorkerListHtml, map[string]*bintree{}},
+	"web-dashboard": {nil, map[string]*bintree{
+		"bundle.js":        {webDashboardBundleJs, map[string]*bintree{}},
+		"index.html":       {webDashboardIndexHtml, map[string]*bintree{}},
+		"list.html":        {webDashboardListHtml, map[string]*bintree{}},
+		"style.css":        {webDashboardStyleCss, map[string]*bintree{}},
+		"task.html":        {webDashboardTaskHtml, map[string]*bintree{}},
+		"worker-list.html": {webDashboardWorkerListHtml, map[string]*bintree{}},
 	}},
 }}
 
@@ -349,4 +350,3 @@ func _filePath(dir, name string) string {
 	cannonicalName := strings.Replace(name, "\\", "/", -1)
 	return filepath.Join(append([]string{dir}, strings.Split(cannonicalName, "/")...)...)
 }
-

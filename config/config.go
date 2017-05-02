@@ -157,6 +157,13 @@ type LocalStorage struct {
 	AllowedDirs []string
 }
 
+// CCCStorage describes the directories Funnel can read from and write to
+type CCCStorage struct {
+	AllowedDirs []string
+	Site        string
+	DTSUrl      string
+}
+
 // Valid validates the LocalStorage configuration
 func (l LocalStorage) Valid() bool {
 	return len(l.AllowedDirs) > 0
