@@ -66,10 +66,10 @@ func (ccc *CCCBackend) Get(ctx context.Context, url string, hostPath string, cla
 func (ccc *CCCBackend) Put(ctx context.Context, url string, hostPath string, class tes.FileType) error {
 	log.Info("Starting upload", "url", url, "hostPath", hostPath)
 
-	id := strings.TrimPrefix(url, CCCProtocol)
-	path, rerr := resolveCCCID(id, ccc.site, ccc.dtsURL)
+	path := strings.TrimPrefix(url, CCCProtocol)
+	record, rerr := resolveCCCID(path, ccc.site, ccc.dtsURL)
 	if rerr == nil {
-		return fmt.Errorf("CCCID %s conflicts with an existing record: %v", id, path)
+		return fmt.Errorf("CCCID %s conflicts with an existing record: %+v", path, record)
 	}
 	if !isAllowed(path, ccc.allowedDirs) {
 		return fmt.Errorf("Can't access file, path is not in allowed directories:  %s", url)
@@ -92,7 +92,7 @@ func (ccc *CCCBackend) Put(ctx context.Context, url string, hostPath string, cla
 		return fmt.Errorf("Failed to create DTS Record for output %s. %v", url, cerr)
 	}
 
-	log.Debug("Created DTS Record.", "record", r)
+	log.Debug("Created DTS Record", "record", fmt.Sprintf("%+v", r))
 	log.Info("Finished upload", "url", url, "hostPath", hostPath)
 
 	return nil
@@ -113,7 +113,7 @@ func resolveCCCID(path string, site string, dtsURL string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	log.Debug("DTS Record", "record", entry)
+	log.Debug("DTS Record", "record", fmt.Sprintf("%+v", entry))
 	for _, location := range entry.Location {
 		if site == location.Site {
 			return filepath.Join(location.Path, entry.Name), nil
@@ -133,6 +133,7 @@ func createDTSRecord(path string, site string, dtsURL string) (*dts.Record, erro
 		return nil, err
 	}
 	msg, err := json.Marshal(r)
+	log.Debug("Created DTS message", "message", string(msg))
 	if err != nil {
 		return nil, err
 	}

@@ -59,26 +59,28 @@ type Client struct {
 
 // Record represents a DTS record
 type Record struct {
-	ID       string
-	Name     string
-	Size     int64
-	Location []Location
+	CCCID    string     `json:"cccId"`
+	Name     string     `json:"name"`
+	Size     int64      `json:"size"`
+	Location []Location `json:"location"`
 }
 
 // Location represents a DTS location
 type Location struct {
-	Site             string
-	Path             string
-	TimestampUpdated int64
+	Site             string `json:"site"`
+	Path             string `json:"path"`
+	TimestampUpdated int64  `json:"timestampUpdated"`
 	User             struct {
-		Name string
-	}
+		Name string `json:"name"`
+	} `json:"user"`
 }
 
 // GetFile returns the raw bytes from GET /api/v1/dts/file/<id>
 func (c *Client) GetFile(id string) (*Record, error) {
+	// convert ID to be URL safe
+	cccID := url.PathEscape(id)
 	// Send request
-	u := c.address + "/api/v1/dts/file/" + id
+	u := c.address + "/api/v1/dts/file/" + cccID
 	body, err := CheckHTTPResponse(c.client.Get(u))
 	if err != nil {
 		return nil, err
@@ -121,9 +123,9 @@ func GenerateRecord(path string, site string) (*Record, error) {
 	}
 	defer f.Close()
 	r := &Record{
-		ID:   path,
-		Name: fi.Name(),
-		Size: fi.Size(),
+		CCCID: path,
+		Name:  fi.Name(),
+		Size:  fi.Size(),
 		Location: []Location{
 			{
 				Site:             site,
