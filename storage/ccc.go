@@ -99,7 +99,7 @@ func (ccc *CCCBackend) Put(ctx context.Context, url string, hostPath string, cla
 
 // Supports indicates whether this backend supports the given storage request.
 // For the CCCBackend, the url must start with "ccc://"
-func (ccc *CCCBackend) Supports(url string, class tes.FileType) bool {
+func (ccc *CCCBackend) Supports(url string, hostPath string, class tes.FileType) bool {
 	return strings.HasPrefix(url, CCCProtocol)
 }
 
