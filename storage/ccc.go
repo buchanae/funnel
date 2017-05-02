@@ -39,6 +39,7 @@ func (ccc *CCCBackend) Get(ctx context.Context, url string, hostPath string, cla
 
 	path := strings.TrimPrefix(url, CCCProtocol)
 	path, rerr := resolveCCCID(path, ccc.site, ccc.dtsURL)
+	log.Info("Resolved DTS url", "url", url, "sitePath", path)
 	if rerr != nil {
 		return rerr
 	}
@@ -112,6 +113,7 @@ func resolveCCCID(path string, site string, dtsURL string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	log.Debug("DTS Record", "record", entry)
 	for _, location := range entry.Location {
 		if site == location.Site {
 			return filepath.Join(location.Path, entry.Name), nil

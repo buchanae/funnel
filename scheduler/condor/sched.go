@@ -100,7 +100,10 @@ func (s *Backend) StartWorker(w *pbf.Worker) error {
 	confPath := path.Join(workdir, "worker.conf.yml")
 	wc.ToYamlFile(confPath)
 
-	workerPath := scheduler.DetectWorkerPath()
+	workerPath, err := scheduler.DetectWorkerPath()
+	if err != nil {
+		return err
+	}
 
 	submitPath := path.Join(workdir, "condor.submit")
 	f, err := os.Create(submitPath)

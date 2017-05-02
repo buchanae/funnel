@@ -32,7 +32,7 @@ func NewClient(address string) (*Client, error) {
 		log.Error("Error parsing URL", err)
 		return nil, err
 	}
-	if u.Host != "" {
+	if u.Host == "" {
 		err := fmt.Errorf("Invalid host: { %s }", u.Host)
 		log.Error("Error parsing URL", err)
 		return nil, err
@@ -69,7 +69,7 @@ type Record struct {
 type Location struct {
 	Site             string
 	Path             string
-	TimestampUpdated time.Time
+	TimestampUpdated int64
 	User             struct {
 		Name string
 	}
@@ -128,7 +128,7 @@ func GenerateRecord(path string, site string) (*Record, error) {
 			{
 				Site:             site,
 				Path:             filepath.Dir(path),
-				TimestampUpdated: fi.ModTime(),
+				TimestampUpdated: fi.ModTime().Unix(),
 			},
 		},
 	}
