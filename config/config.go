@@ -148,6 +148,7 @@ func WorkerInheritConfigVals(c Config) Worker {
 // StorageConfig describes configuration for all storage types
 type StorageConfig struct {
 	Local LocalStorage
+	CCC   CCCStorage
 	S3    S3Storage
 	GS    GSStorage
 }
@@ -157,6 +158,11 @@ type LocalStorage struct {
 	AllowedDirs []string
 }
 
+// Valid validates the LocalStorage configuration
+func (l LocalStorage) Valid() bool {
+	return len(l.AllowedDirs) > 0
+}
+
 // CCCStorage describes the directories Funnel can read from and write to
 type CCCStorage struct {
 	AllowedDirs []string
@@ -164,9 +170,9 @@ type CCCStorage struct {
 	DTSUrl      string
 }
 
-// Valid validates the LocalStorage configuration
-func (l LocalStorage) Valid() bool {
-	return len(l.AllowedDirs) > 0
+// Valid validates the CCCStorage configuration
+func (l CCCStorage) Valid() bool {
+	return len(l.AllowedDirs) > 0 && l.Site != "" && l.DTSUrl != ""
 }
 
 // GSStorage describes configuration for the Google Cloud storage backend.
