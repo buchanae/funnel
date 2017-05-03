@@ -145,7 +145,13 @@ func (ccc *CCCBackend) resolveCCCID(path string) (string, error) {
 }
 
 func (ccc *CCCBackend) createDTSRecord(path string) (*dts.Record, error) {
-	r, err := dts.GenerateRecord(path, ccc.outputSite)
+	r, err := dts.GenerateRecord(path, ccc.localSite)
+	if ccc.outputSite != ccc.localSite {
+		var l dts.Location
+		l = r.Location[0]
+		l.Site = ccc.outputSite
+		r.Location = append(r.Location, l)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("Failed to generate DTS Record for output %s. %v", path, err)
 	}

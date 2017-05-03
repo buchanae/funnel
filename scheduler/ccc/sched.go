@@ -58,10 +58,19 @@ func (s *Backend) Schedule(t *tes.Task) *scheduler.Offer {
 		ram = t.GetResources().GetRamGb()
 	}
 
+	// Setup strategy
+	// Worker config take precedence
 	metadata := make(map[string]string)
 	metadata["strategy"] = "routed_file"
 	if val, ok := t.Tags["strategy"]; ok {
 		metadata["strategy"] = val
+	}
+	for _, store := range s.conf.Worker.Storage {
+		if store.CCC.Valid() {
+			if store.CCC.Strategy != "" {
+				metadata["strategy"] = store.CCC.Strategy
+			}
+		}
 	}
 
 	// TODO could we call condor_submit --dry-run to test if a task would succeed?
