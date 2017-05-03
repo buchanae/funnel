@@ -55,22 +55,33 @@ func (ccc *CCCBackend) Get(ctx context.Context, url string, hostPath string, cla
 	log.Info("Starting download", "url", url, "hostPath", hostPath)
 
 	path := strings.TrimPrefix(url, CCCProtocol)
-	path, rerr := ccc.resolveCCCID(path)
-	log.Info("Resolved DTS url", "url", url, "sitePath", path)
+	path, remote, rerr := ccc.resolveCCCID(path)
 	if rerr != nil {
 		return rerr
 	}
+	log.Info("Resolved DTS url", "url", url, "sitePath", path)
 	if !isAllowed(path, ccc.allowedDirs) {
 		return fmt.Errorf("Can't access file, path is not in allowed directories:  %s", path)
 	}
 
 	var err error
-	if class == File {
-		err = linkFile(path, hostPath)
-	} else if class == Directory {
-		err = copyDir(path, hostPath)
+	if remote {
+		if class == File {
+			cli := NewSCPClient(ccc.outputSite)
+			err = cli.SCPRemoteToLocal(path, hostPath)
+		} else if class == Directory {
+			err = fmt.Errorf("SCP of directories not supported")
+		} else {
+			err = fmt.Errorf("Unknown file class: %s", class)
+		}
 	} else {
-		err = fmt.Errorf("Unknown file class: %s", class)
+		if class == File {
+			err = linkFile(path, hostPath)
+		} else if class == Directory {
+			err = copyDir(path, hostPath)
+		} else {
+			err = fmt.Errorf("Unknown file class: %s", class)
+		}
 	}
 
 	if err == nil {
@@ -84,7 +95,7 @@ func (ccc *CCCBackend) Put(ctx context.Context, url string, hostPath string, cla
 	log.Info("Starting upload", "url", url, "hostPath", hostPath)
 
 	path := strings.TrimPrefix(url, CCCProtocol)
-	record, rerr := ccc.resolveCCCID(path)
+	record, remote, rerr := ccc.resolveCCCID(path)
 	if rerr == nil {
 		return fmt.Errorf("CCCID %s conflicts with an existing record: %+v", path, record)
 	}
@@ -93,12 +104,23 @@ func (ccc *CCCBackend) Put(ctx context.Context, url string, hostPath string, cla
 	}
 
 	var err error
-	if class == File {
-		err = copyFile(hostPath, path)
-	} else if class == Directory {
-		err = copyDir(hostPath, path)
+	if remote {
+		if class == File {
+			cli := NewSCPClient(ccc.outputSite)
+			err = cli.SCPLocalToRemote(hostPath, path)
+		} else if class == Directory {
+			err = fmt.Errorf("SCP of directories not supported")
+		} else {
+			err = fmt.Errorf("Unknown file class: %s", class)
+		}
 	} else {
-		err = fmt.Errorf("Unknown file class: %s", class)
+		if class == File {
+			err = copyFile(hostPath, path)
+		} else if class == Directory {
+			err = copyDir(hostPath, path)
+		} else {
+			err = fmt.Errorf("Unknown file class: %s", class)
+		}
 	}
 	if err != nil {
 		return fmt.Errorf("Failed to upload %s: %v", url, err)
@@ -121,27 +143,29 @@ func (ccc *CCCBackend) Supports(url string, hostPath string, class tes.FileType)
 	return strings.HasPrefix(url, CCCProtocol)
 }
 
-func (ccc *CCCBackend) resolveCCCID(path string) (string, error) {
+func (ccc *CCCBackend) resolveCCCID(path string) (string, bool, error) {
+	var remote bool
 	cli, err := dts.NewClient(ccc.dtsURL)
 	if err != nil {
-		return "", err
+		return "", remote, err
 	}
 	entry, err := cli.GetFile(path)
 	if err != nil {
-		return "", err
+		return "", remote, err
 	}
 	log.Debug("DTS Record", "record", fmt.Sprintf("%+v", entry))
 	for _, location := range entry.Location {
 		if ccc.localSite == location.Site {
-			return filepath.Join(location.Path, entry.Name), nil
+			return filepath.Join(location.Path, entry.Name), remote, nil
 		}
 		for _, r := range ccc.remoteSites {
 			if r == location.Site {
-				return filepath.Join(location.Path, entry.Name), nil
+				remote = true
+				return filepath.Join(location.Path, entry.Name), remote, nil
 			}
 		}
 	}
-	return "", fmt.Errorf("%s is not located at an accessible site", path)
+	return "", remote, fmt.Errorf("%s is not located at an accessible site", path)
 }
 
 func (ccc *CCCBackend) createDTSRecord(path string) (*dts.Record, error) {

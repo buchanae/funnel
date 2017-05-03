@@ -134,10 +134,10 @@ func (s *Backend) StartWorker(w *pbf.Worker) error {
 universe       = vanilla
 executable     = {{.Executable}}
 arguments      = worker --config worker.conf.yml
-environment    = "PATH=/usr/bin"
+getenv         = True
 log            = {{.WorkDir}}/condor-event-log
-error          = {{.WorkDir}}/tes-worker-stderr
-output         = {{.WorkDir}}/tes-worker-stdout
+error          = {{.WorkDir}}/funnel-worker-stderr
+output         = {{.WorkDir}}/funnel-worker-stdout
 input          = {{.Config}}
 {{.Resources}}
 should_transfer_files   = YES

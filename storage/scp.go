@@ -6,10 +6,12 @@ import (
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/crypto/ssh/agent"
 	"io"
+	"io/ioutil"
 	"net"
 	"os"
 	"path"
 	"strings"
+	"time"
 )
 
 // SCPClient provides access to remote storage systems
@@ -23,16 +25,25 @@ type SCPClient struct {
 // NewSCPClient returns a SCPClient instance, configured to connect
 // to a remote SSH server
 func NewSCPClient(host string) *SCPClient {
-	var auths []ssh.AuthMethod
-	if aconn, err := net.Dial("unix", os.Getenv("SSH_AUTH_SOCK")); err == nil {
-		auths = append(auths, ssh.PublicKeysCallback(agent.NewClient(aconn).Signers))
-	}
+	host = strings.TrimPrefix(host, "http://")
+	host = fmt.Sprintf("%s:%d", host, 22)
 	username := os.Getenv("USER")
-	config := &ssh.ClientConfig{
-		User: username,
-		Auth: auths,
+	log.Debug("SCP Connect ENV", "USER", os.Getenv("USER"), "SSH_AUTH_SOCK", os.Getenv("SSH_AUTH_SOCK"))
+	var auths []ssh.AuthMethod
+	// auth := sshAgent()
+	auth := publicKeyFile()
+	if auth != nil {
+		auths = append(auths, auth)
 	}
 
+	config := &ssh.ClientConfig{
+		User:            username,
+		Auth:            auths,
+		Timeout:         10 * time.Second,
+		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+	}
+
+	log.Debug("SCP Connect", "host", host, "user", username, "auths", fmt.Sprintf("%v", auths))
 	// Create a new SCP client
 	return &SCPClient{
 		Host:   host,
@@ -78,7 +89,10 @@ func (s *SCPClient) SCPLocalToRemote(source string, dest string) error {
 	// Close connection after the file has been copied
 	defer s.Close()
 
-	sf, _ := os.Open(source)
+	sf, err := os.Open(source)
+	if err != nil {
+		return err
+	}
 	defer sf.Close()
 
 	dstD := path.Dir(dest)
@@ -114,7 +128,10 @@ func (s *SCPClient) SCPRemoteToLocal(source string, dest string) error {
 	// Close connection after the file has been copied
 	defer s.Close()
 
-	sf, _ := s.Client.Open(source)
+	sf, err := s.Client.Open(source)
+	if err != nil {
+		return err
+	}
 	defer sf.Close()
 
 	dstD := path.Dir(dest)
@@ -156,4 +173,25 @@ func mkdirAll(p string, mkdir func(string) error) error {
 
 func mkdir(p string) error {
 	return os.Mkdir(p, 0777)
+}
+
+func publicKeyFile() ssh.AuthMethod {
+	home := os.Getenv("HOME")
+	file := path.Join(home, ".ssh", "id_rsa")
+	buffer, err := ioutil.ReadFile(file)
+	if err != nil {
+		return nil
+	}
+	key, err := ssh.ParsePrivateKey(buffer)
+	if err != nil {
+		return nil
+	}
+	return ssh.PublicKeys(key)
+}
+
+func sshAgent() ssh.AuthMethod {
+	if sshAgent, err := net.Dial("unix", os.Getenv("SSH_AUTH_SOCK")); err == nil {
+		return ssh.PublicKeysCallback(agent.NewClient(sshAgent).Signers)
+	}
+	return nil
 }
