@@ -42,7 +42,7 @@ func TestCreateTask(t *testing.T) {
 
   conf := config.DefaultConfig()
   m := &siteMapper{conf, getSiteClient}
-  p := TaskProxy{dtsMock, m}
+  p := TaskProxy{conf, dtsMock, m}
 
   dtsMock.SetFileSites("ccc-id/file-one", []string{
     "http://site-one", "http://site-two",
@@ -88,14 +88,14 @@ func TestCreateNoSharedSite(t *testing.T) {
 
   conf := config.DefaultConfig()
   m := &siteMapper{conf, getSiteClient}
-  p := TaskProxy{dtsMock, m}
+  p := TaskProxy{conf, dtsMock, m}
   _, err := p.CreateTask(context.Background(), task)
 
   if err == nil {
     t.Fatal("Expected error")
   }
   if err != ErrNoSite {
-    t.Fatal("Unexpected error value")
+    t.Fatal(err)
   }
 }
 
@@ -120,7 +120,7 @@ func TestGetTask(t *testing.T) {
   conf := config.DefaultConfig()
   m := &siteMapper{conf, getSiteClient}
   dtsMock := new(dtsmocks.Client)
-  p := TaskProxy{dtsMock, m}
+  p := TaskProxy{conf, dtsMock, m}
 
   req := &tes.GetTaskRequest{Id: "http://site-one/ccc-task-id"}
   resp, err := p.GetTask(context.Background(), req)
@@ -164,7 +164,7 @@ func TestListTasks(t *testing.T) {
   conf.CCC.Sites = append(conf.CCC.Sites, "http://site-one", "http://site-two")
   m := &siteMapper{conf, getSiteClient}
   dtsMock := new(dtsmocks.Client)
-  p := TaskProxy{dtsMock, m}
+  p := TaskProxy{conf, dtsMock, m}
 
   req := &tes.ListTasksRequest{}
   resp, err := p.ListTasks(context.Background(), req)
@@ -196,7 +196,7 @@ func TestCancelTask(t *testing.T) {
   conf := config.DefaultConfig()
   m := &siteMapper{conf, getSiteClient}
   dtsMock := new(dtsmocks.Client)
-  p := TaskProxy{dtsMock, m}
+  p := TaskProxy{conf, dtsMock, m}
 
   req := &tes.CancelTaskRequest{Id: "http://site-one/ccc-task-id"}
   _, err := p.CancelTask(context.Background(), req)

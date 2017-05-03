@@ -55,6 +55,7 @@ type Config struct {
   CCC struct{
     DTSAddress string
     Sites []string
+    CentralSite string
   }
 }
 

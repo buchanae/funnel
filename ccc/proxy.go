@@ -7,7 +7,6 @@ import (
 	"github.com/ohsu-comp-bio/funnel/proto/tes"
 	"github.com/ohsu-comp-bio/funnel/ccc/dts"
 	"golang.org/x/net/context"
-  "strings"
 )
 
 var log = logger.New("ccc")
@@ -15,6 +14,7 @@ var ErrNoSite = errors.New("no site found")
 var ErrBadSite = errors.New("can't connect to site")
 
 type TaskProxy struct {
+  conf config.Config
   dts dts.Client
   mapper SiteMapper
 }
@@ -26,33 +26,15 @@ func NewTaskProxy(conf config.Config) (*TaskProxy, error) {
     return nil, err
   }
   mapper := &siteMapper{conf: conf}
-  return &TaskProxy{dtsClient, mapper}, nil
+  return &TaskProxy{conf, dtsClient, mapper}, nil
 }
+
 
 // CreateTask
 func (p *TaskProxy) CreateTask(ctx context.Context, task *tes.Task) (*tes.CreateTaskResponse, error) {
-  // Track the locations where the inputs exist.
-  // Used in routing decisions.
-  locations := locationSet{}
-
-  // Add all CCC task inputs to the location tracking set.
-  for _, input := range task.Inputs {
-    if strings.HasPrefix(input.Url, "ccc://") {
-      url := strings.TrimPrefix(input.Url, "ccc://")
-      resp, err := p.dts.GetFile(url)
-      if err != nil {
-        return nil, err
-      }
-      locations.Include(resp.ID, resp.Location)
-    }
-  }
-
-  // Get the site that contains all the inputs.
-  // If there is not site that contains ALL inputs, "ok" will be false.
-  bestSite, ok := locations.BestSite()
-  if !ok {
-    // No appropriate site could be found, return an error.
-    return nil, ErrNoSite
+  bestSite, err := routeTask(p.conf, p.dts, task)
+  if err != nil {
+    return nil, err
   }
 
   // Get a client for the best site
@@ -144,33 +126,4 @@ func (p *TaskProxy) CancelTask(ctx context.Context, req *tes.CancelTaskRequest) 
   }
 
   return client.CancelTask(ctx, req)
-}
-
-
-// locationSet helps track the locations for all task inputs
-// in order to choose the best site to run the task on
-// (which would be the site that contains all inputs)
-type locationSet struct {
-  counts map[string]int
-  inputs []string
-}
-// Include a set of locations for the input ID
-func (locset *locationSet) Include(id string, locs []dts.Location) {
-  if locset.counts == nil {
-    locset.counts = map[string]int{}
-  }
-  locset.inputs = append(locset.inputs, id)
-  for _, loc := range locs {
-    locset.counts[loc.Site] += 1
-  }
-}
-
-// Get the site that includes all the inputs
-func (locset *locationSet) BestSite() (string, bool) {
-  for site, count := range locset.counts {
-    if count == len(locset.inputs) {
-      return site, true
-    }
-  }
-  return "", false
 }
