@@ -8,6 +8,7 @@ import (
 	"github.com/ohsu-comp-bio/funnel/config"
 	"github.com/ohsu-comp-bio/funnel/proto/tes"
 	"os"
+	"path/filepath"
 	"strings"
 )
 
@@ -38,19 +39,20 @@ func NewCCCBackend(conf config.CCCStorage) (*CCCBackend, error) {
 func (ccc *CCCBackend) Get(ctx context.Context, url string, hostPath string, class tes.FileType) error {
 	log.Info("Starting download", "url", url, "hostPath", hostPath)
 
-	path := strings.TrimPrefix(url, CCCProtocol)
+	cccID := strings.TrimPrefix(url, CCCProtocol)
 	cli, err := dts.NewClient(ccc.conf.DTSUrl)
 	if err != nil {
 		return err
 	}
-	record, err := cli.GetFile(path)
+	record, err := cli.Get(cccID)
 	if err != nil {
 		return err
 	}
-	log.Debug("Resolved DTS Record", "cccId", path, "record", fmt.Sprintf("%+v", record))
+	log.Debug("Resolved DTS Record", "cccID", cccID, "record", fmt.Sprintf("%+v", record))
 
 	if ccc.conf.Strategy == "fetch_file" && record.HasSiteLocation(ccc.conf.Sites.Remote) && !record.HasSiteLocation(ccc.conf.Sites.Local) {
-		path = record.SitePath(ccc.conf.Sites.Remote)
+		log.Debug("REMOTE")
+		path := record.SitePath(ccc.conf.Sites.Remote)
 		if class == File {
 			cli := NewSCPClient(ccc.conf.Sites.Remote)
 			err = cli.SCPRemoteToLocal(path, path)
@@ -59,14 +61,17 @@ func (ccc *CCCBackend) Get(ctx context.Context, url string, hostPath string, cla
 		} else {
 			err = fmt.Errorf("Unknown file class: %s", class)
 		}
-		record, err = ccc.updateDTSRecord(path, ccc.conf.Sites.Local)
-	}
-	if err != nil {
-		return fmt.Errorf("Failed to download from remote %s: %v", url, err)
+		if err != nil {
+			return fmt.Errorf("Failed to download from remote %s: %v", url, err)
+		}
+		record, err = ccc.updateDTSRecord(cccID, path, ccc.conf.Sites.Local)
+		if err != nil {
+			return fmt.Errorf("Failed update the DTS record: %v", err)
+		}
 	}
 
 	if record.HasSiteLocation(ccc.conf.Sites.Local) {
-		path = record.SitePath(ccc.conf.Sites.Local)
+		path := record.SitePath(ccc.conf.Sites.Local)
 		err = ccc.local.Get(ctx, path, hostPath, class)
 	}
 	if err != nil {
@@ -86,7 +91,7 @@ func (ccc *CCCBackend) Put(ctx context.Context, url string, hostPath string, cla
 	if err != nil {
 		return err
 	}
-	record, err := cli.GetFile(path)
+	record, err := cli.Get(path)
 	if err == nil {
 		return fmt.Errorf("CCCID %s conflicts with an existing record: %+v", path, record)
 	}
@@ -126,47 +131,45 @@ func (ccc *CCCBackend) Supports(url string, hostPath string, class tes.FileType)
 }
 
 func (ccc *CCCBackend) createDTSRecord(path string) error {
-	r, err := dts.GenerateRecord(path, ccc.conf.Sites.Local)
+	record, err := dts.GenerateRecord(path, ccc.conf.Sites.Local)
 	if err != nil {
 		return fmt.Errorf("Failed to generate DTS Record for output %s. %v", path, err)
 	}
 
 	if ccc.conf.Strategy == "push_file" {
 		var l dts.Location
-		l = r.Location[0]
+		l = record.Location[0]
 		l.Site = ccc.conf.Sites.Remote
-		l.User.Name = os.Getenv("USER")
-		r.Location = append(r.Location, l)
+		record.Location = append(record.Location, l)
 	}
 
 	cli, err := dts.NewClient(ccc.conf.DTSUrl)
 	if err != nil {
 		return err
 	}
-	msg, err := json.Marshal(r)
-	log.Debug("Created DTS message", "message", string(msg))
+	msg, err := json.Marshal(record)
 	if err != nil {
 		return err
 	}
-	err = cli.PostFile(msg)
+	err = cli.Post(msg)
 	if err != nil {
 		return err
 	}
-	log.Debug("Created DTS Record", "record", fmt.Sprintf("%+v", r))
+	log.Debug("Created DTS Record", "record", fmt.Sprintf("%+v", record))
 	return err
 }
 
-func (ccc *CCCBackend) updateDTSRecord(path string, site string) (*dts.Record, error) {
+func (ccc *CCCBackend) updateDTSRecord(cccID string, hostPath string, site string) (*dts.Record, error) {
 	cli, err := dts.NewClient(ccc.conf.DTSUrl)
 	if err != nil {
 		return nil, err
 	}
-	record, err := cli.GetFile(path)
+	record, err := cli.Get(cccID)
 	if err != nil {
 		return nil, err
 	}
 
-	f, err := os.Open(path)
+	f, err := os.Open(hostPath)
 	if err != nil {
 		return nil, err
 	}
@@ -183,15 +186,16 @@ func (ccc *CCCBackend) updateDTSRecord(path string, site string) (*dts.Record, e
 
 	var l dts.Location
 	l.Site = site
+	l.Path = filepath.Dir(hostPath)
 	l.User.Name = os.Getenv("USER")
+	l.TimestampUpdated = fi.ModTime().Unix()
 	record.Location = append(record.Location, l)
 
 	msg, err := json.Marshal(record)
 	if err != nil {
 		return nil, err
 	}
-	log.Debug("Created DTS message", "message", string(msg))
-	err = cli.PutFile(msg)
+	err = cli.Put(msg)
 	if err != nil {
 		return nil, err
 	}

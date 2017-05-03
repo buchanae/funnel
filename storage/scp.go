@@ -28,7 +28,6 @@ func NewSCPClient(host string) *SCPClient {
 	host = strings.TrimPrefix(host, "http://")
 	host = fmt.Sprintf("%s:%d", host, 22)
 	username := os.Getenv("USER")
-	log.Debug("SCP Connect ENV", "USER", os.Getenv("USER"), "SSH_AUTH_SOCK", os.Getenv("SSH_AUTH_SOCK"))
 	var auths []ssh.AuthMethod
 	//_ = sshAgent()
 	auth := publicKeyFile()
@@ -43,7 +42,6 @@ func NewSCPClient(host string) *SCPClient {
 		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
 	}
 
-	log.Debug("SCP Connect", "host", host, "user", username, "auths", fmt.Sprintf("%v", auths))
 	// Create a new SCP client
 	return &SCPClient{
 		Host:   host,
@@ -62,6 +60,7 @@ func (s *SCPClient) Connect() error {
 	if err != nil {
 		return fmt.Errorf("unable to start sftp subsytem: %v", err)
 	}
+	log.Debug("SCP Client Connection Open", "host", s.Host)
 	return nil
 }
 
@@ -76,6 +75,7 @@ func (s *SCPClient) Close() error {
 	if err != nil {
 		return err
 	}
+	log.Debug("SCP Client Connection Closed", "host", s.Host)
 	return nil
 }
 

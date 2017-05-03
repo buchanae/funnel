@@ -95,8 +95,8 @@ func (r *Record) HasSiteLocation(site string) bool {
 	return false
 }
 
-// GetFile returns the raw bytes from GET /api/v1/dts/file/<id>
-func (c *Client) GetFile(id string) (*Record, error) {
+// Get returns the raw bytes from GET /api/v1/dts/file/<id>
+func (c *Client) Get(id string) (*Record, error) {
 	// convert ID to be URL safe
 	cccID := url.PathEscape(id)
 	// Send request
@@ -114,8 +114,8 @@ func (c *Client) GetFile(id string) (*Record, error) {
 	return resp, nil
 }
 
-// PostFile returns the raw bytes from POST /api/v1/dts/file
-func (c *Client) PostFile(msg []byte) error {
+// Post returns the raw bytes from POST /api/v1/dts/file
+func (c *Client) Post(msg []byte) error {
 	err := isRecord(msg)
 	if err != nil {
 		return fmt.Errorf("Not a valid DTS Record message: %v", err)
@@ -131,8 +131,8 @@ func (c *Client) PostFile(msg []byte) error {
 	return nil
 }
 
-// PutFile returns the raw bytes from PUT /api/v1/dts/file
-func (c *Client) PutFile(msg []byte) error {
+// Put returns the raw bytes from PUT /api/v1/dts/file
+func (c *Client) Put(msg []byte) error {
 	err := isRecord(msg)
 	if err != nil {
 		return fmt.Errorf("Not a valid DTS Record message: %v", err)
@@ -145,6 +145,7 @@ func (c *Client) PutFile(msg []byte) error {
 	if err != nil {
 		return err
 	}
+	req.Header.Add("Content-Type", "application/json")
 	_, err = util.CheckHTTPResponse(c.client.Do(req))
 	if err != nil {
 		return err
