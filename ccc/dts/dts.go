@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/ohsu-comp-bio/funnel/logger"
+	"github.com/ohsu-comp-bio/funnel/util"
 	"io/ioutil"
 	"net/http"
 	"net/url"
@@ -75,13 +76,33 @@ type Location struct {
 	} `json:"user"`
 }
 
+// SitePath returns the absolute path of the file/directory at the specified site
+func (r *Record) SitePath(site string) string {
+	for _, location := range r.Location {
+		if location.Site == site {
+			return filepath.Join(location.Path, r.Name)
+		}
+	}
+	return ""
+}
+
+// HasSiteLocation returns true if the record contains a Location with this Site
+func (r *Record) HasSiteLocation(site string) bool {
+	for _, location := range r.Location {
+		if location.Site == site {
+			return true
+		}
+	}
+	return false
+}
+
 // GetFile returns the raw bytes from GET /api/v1/dts/file/<id>
 func (c *Client) GetFile(id string) (*Record, error) {
 	// convert ID to be URL safe
 	cccID := url.PathEscape(id)
 	// Send request
 	u := c.address + "/api/v1/dts/file/" + cccID
-	body, err := CheckHTTPResponse(c.client.Get(u))
+	body, err := util.CheckHTTPResponse(c.client.Get(u))
 	if err != nil {
 		return nil, err
 	}
@@ -104,7 +125,28 @@ func (c *Client) PostFile(msg []byte) error {
 	// Send request
 	r := bytes.NewReader(msg)
 	u := c.address + "/api/v1/dts/file"
-	_, err = CheckHTTPResponse(c.client.Post(u, "application/json", r))
+	_, err = util.CheckHTTPResponse(c.client.Post(u, "application/json", r))
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// PutFile returns the raw bytes from PUT /api/v1/dts/file
+func (c *Client) PutFile(msg []byte) error {
+	err := isRecord(msg)
+	if err != nil {
+		return fmt.Errorf("Not a valid DTS Record message: %v", err)
+	}
+
+	// Send request
+	r := bytes.NewReader(msg)
+	u := c.address + "/api/v1/dts/file"
+	req, err := http.NewRequest(http.MethodPut, u, r)
+	if err != nil {
+		return err
+	}
+	_, err = util.CheckHTTPResponse(c.client.Do(req))
 	if err != nil {
 		return err
 	}
@@ -131,28 +173,15 @@ func GenerateRecord(path string, site string) (*Record, error) {
 				Site:             site,
 				Path:             filepath.Dir(path),
 				TimestampUpdated: fi.ModTime().Unix(),
+				User: struct {
+					Name string `json:"name"`
+				}{
+					Name: os.Getenv("USER"),
+				},
 			},
 		},
 	}
 	return r, nil
-}
-
-// CheckHTTPResponse does some basic error handling
-// and reads the response body into a byte array
-func CheckHTTPResponse(resp *http.Response, err error) ([]byte, error) {
-	if err != nil {
-		return nil, err
-	}
-
-	defer resp.Body.Close()
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
-	}
-	if (resp.StatusCode / 100) != 2 {
-		return nil, fmt.Errorf("[STATUS CODE - %d]\t%s", resp.StatusCode, body)
-	}
-	return body, nil
 }
 
 // TODO replace with proper message validation

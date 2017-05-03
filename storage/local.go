@@ -63,7 +63,7 @@ func (local *LocalBackend) Put(ctx context.Context, url string, hostPath string,
 	}
 
 	if class == File {
-		err := copyFile(hostPath, path)
+		err := linkFile(hostPath, path)
 		if err != nil {
 			return err
 		}

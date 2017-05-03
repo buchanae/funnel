@@ -7,7 +7,7 @@ import (
 	"github.com/ohsu-comp-bio/funnel/ccc/dts"
 	"github.com/ohsu-comp-bio/funnel/config"
 	"github.com/ohsu-comp-bio/funnel/proto/tes"
-	"path/filepath"
+	"os"
 	"strings"
 )
 
@@ -17,36 +17,20 @@ const CCCProtocol = "ccc://"
 
 // CCCBackend provides access to a ccc-disk storage system.
 type CCCBackend struct {
-	allowedDirs []string
-	localSite   string
-	remoteSites []string
-	outputSite  string
-	dtsURL      string
+	conf  *config.CCCStorage
+	local *LocalBackend
 }
 
-// NewCCCBackend returns a CCCBackend instance, configured to limit
-// file system access to the given allowed directories.
+// NewCCCBackend returns a CCCBackend instance
 func NewCCCBackend(conf config.CCCStorage) (*CCCBackend, error) {
+	local, err := NewLocalBackend(config.LocalStorage{AllowedDirs: []string{"/cluster_share"}})
+	if err != nil {
+		return nil, err
+	}
 	b := &CCCBackend{
-		allowedDirs: conf.AllowedDirs,
-		dtsURL:      conf.DTSUrl,
-		localSite:   conf.SiteMap.Local,
+		conf:  &conf,
+		local: local,
 	}
-
-	local := conf.SiteMap.Local
-	central := conf.SiteMap.Central
-	switch conf.Strategy {
-	case "fetch_file":
-		b.remoteSites = []string{central}
-		b.outputSite = local
-	case "push_file":
-		b.remoteSites = nil
-		b.outputSite = central
-	default: // AKA "routed_file"
-		b.remoteSites = nil
-		b.outputSite = local
-	}
-
 	return b, nil
 }
 
@@ -55,39 +39,42 @@ func (ccc *CCCBackend) Get(ctx context.Context, url string, hostPath string, cla
 	log.Info("Starting download", "url", url, "hostPath", hostPath)
 
 	path := strings.TrimPrefix(url, CCCProtocol)
-	path, remote, rerr := ccc.resolveCCCID(path)
-	if rerr != nil {
-		return rerr
+	cli, err := dts.NewClient(ccc.conf.DTSUrl)
+	if err != nil {
+		return err
 	}
-	log.Info("Resolved DTS url", "url", url, "sitePath", path)
-	if !isAllowed(path, ccc.allowedDirs) {
-		return fmt.Errorf("Can't access file, path is not in allowed directories:  %s", path)
+	record, err := cli.GetFile(path)
+	if err != nil {
+		return err
 	}
+	log.Debug("Resolved DTS Record", "cccId", path, "record", fmt.Sprintf("%+v", record))
 
-	var err error
-	if remote {
+	if ccc.conf.Strategy == "fetch_file" && record.HasSiteLocation(ccc.conf.Sites.Remote) && !record.HasSiteLocation(ccc.conf.Sites.Local) {
+		path = record.SitePath(ccc.conf.Sites.Remote)
 		if class == File {
-			cli := NewSCPClient(ccc.outputSite)
-			err = cli.SCPRemoteToLocal(path, hostPath)
+			cli := NewSCPClient(ccc.conf.Sites.Remote)
+			err = cli.SCPRemoteToLocal(path, path)
 		} else if class == Directory {
 			err = fmt.Errorf("SCP of directories not supported")
 		} else {
 			err = fmt.Errorf("Unknown file class: %s", class)
 		}
-	} else {
-		if class == File {
-			err = linkFile(path, hostPath)
-		} else if class == Directory {
-			err = copyDir(path, hostPath)
-		} else {
-			err = fmt.Errorf("Unknown file class: %s", class)
-		}
+		record, err = ccc.updateDTSRecord(path, ccc.conf.Sites.Local)
+	}
+	if err != nil {
+		return fmt.Errorf("Failed to download from remote %s: %v", url, err)
 	}
 
-	if err == nil {
-		log.Info("Finished download", "url", url, "hostPath", hostPath)
+	if record.HasSiteLocation(ccc.conf.Sites.Local) {
+		path = record.SitePath(ccc.conf.Sites.Local)
+		err = ccc.local.Get(ctx, path, hostPath, class)
 	}
-	return err
+	if err != nil {
+		return fmt.Errorf("Failed to download %s: %v", url, err)
+	}
+
+	log.Info("Finished download", "url", url, "hostPath", hostPath)
+	return nil
 }
 
 // Put copies a file from the hostPath into storage.
@@ -95,45 +82,40 @@ func (ccc *CCCBackend) Put(ctx context.Context, url string, hostPath string, cla
 	log.Info("Starting upload", "url", url, "hostPath", hostPath)
 
 	path := strings.TrimPrefix(url, CCCProtocol)
-	record, remote, rerr := ccc.resolveCCCID(path)
-	if rerr == nil {
+	cli, err := dts.NewClient(ccc.conf.DTSUrl)
+	if err != nil {
+		return err
+	}
+	record, err := cli.GetFile(path)
+	if err == nil {
 		return fmt.Errorf("CCCID %s conflicts with an existing record: %+v", path, record)
 	}
-	if !isAllowed(path, ccc.allowedDirs) {
-		return fmt.Errorf("Can't access file, path is not in allowed directories:  %s", url)
-	}
 
-	var err error
-	if remote {
+	if ccc.conf.Strategy == "push_file" {
 		if class == File {
-			cli := NewSCPClient(ccc.outputSite)
+			cli := NewSCPClient(ccc.conf.Sites.Remote)
 			err = cli.SCPLocalToRemote(hostPath, path)
 		} else if class == Directory {
 			err = fmt.Errorf("SCP of directories not supported")
 		} else {
 			err = fmt.Errorf("Unknown file class: %s", class)
 		}
-	} else {
-		if class == File {
-			err = copyFile(hostPath, path)
-		} else if class == Directory {
-			err = copyDir(hostPath, path)
-		} else {
-			err = fmt.Errorf("Unknown file class: %s", class)
+		if err != nil {
+			return fmt.Errorf("Failed to upload to remote %s: %v", url, err)
 		}
 	}
+
+	err = ccc.local.Put(ctx, hostPath, path, class)
 	if err != nil {
 		return fmt.Errorf("Failed to upload %s: %v", url, err)
 	}
 
-	r, cerr := ccc.createDTSRecord(path)
+	cerr := ccc.createDTSRecord(path)
 	if cerr != nil {
 		return fmt.Errorf("Failed to create DTS Record for output %s. %v", url, cerr)
 	}
 
-	log.Debug("Created DTS Record", "record", fmt.Sprintf("%+v", r))
 	log.Info("Finished upload", "url", url, "hostPath", hostPath)
-
 	return nil
 }
 
@@ -143,54 +125,76 @@ func (ccc *CCCBackend) Supports(url string, hostPath string, class tes.FileType)
 	return strings.HasPrefix(url, CCCProtocol)
 }
 
-func (ccc *CCCBackend) resolveCCCID(path string) (string, bool, error) {
-	var remote bool
-	cli, err := dts.NewClient(ccc.dtsURL)
+func (ccc *CCCBackend) createDTSRecord(path string) error {
+	r, err := dts.GenerateRecord(path, ccc.conf.Sites.Local)
 	if err != nil {
-		return "", remote, err
+		return fmt.Errorf("Failed to generate DTS Record for output %s. %v", path, err)
 	}
-	entry, err := cli.GetFile(path)
-	if err != nil {
-		return "", remote, err
-	}
-	log.Debug("DTS Record", "record", fmt.Sprintf("%+v", entry))
-	for _, location := range entry.Location {
-		if ccc.localSite == location.Site {
-			return filepath.Join(location.Path, entry.Name), remote, nil
-		}
-		for _, r := range ccc.remoteSites {
-			if r == location.Site {
-				remote = true
-				return filepath.Join(location.Path, entry.Name), remote, nil
-			}
-		}
-	}
-	return "", remote, fmt.Errorf("%s is not located at an accessible site", path)
-}
 
-func (ccc *CCCBackend) createDTSRecord(path string) (*dts.Record, error) {
-	r, err := dts.GenerateRecord(path, ccc.localSite)
-	if ccc.outputSite != ccc.localSite {
+	if ccc.conf.Strategy == "push_file" {
 		var l dts.Location
 		l = r.Location[0]
-		l.Site = ccc.outputSite
+		l.Site = ccc.conf.Sites.Remote
+		l.User.Name = os.Getenv("USER")
 		r.Location = append(r.Location, l)
 	}
+
+	cli, err := dts.NewClient(ccc.conf.DTSUrl)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to generate DTS Record for output %s. %v", path, err)
-	}
-	cli, err := dts.NewClient(ccc.dtsURL)
-	if err != nil {
-		return nil, err
+		return err
 	}
 	msg, err := json.Marshal(r)
 	log.Debug("Created DTS message", "message", string(msg))
 	if err != nil {
-		return nil, err
+		return err
 	}
 	err = cli.PostFile(msg)
 	if err != nil {
+		return err
+	}
+	log.Debug("Created DTS Record", "record", fmt.Sprintf("%+v", r))
+	return err
+}
+
+func (ccc *CCCBackend) updateDTSRecord(path string, site string) (*dts.Record, error) {
+	cli, err := dts.NewClient(ccc.conf.DTSUrl)
+	if err != nil {
 		return nil, err
 	}
-	return r, err
+	record, err := cli.GetFile(path)
+	if err != nil {
+		return nil, err
+	}
+
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	fi, err := f.Stat()
+	if err != nil {
+		return nil, err
+	}
+
+	name := fi.Name()
+	size := fi.Size()
+	if name != record.Name || size != record.Size {
+		return nil, fmt.Errorf("Name: %s or Size: %d in update does not match record: %+v", name, size, record)
+	}
+
+	var l dts.Location
+	l.Site = site
+	l.User.Name = os.Getenv("USER")
+	record.Location = append(record.Location, l)
+
+	msg, err := json.Marshal(record)
+	if err != nil {
+		return nil, err
+	}
+	log.Debug("Created DTS message", "message", string(msg))
+	err = cli.PutFile(msg)
+	if err != nil {
+		return nil, err
+	}
+	log.Debug("Updated DTS Record", "record", fmt.Sprintf("%+v", record))
+	return record, err
 }

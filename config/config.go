@@ -20,6 +20,7 @@ type Config struct {
 	Backends  struct {
 		Local     struct{}
 		HTCondor  struct{}
+		CCC       struct{}
 		OpenStack struct {
 			KeyPair    string
 			ConfigPath string
@@ -166,18 +167,17 @@ func (l LocalStorage) Valid() bool {
 // CCCStorage describes the directories Funnel can read from and write to and
 // the sites it can access
 type CCCStorage struct {
-	AllowedDirs []string
-	Strategy    string
-	DTSUrl      string
-	SiteMap     struct {
-		Central string
-		Local   string
+	Strategy string
+	DTSUrl   string
+	Sites    struct {
+		Local  string
+		Remote string
 	}
 }
 
 // Valid validates the CCCStorage configuration
 func (l CCCStorage) Valid() bool {
-	return len(l.AllowedDirs) > 0 && l.DTSUrl != "" && l.SiteMap.Central != "" && l.SiteMap.Local != ""
+	return l.DTSUrl != "" && l.Sites.Remote != "" && l.Sites.Local != ""
 }
 
 // GSStorage describes configuration for the Google Cloud storage backend.
