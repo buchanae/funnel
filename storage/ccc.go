@@ -105,7 +105,7 @@ func (ccc *CCCBackend) Put(ctx context.Context, url string, hostPath string, cla
 		}
 	}
 
-	err = ccc.local.Put(ctx, hostPath, path, class)
+	err = ccc.local.Put(ctx, path, hostPath, class)
 	if err != nil {
 		return fmt.Errorf("Failed to upload %s: %v", url, err)
 	}

@@ -8,7 +8,6 @@ import (
 	"github.com/ohsu-comp-bio/funnel/logger"
 	"github.com/ohsu-comp-bio/funnel/proto/tes"
 	"github.com/ohsu-comp-bio/funnel/util"
-	"io/ioutil"
 	"net/http"
 	"strings"
 	"time"

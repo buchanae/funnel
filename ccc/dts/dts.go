@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"github.com/ohsu-comp-bio/funnel/logger"
 	"github.com/ohsu-comp-bio/funnel/util"
-	"io/ioutil"
 	"net/http"
 	"net/url"
 	"os"

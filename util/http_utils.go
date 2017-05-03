@@ -2,11 +2,8 @@ package util
 
 import (
 	"fmt"
-	"github.com/golang/protobuf/jsonpb"
+	"io/ioutil"
 	"net/http"
-	"net/url"
-	"strings"
-	"time"
 )
 
 // CheckHTTPResponse does some basic error handling
