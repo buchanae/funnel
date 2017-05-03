@@ -49,7 +49,7 @@ func parseCliVars(args []string) (map[string]string, error) {
 
 func compareKeys(maps ...map[string]string) error {
 	keys := make(map[string]string)
-	for i, mymap := range maps {
+	for _, mymap := range maps {
 		for k := range mymap {
 			if _, ok := keys[k]; !ok {
 				keys[k] = ""
