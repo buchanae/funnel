@@ -51,7 +51,6 @@ func (ccc *CCCBackend) Get(ctx context.Context, url string, hostPath string, cla
 	log.Debug("Resolved DTS Record", "cccID", cccID, "record", fmt.Sprintf("%+v", record))
 
 	if ccc.conf.Strategy == "fetch_file" && record.HasSiteLocation(ccc.conf.Sites.Remote) && !record.HasSiteLocation(ccc.conf.Sites.Local) {
-		log.Debug("REMOTE")
 		path := record.SitePath(ccc.conf.Sites.Remote)
 		if class == File {
 			cli := NewSCPClient(ccc.conf.Sites.Remote)
