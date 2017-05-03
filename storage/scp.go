@@ -30,7 +30,7 @@ func NewSCPClient(host string) *SCPClient {
 	username := os.Getenv("USER")
 	log.Debug("SCP Connect ENV", "USER", os.Getenv("USER"), "SSH_AUTH_SOCK", os.Getenv("SSH_AUTH_SOCK"))
 	var auths []ssh.AuthMethod
-	// auth := sshAgent()
+	//_ = sshAgent()
 	auth := publicKeyFile()
 	if auth != nil {
 		auths = append(auths, auth)
@@ -190,8 +190,10 @@ func publicKeyFile() ssh.AuthMethod {
 }
 
 func sshAgent() ssh.AuthMethod {
-	if sshAgent, err := net.Dial("unix", os.Getenv("SSH_AUTH_SOCK")); err == nil {
+	sshAgent, err := net.Dial("unix", os.Getenv("SSH_AUTH_SOCK"))
+	if err == nil {
 		return ssh.PublicKeysCallback(agent.NewClient(sshAgent).Signers)
 	}
+	log.Debug("sshAgent", "", err)
 	return nil
 }
