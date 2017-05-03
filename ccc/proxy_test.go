@@ -134,6 +134,49 @@ func TestGetTask(t *testing.T) {
   }
 }
 
+func TestListTasks(t *testing.T) {
+
+  getSiteClient := func(address string) (tes.TaskServiceClient, error) {
+    c := new(tesmocks.TaskServiceClient)
+    request := &tes.ListTasksRequest{}
+    response := &tes.ListTasksResponse{}
+
+    if address == "site-one:9090" {
+      response.Tasks = append(response.Tasks,
+        &tes.Task{Id: "site-one-id-1"},
+        &tes.Task{Id: "site-one-id-2"},
+      )
+    } else if address == "site-two:9090" {
+      response.Tasks = append(response.Tasks,
+        &tes.Task{Id: "site-two-id-1"},
+        &tes.Task{Id: "site-two-id-2"},
+      )
+    } else {
+      t.Fatal("Unexpected site connection")
+    }
+
+    c.On("ListTasks", mock.Anything, request, mock.Anything).
+      Return(response, nil)
+    return c, nil
+  }
+
+  conf := config.DefaultConfig()
+  conf.CCC.Sites = append(conf.CCC.Sites, "http://site-one", "http://site-two")
+  m := &siteMapper{conf, getSiteClient}
+  dtsMock := new(dtsmocks.Client)
+  p := TaskProxy{dtsMock, m}
+
+  req := &tes.ListTasksRequest{}
+  resp, err := p.ListTasks(context.Background(), req)
+
+  if err != nil {
+    t.Fatal(err)
+  }
+  if len(resp.Tasks) != 4 {
+    t.Fatal("Unexpected task count")
+  }
+}
+
 func TestCancelTask(t *testing.T) {
 
   getSiteClient := func(address string) (tes.TaskServiceClient, error) {
