@@ -1,15 +1,14 @@
 package ccc
 
 import (
+	dtsmocks "github.com/ohsu-comp-bio/funnel/ccc/dts/mocks"
 	"github.com/ohsu-comp-bio/funnel/config"
 	"github.com/ohsu-comp-bio/funnel/logger"
-	"golang.org/x/net/context"
-	"testing"
-	//"github.com/ohsu-comp-bio/funnel/ccc/dts"
-	dtsmocks "github.com/ohsu-comp-bio/funnel/ccc/dts/mocks"
 	"github.com/ohsu-comp-bio/funnel/proto/tes"
 	tesmocks "github.com/ohsu-comp-bio/funnel/proto/tes/mocks"
 	mock "github.com/stretchr/testify/mock"
+	"golang.org/x/net/context"
+	"testing"
 )
 
 func init() {

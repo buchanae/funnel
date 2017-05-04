@@ -49,8 +49,6 @@ var _ = math.Inf
 // proto package needs to be updated.
 const _ = proto.ProtoPackageIsVersion2 // please upgrade the proto package
 
-// FileType allows TaskParameter to describe whether an input/output
-// is a regular file or directory.
 type FileType int32
 
 const (
@@ -157,34 +155,21 @@ func (x TaskView) String() string {
 }
 func (TaskView) EnumDescriptor() ([]byte, []int) { return fileDescriptor0, []int{2} }
 
-// Task is the core of the task execution schema. It represents:
-//
-// - metadata: id, name, description, tags, etc.
-// - state: queued, running, complete, error, etc.
-// - inputs: files to be downloaded before the task commands are run.
-// - outputs: files to be uploaded after the task completes.
-// - resources: CPU, RAM, Disk, and other resource requests.
-// - logs: stdout, stderr, and other logs collected while running the task.
+// Task describes an instance of a task.
 type Task struct {
-	// Task identifier assigned by the server.
-	//
 	// OUTPUT ONLY
-	Id string `protobuf:"bytes,1,opt,name=id" json:"id,omitempty"`
-	// Task state. See the State enum for possible values.
 	//
+	// Task identifier assigned by the server.
+	Id string `protobuf:"bytes,1,opt,name=id" json:"id,omitempty"`
 	// OUTPUT ONLY
 	State State `protobuf:"varint,2,opt,name=state,enum=tes.State" json:"state,omitempty"`
-	// Human-readable task name.
-	//
 	// OPTIONAL
 	Name string `protobuf:"bytes,3,opt,name=name" json:"name,omitempty"`
-	// Project identifier this task is associated with.
-	// Commonly used for billing on cloud providers (AWS, Google Cloud, etc).
-	//
 	// OPTIONAL
-	Project string `protobuf:"bytes,4,opt,name=project" json:"project,omitempty"`
-	// Human-readable task description.
 	//
+	// Describes the project this task is associated with.
+	// Commonly used for billing on cloud providers (AWS, Google Cloud, etc).
+	Project string `protobuf:"bytes,4,opt,name=project" json:"project,omitempty"`
 	// OPTIONAL
 	Description string `protobuf:"bytes,5,opt,name=description" json:"description,omitempty"`
 	// OPTIONAL

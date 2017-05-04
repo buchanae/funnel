@@ -159,8 +159,6 @@ func (i *inputSites) Candidates() []candidate {
 			_, isFetchable := i.fetchable[input]
 			if (!isLocal && i.RequireLocal) || (!isLocal && !isFetchable) {
 				valid = false
-				log.Debug(site, "valid", valid, "isLocal", isLocal, "isFetchable", isFetchable,
-					"input", input)
 				break
 			}
 			if isLocal {

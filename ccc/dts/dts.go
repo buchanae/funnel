@@ -65,22 +65,22 @@ type client struct {
 
 // Record represents a DTS record
 type Record struct {
-	ID       string `json:"cccId"`
-	Name     string
-	Size     int64
-	Location []Location
+	ID       string     `json:"cccId"`
+	Name     string     `json:"name"`
+	Size     int64      `json:"size"`
+	Location []Location `json:"location"`
 }
 
 type User struct {
-	Name string
+	Name string `json:"name"`
 }
 
 // Location represents a DTS location
 type Location struct {
-	Site             string
-	Path             string
-	TimestampUpdated int64 `json:"timestampUpdated"`
-	User             User
+	Site             string `json:"site"`
+	Path             string `json:"path"`
+	TimestampUpdated int64  `json:"timestampUpdated"`
+	User             User   `json:"user"`
 }
 
 // SitePath returns the absolute path of the file/directory at the specified site
