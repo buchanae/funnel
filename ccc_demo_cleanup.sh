@@ -21,7 +21,10 @@ if [ -e $TEST_OUTFILE ]; then
     rm $TEST_OUTFILE
 fi
 if [ -e $TEST_FILE_CCCID ]; then
-    ccc_client dts delete $(cat $TEST_FILE_CCCID)
+    ID=$(cat $TEST_FILE_CCCID)
+    if [ ! -z "$ID" ]; then 
+        ccc_client dts delete $ID
+    fi
     rm $TEST_FILE_CCCID
 fi
 
@@ -40,7 +43,10 @@ if [ -e $TEST_OUTFILE ]; then
     rm $TEST_OUTFILE
 fi
 if [ -e $TEST_FILE_CCCID ]; then
-    ccc_client dts delete $(cat $TEST_FILE_CCCID)
+    ID=$(cat $TEST_FILE_CCCID)
+    if [ ! -z "$ID" ]; then 
+        ccc_client dts delete $ID
+    fi
     rm $TEST_FILE_CCCID
 fi
 
@@ -59,6 +65,9 @@ if [ -e $TEST_OUTFILE ]; then
     rm $TEST_OUTFILE
 fi
 if [ -e $TEST_FILE_CCCID ]; then
-    ccc_client dts delete $(cat $TEST_FILE_CCCID)
+    ID=$(cat $TEST_FILE_CCCID)
+    if [ ! -z "$ID" ]; then 
+        ccc_client dts delete $ID
+    fi
     rm $TEST_FILE_CCCID
 fi

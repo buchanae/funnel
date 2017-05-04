@@ -10,19 +10,14 @@ NC='\033[0m'
 function demoRun() {
     echo -e "${RED}$@ --print${NC}"
     eval "$@ --print | jq ." 
-    read -n1 -r -p "Press space to continue..." key
-    if [ "$key" = '' ]; then
-        eval "$@ --wait" 
-    fi
+    read -n 1 -s -p "Press any key to continue..." key
+    eval "$@ --wait" 
 }
 
 function demoCmd() {
     echo -e "${RED}$@${NC}"
-    $@
-    read -n1 -r -p "Press space to continue..." key
-    if [ "$key" = '' ]; then
-        continue
-    fi
+    eval "$@"
+    read -n 1 -s -p "Press any key to continue..." key
 }
 
 
