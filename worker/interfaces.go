@@ -11,14 +11,6 @@ type Executor interface {
   Close()
 }
 
-type ExecutorLogger interface {
-	ExitCode(int)
-	Ports([]*tes.Ports)
-	HostIP(string)
-	StartTime(t string)
-	EndTime(t string)
-}
-
 type TaskLogger interface {
 	StartTime(t string)
 	EndTime(t string)
