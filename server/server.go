@@ -140,7 +140,6 @@ func handleError(w http.ResponseWriter, req *http.Request, err string, code int)
 // and pass through to the next mux.
 func disableCache(next http.Handler) http.HandlerFunc {
 	return func(resp http.ResponseWriter, req *http.Request) {
-		log.Error("FW:LFKJEW:LFWEK")
 		resp.Header().Set("Cache-Control", "no-store")
 		next.ServeHTTP(resp, req)
 	}
