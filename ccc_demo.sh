@@ -1,39 +1,51 @@
 #!/usr/bin/bash
 
 set -e 
-set -o xtrace
 
 source /cluster_share/OHSU/shared/.venv/bin/activate
 
-DEMO_DIR=/cluster_share/home/strucka/funnel_demo
-mkdir -p $DEMO_DIR
+GREEN='\033[0;31m'
+RED='\033[0;31m'
+NC='\033[0m'
+function demoRun() {
+    echo -e "${RED}$@ --print${NC}"
+    $@ --print
+    read -n1 -r -p "Press space to continue..." key
+    if [ "$key" = '' ]; then
+        $@ --wait
+    fi
+}
 
+function demoCmd() {
+    echo -e "${RED}$@${NC}"
+    $@
+    read -n1 -r -p "Press space to continue..." key
+    if [ "$key" = '' ]; then
+        continue
+    fi
+}
+
+
+DEMO_DIR=/cluster_share/home/strucka/funnel_demo
+mkdir -p $DEMO_DIR $DEMO_DIR/routed_file $DEMO_DIR/fetch_file $DEMO_DIR/push_file
+
+
+echo -e "${GREEN}
 ##-----------------------------------------##
 ## ROUTED FILE TEST
 ##-----------------------------------------##
-TEST_FILE=${DEMO_DIR}/test_local_input
+${NC}"
+TEST_FILE=${DEMO_DIR}/routed_file/test_local_input
 TEST_FILE_CCCID=${TEST_FILE}.ccc
-TEST_OUTFILE=${DEMO_DIR}/test_local_output
-
-# Cleanup previous runs
-if [ -e $TEST_FILE ]; then
-    rm $TEST_FILE
-fi
-if [ -e $TEST_OUTFILE ]; then
-    rm $TEST_OUTFILE
-fi
-if [ -e $TEST_FILE_CCCID ]; then
-    ccc_client dts delete $(cat $TEST_FILE_CCCID)
-    rm $TEST_FILE_CCCID
-fi
+TEST_OUTFILE=${DEMO_DIR}/routed_file/test_local_output
 
 # Stage run
 touch $TEST_FILE
-echo 'HELLO WORLD' > $TEST_FILE
+echo 'LOCAL FILE' > $TEST_FILE
 ccc_client dts post -f $TEST_FILE -s ohsu -u strucka | cut -f 2 > $TEST_FILE_CCCID
-ccc_client dts get $(cat $TEST_FILE_CCCID)
+# ccc_client dts get $(cat $TEST_FILE_CCCID)
 
-funnel run 'md5sum $INFILE > $OUTFILE' \
+demoRun funnel run 'md5sum $INFILE > $OUTFILE' \
 --server http://application-0-1:18000 \
 --container ubuntu \
 --in INFILE=ccc://$(cat $TEST_FILE_CCCID) \
@@ -42,77 +54,57 @@ funnel run 'md5sum $INFILE > $OUTFILE' \
 --wait
 
 # Check output
-ls -a $TEST_OUTFILE
-ccc_client dts get $TEST_OUTFILE
+demoCmd ls -a $DEMO_DIR/routed
+demoCmd ccc_client dts get $TEST_OUTFILE
 
 
+echo -e "${GREEN}
 ##-----------------------------------------##
 ## PUSH FILE TEST
 ##-----------------------------------------##
-TEST_FILE=${DEMO_DIR}/test_local_input
+${NC}"
+TEST_FILE=${DEMO_DIR}/push_file/test_local_input
 TEST_FILE_CCCID=${TEST_FILE}.ccc
-TEST_OUTFILE=${DEMO_DIR}/test_pushed_output
-
-# Cleanup previous runs
-if [ -e $TEST_FILE ]; then
-    rm $TEST_FILE
-fi
-if [ -e $TEST_OUTFILE ]; then
-    rm $TEST_OUTFILE
-fi
-if [ -e $TEST_FILE_CCCID ]; then
-    ccc_client dts delete $(cat $TEST_FILE_CCCID)
-    rm $TEST_FILE_CCCID
-fi
+TEST_OUTFILE=${DEMO_DIR}/push_file/test_pushed_output
 
 # Stage run
 touch $TEST_FILE
-echo 'HELLO WORLD' > $TEST_FILE
+echo 'LOCAL FILE' > $TEST_FILE
 ccc_client dts post -f $TEST_FILE -s ohsu -u strucka | cut -f 2 > $TEST_FILE_CCCID
-ccc_client dts get $(cat $TEST_FILE_CCCID)
+# ccc_client dts get $(cat $TEST_FILE_CCCID)
 
-funnel run 'md5sum $INFILE > $OUTFILE' \
+demoRun funnel run 'md5sum $INFILE > $OUTFILE' \
 --server http://application-0-1:18000 \
 --container ubuntu \
 --in INFILE=ccc://$(cat $TEST_FILE_CCCID) \
 --out OUTFILE=ccc://$TEST_OUTFILE \
---tag strategy=pushed_file \
+--tag strategy=push_file \
 --wait
 
 # Check output
-ls -a $TEST_OUTFILE
-ccc_client dts get $TEST_OUTFILE
+demoCmd ls -a $DEMO_DIR/push
+demoCmd ccc_client dts get $TEST_OUTFILE
 
 
+echo -e "${GREEN}
 ##-----------------------------------------##
 ## FETCH FILE TEST
 ##-----------------------------------------##
-TEST_FILE=${DEMO_DIR}/test_remote_input
+${NC}"
+TEST_FILE=${DEMO_DIR}/fetch_file/test_remote_input
 TEST_FILE_CCCID=${TEST_FILE}.ccc
-TEST_OUTFILE=${DEMO_DIR}/test_pushed_output
-
-# Cleanup previous runs
-if [ -e $TEST_FILE ]; then
-    rm $TEST_FILE
-fi
-if [ -e $TEST_OUTFILE ]; then
-    rm $TEST_OUTFILE
-fi
-if [ -e $TEST_FILE_CCCID ]; then
-    ccc_client dts delete $(cat $TEST_FILE_CCCID)
-    rm $TEST_FILE_CCCID
-fi
+TEST_OUTFILE=${DEMO_DIR}/fetch_file/test_local_output
 
 # Stage run
 touch $TEST_FILE
-echo 'HELLO WORLD' > $TEST_FILE
+echo 'REMOTE FILE' > $TEST_FILE
 scp $TEST_FILE central-gateway:$DEMO_DIR/$TEST_FILE
 ccc_client dts post -f $TEST_FILE -s ohsu -u strucka | cut -f 2 > $TEST_FILE_CCCID
 rm $TEST_FILE
-ls -a $TEST_FILE
-ccc_client dts get $(cat $TEST_FILE_CCCID)
+# ls -a $TEST_FILE
+# ccc_client dts get $(cat $TEST_FILE_CCCID)
 
-funnel run 'md5sum $INFILE > $OUTFILE' \
+demoRun funnel run 'md5sum $INFILE > $OUTFILE' \
 --server http://application-0-1:18000 \
 --container ubuntu \
 --in INFILE=ccc://$(cat $TEST_FILE_CCCID) \
@@ -121,8 +113,8 @@ funnel run 'md5sum $INFILE > $OUTFILE' \
 --wait 
 
 # Input should have 2 locations now
-ccc_client dts get $(cat $TEST_FILE_CCCID)
+demoCmd ccc_client dts get $(cat $TEST_FILE_CCCID)
 
 # Check output
-ls -a $TEST_OUTFILE
-ccc_client dts get $TEST_OUTFILE
+demoCmd ls -a $DEMO_DIR/fetch
+demoCmd ccc_client dts get $TEST_OUTFILE
