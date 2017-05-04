@@ -13,6 +13,39 @@ import (
 	"time"
 )
 
+type DockerExecutor struct {
+  RemoveContainer bool
+  task *tes.Task
+  logger TaskLogger
+  workspace Workspace
+}
+
+func (b *DockerExecutor) Executor(i int) Executor {
+  stdin, ierr := b.workspace.Reader(d.Stdin)
+
+  // TODO
+  volumes := 
+
+  d := b.task.Executors[i]
+
+  return &Docker{
+    ContainerName:   fmt.Sprintf("%s-%d", b.task.Id, i),
+    RemoveContainer: b.RemoveContainer,
+    ImageName:       d.ImageName,
+    Cmd:             d.Cmd,
+    Volumes:         volumes,
+    Workdir:         d.Workdir,
+    Ports:           d.Ports,
+    Environ:         d.Environ,
+    Stdin: stdin,
+    Stdout: b.logger.ExecutorStdout(i),
+    Stderr: b.logger.ExecutorStderr(i),
+  }, nil
+}
+
+
+
+
 // Docker is responsible for configuring and running a docker container.
 type Docker struct {
 	ContainerName   string

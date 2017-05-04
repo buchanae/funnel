@@ -5,37 +5,39 @@ import (
 	"github.com/ohsu-comp-bio/funnel/util"
 )
 
-  // Create a backend of the given name.
-  // Backends are created per-task.
-  //backend, err := loadBackend(conf, taskID)
-  // defer backend.Close()
+type TaskRunner struct {
+  Storage
+  TaskLogger
+  TaskReader
+  PollRate time.Duration
+}
 
-func RunTask(ctx context.Context, backend Backend) {
+func (r *TaskRunner) RunTask(ctx context.Context, task *tes.Task) {
   l := util.CallList{}
-  task := backend.Task()
-  ctx = PollForCancel(ctx, conf.PollRate, backend)
+  task, err := r.Task()
+  ctx = r.PollForCancel(ctx)
 
   l.AddUnchecked(func() {
-    backend.TaskLogger.StartTime(util.Now())
+    r.TaskLogger.StartTime(util.Now())
   })
 
   // Validate the input and outputs
   for _, p := range append(task.Inputs, task.Outputs...) {
     l.Add(func() error {
-      return backend.Storage.Supports(p.Url, p.Path, p.Type) {
+      return r.Storage.Supports(p.Url, p.Path, p.Type) {
     })
   })
 
 	// Download inputs
 	for _, input := range task.Inputs {
 		l.Add(func() error {
-			return backend.Storage.Get(ctx, input.Url, input.Path, input.Type)
+			return r.Storage.Get(ctx, input.Url, input.Path, input.Type)
 		})
 	}
 
   // Set task to running state
   l.AddUnchecked(func() {
-    backend.TaskLogger.Running()
+    r.TaskLogger.Running()
   })
 
 	// Run executors
@@ -46,12 +48,12 @@ func RunTask(ctx context.Context, backend Backend) {
       subctx, cleanup := context.WithCancel(ctx)
       defer cleanup()
 
-      exec := backend.Executor(i, d)
+      exec := r.Executor(i, d)
       defer exec.Close()
 
       exec.Logger.Info("Running")
-      backend.TaskLogger.ExecutorStartTime(i, util.Now())
-      exec.Stdout(backend.TaskLogger.ExecutorStdout(i))
+      r.TaskLogger.ExecutorStartTime(i, util.Now())
+      exec.Stdout(r.TaskLogger.ExecutorStdout(i))
 
       // Run the executor
       done := make(chan error)
@@ -62,14 +64,14 @@ func RunTask(ctx context.Context, backend Backend) {
       // Inspect the executor for metadata
       go func() {
         meta := exec.Inspect(subctx, d)
-        backend.TaskLogger.ExecutorPorts(i, meta.Ports)
-        backend.TaskLogger.ExecutorHostIP(i, meta.HostIP)
+        r.TaskLogger.ExecutorPorts(i, meta.Ports)
+        r.TaskLogger.ExecutorHostIP(i, meta.HostIP)
       }()
 
       // Wait for executor to exit
       res := <-done
-      backend.TaskLogger.ExecutorEndTime(i, util.Now())
-      backend.TaskLogger.ExecutorExitCode(i, getExitCode(res))
+      r.TaskLogger.ExecutorEndTime(i, util.Now())
+      r.TaskLogger.ExecutorExitCode(i, getExitCode(res))
       return res
 		})
 	}
@@ -77,16 +79,41 @@ func RunTask(ctx context.Context, backend Backend) {
 	// Upload outputs
 	for _, output := range task.Outputs {
 		l.Add(func() error {
-      filelist, err := backend.Storage.Put(ctx, output.Url, output.Path, output.Type)
-      backend.TaskLogger.OutputFiles(f)
+      filelist, err := r.Storage.Put(ctx, output.Url, output.Path, output.Type)
+      r.TaskLogger.OutputFiles(f)
       return err
 		})
 	}
 
   l.AddUnchecked(func() {
-    backend.TaskLogger.EndTime(util.Now())
+    r.TaskLogger.EndTime(util.Now())
   })
 
   result := l.Run(ctx)
-  backend.TaskLogger.Result(result)
+  r.TaskLogger.Result(result)
+}
+
+
+
+
+func (r *TaskRunner) PollForCancel(ctx context.Context) context.Context {
+  taskctx, cancel := context.WithCancel(ctx)
+
+  // Start a goroutine that polls the server to watch for a canceled state.
+  // If a cancel state is found, "taskctx" is canceled.
+  go func() {
+    ticker := time.NewTicker(r.PollRate)
+    defer ticker.Stop()
+
+    for {
+    case <-taskctx.Done():
+      return
+    case <-ticker.C:
+      state, err := reader.State()
+      if state == tes.State_CANCELED {
+        cancel()
+      }
+    }
+  }()
+  return taskctx
 }

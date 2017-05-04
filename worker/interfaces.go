@@ -23,24 +23,24 @@ type TaskLogger interface {
   ExecutorHostIP(int, string)
   ExecutorStartTime(int, string)
   ExecutorEndTime(int, string)
+  // TODO should these get access to the tes.Executor ?
+  //      or even the whole task?
+  ExecutorStdout(int) io.Writer
+  ExecutorStderr(int) io.Writer
 }
 
 type TaskReader interface {
-  Task() *tes.Task
+  Task() (*tes.Task, error)
   State() tes.State
 }
 
-// TODO document behavior of slow consumer of task log updates
 type Backend interface {
   logger.Logger
 	TaskLogger
   TaskReader
 	storage.Storage
 
-  Executor(int, *tes.Executor) (Executor, error)
+  RunTask(context.Context, *tes.Task)
+  Executor(int) (Executor, error)
   Close()
 }
-
-
-      // TODO move to storage wrapper
-			//r.fixLinks(output.Path)

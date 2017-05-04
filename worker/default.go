@@ -10,16 +10,11 @@ import (
 	"time"
 )
 
+
 func NewDefaultBackend(conf config.Worker, taskID string) (*DefaultBackend, error) {
   workspace, werr := NewWorkspace(conf.WorkDir, taskID)
-  NewTaskState()
-
-  task, terr := client.GetTask(context.TODO(), &tes.GetTaskRequest{
-    Id: taskID:
-    View: tes.TaskView_FULL,
-  })
-
   store, serr := storage.FromConfig(conf.Storage)
+  rpc, err := NewRPCTask(conf, taskID)
 
   if err := util.Check(werr, terr, serr); err != nil {
     return nil, err
@@ -27,12 +22,10 @@ func NewDefaultBackend(conf config.Worker, taskID string) (*DefaultBackend, erro
 
   return &DefaultBackend{
     Logger: log.WithFields("task", taskID),
-    RPCTaskLogger: &RPCTaskLogger{client, taskID},
-    RPCTaskReader: &RPCTaskReader{client, taskID},
+    RPCTaskLogger: rpc,
+    RPCTaskReader: rpc,
     Storage: store,
-    task: task,
-    client: client
-    workspace: workspace,
+    DockerExecutor: docker,
   }, nil
 }
 
@@ -41,35 +34,9 @@ type DefaultBackend struct {
   *RPCTaskLogger
   *RPCTaskReader
   storage.Storage
-  client
-  workspace *Workspace
+  *DockerExecutor
 }
 
 func (b *DefaultBackend) Close() {
-  b.RPCTaskLogger.Close()
-  b.client.Close()
-}
-
-func (b *DefaultBackend) Executor(i int, d *tes.Executor) Executor {
-  stdin, ierr := b.workspace.Reader(d.Stdin)
-  stdout, oerr := b.workspace.Writer(d.Stdout)
-  stderr, eerr := b.workspace.Writer(d.Stderr)
-
-  if err := util.Check(ierr, oerr, eerr); err != nil {
-    return nil, err
-  }
-
-  return &Docker{
-    ImageName:       d.ImageName,
-    Cmd:             d.Cmd,
-    Volumes:         r.mapper.Volumes,
-    Workdir:         d.Workdir,
-    Ports:           d.Ports,
-    ContainerName:   fmt.Sprintf("%s-%d", task.Id, i),
-    RemoveContainer: r.conf.RemoveContainer,
-    Environ:         d.Environ,
-    Stdin: stdin,
-    Stdout: io.MultiWriter(stdout, log.Stdout())
-    Stderr: io.MultiWriter(stderr, log.Stderr())
-  }, nil
+  // TODO ?? b.RPCTaskLogger.Close()
 }
