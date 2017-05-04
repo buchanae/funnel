@@ -2,11 +2,11 @@ package ccc
 
 import (
 	"context"
+	"github.com/ohsu-comp-bio/funnel/ccc"
 	"github.com/ohsu-comp-bio/funnel/config"
 	"github.com/ohsu-comp-bio/funnel/logger"
 	"github.com/ohsu-comp-bio/funnel/logger/logutils"
 	"github.com/ohsu-comp-bio/funnel/server"
-	"github.com/ohsu-comp-bio/funnel/ccc"
 	"github.com/spf13/cobra"
 	"google.golang.org/grpc"
 )
@@ -34,20 +34,20 @@ var Cmd = &cobra.Command{
 func Run(conf config.Config) error {
 	logutils.Configure(conf)
 
-  proxy, err := ccc.NewTaskProxy(conf)
-  if err != nil {
-    return err
-  }
+	proxy, err := ccc.NewTaskProxy(conf)
+	if err != nil {
+		return err
+	}
 
 	srv := server.Server{
-    RPCAddress: conf.RPCAddress(),
-    HTTPPort: conf.HTTPPort,
-    TaskServiceServer: proxy,
-		DisableHTTPCache:       conf.DisableHTTPCache,
+		RPCAddress:        conf.RPCAddress(),
+		HTTPPort:          conf.HTTPPort,
+		TaskServiceServer: proxy,
+		DisableHTTPCache:  conf.DisableHTTPCache,
 		DialOptions: []grpc.DialOption{
 			grpc.WithInsecure(),
 		},
-  }
+	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

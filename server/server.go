@@ -70,11 +70,11 @@ func (s *Server) Serve(ctx context.Context) error {
 		mux.Handle("/v1/", disableCache(grpcMux))
 	}
 
-  if s.Handler != nil {
-    mux.HandleFunc("/", func(resp http.ResponseWriter, req *http.Request) {
-      s.Handler.ServeHTTP(resp, req)
-    })
-  }
+	if s.Handler != nil {
+		mux.HandleFunc("/", func(resp http.ResponseWriter, req *http.Request) {
+			s.Handler.ServeHTTP(resp, req)
+		})
+	}
 
 	// Register TES service
 	if s.TaskServiceServer != nil {

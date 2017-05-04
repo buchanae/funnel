@@ -1,4 +1,4 @@
-package condor
+package ccc
 
 import (
 	"fmt"
@@ -16,16 +16,16 @@ import (
 	"time"
 )
 
-var log = logger.New("condor")
+var log = logger.New("ccc")
 
 // prefix is a string prefixed to condor worker IDs, so that condor
 // workers can be identified by ShouldStartWorker() below.
 // TODO move to worker metadata to be consistent with GCE
-const prefix = "condor-worker-"
+const prefix = "ccc-worker-"
 
 // Plugin provides the HTCondor scheduler backend plugin.
 var Plugin = &scheduler.BackendPlugin{
-	Name:   "condor",
+	Name:   "ccc",
 	Create: NewBackend,
 }
 
@@ -41,7 +41,7 @@ type Backend struct {
 
 // Schedule schedules a task on the HTCondor queue and returns a corresponding Offer.
 func (s *Backend) Schedule(t *tes.Task) *scheduler.Offer {
-	log.Debug("Running condor scheduler")
+	log.Debug("Running ccc scheduler")
 
 	disk := s.conf.Worker.Resources.DiskGb
 	if disk == 0.0 {
@@ -58,6 +58,21 @@ func (s *Backend) Schedule(t *tes.Task) *scheduler.Offer {
 		ram = t.GetResources().GetRamGb()
 	}
 
+	// Setup strategy
+	// Worker config take precedence
+	metadata := make(map[string]string)
+	metadata["strategy"] = "routed_file"
+	if val, ok := t.Tags["strategy"]; ok {
+		metadata["strategy"] = val
+	}
+	for _, store := range s.conf.Worker.Storage {
+		if store.CCC.Valid() {
+			if store.CCC.Strategy != "" {
+				metadata["strategy"] = store.CCC.Strategy
+			}
+		}
+	}
+
 	// TODO could we call condor_submit --dry-run to test if a task would succeed?
 	w := &pbf.Worker{
 		Id: prefix + t.Id,
@@ -66,6 +81,7 @@ func (s *Backend) Schedule(t *tes.Task) *scheduler.Offer {
 			RamGb:  ram,
 			DiskGb: disk,
 		},
+		Metadata: metadata,
 	}
 	return scheduler.NewOffer(w, t, scheduler.Scores{})
 }
@@ -97,6 +113,9 @@ func (s *Backend) StartWorker(w *pbf.Worker) error {
 	wc.Worker.Resources.RamGb = w.Resources.RamGb
 	wc.Worker.Resources.DiskGb = w.Resources.DiskGb
 
+	storage := setupCCCStorage(w.Metadata["strategy"], s.conf.Storage)
+	wc.Worker.Storage = storage
+
 	confPath := path.Join(workdir, "worker.conf.yml")
 	wc.ToYamlFile(confPath)
 
@@ -115,7 +134,7 @@ func (s *Backend) StartWorker(w *pbf.Worker) error {
 universe       = vanilla
 executable     = {{.Executable}}
 arguments      = worker --config worker.conf.yml
-environment    = "PATH=/usr/bin"
+getenv         = True
 log            = {{.WorkDir}}/condor-event-log
 error          = {{.WorkDir}}/funnel-worker-stderr
 output         = {{.WorkDir}}/funnel-worker-stdout
@@ -169,4 +188,18 @@ func resolveCondorResourceRequest(cpus int, ram float64, disk float64) string {
 		resources = append(resources, fmt.Sprintf("request_disk   = %f", disk*976562))
 	}
 	return strings.Join(resources, "\n")
+}
+
+func setupCCCStorage(strategy string, sconf []*config.StorageConfig) []*config.StorageConfig {
+	// Use 'strategy' to setup  CCC Storage Backend
+	var storage []*config.StorageConfig
+	var sc *config.StorageConfig
+	for _, s := range sconf {
+		if s.CCC.Valid() {
+			sc = s
+			sc.CCC.Strategy = strategy
+			storage = append(storage, sc)
+		}
+	}
+	return storage
 }

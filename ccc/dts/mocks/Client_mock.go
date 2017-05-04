@@ -8,16 +8,16 @@ type Client struct {
 	mock.Mock
 }
 
-// GetFile provides a mock function with given fields: id
-func (_m *Client) GetFile(id string) (*dts.Entry, error) {
+// Get provides a mock function with given fields: id
+func (_m *Client) Get(id string) (*dts.Record, error) {
 	ret := _m.Called(id)
 
-	var r0 *dts.Entry
-	if rf, ok := ret.Get(0).(func(string) *dts.Entry); ok {
+	var r0 *dts.Record
+	if rf, ok := ret.Get(0).(func(string) *dts.Record); ok {
 		r0 = rf(id)
 	} else {
 		if ret.Get(0) != nil {
-			r0 = ret.Get(0).(*dts.Entry)
+			r0 = ret.Get(0).(*dts.Record)
 		}
 	}
 
@@ -29,4 +29,32 @@ func (_m *Client) GetFile(id string) (*dts.Entry, error) {
 	}
 
 	return r0, r1
+}
+
+// Post provides a mock function with given fields: msg
+func (_m *Client) Post(msg []byte) error {
+	ret := _m.Called(msg)
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func([]byte) error); ok {
+		r0 = rf(msg)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
+// Put provides a mock function with given fields: msg
+func (_m *Client) Put(msg []byte) error {
+	ret := _m.Called(msg)
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func([]byte) error); ok {
+		r0 = rf(msg)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
 }

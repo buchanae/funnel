@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"github.com/ohsu-comp-bio/funnel/cmd/ccc"
 	"github.com/ohsu-comp-bio/funnel/cmd/examples"
 	"github.com/ohsu-comp-bio/funnel/cmd/gce"
 	"github.com/ohsu-comp-bio/funnel/cmd/run"
@@ -9,7 +10,6 @@ import (
 	"github.com/ohsu-comp-bio/funnel/cmd/termdash"
 	"github.com/ohsu-comp-bio/funnel/cmd/wait"
 	"github.com/ohsu-comp-bio/funnel/cmd/worker"
-	"github.com/ohsu-comp-bio/funnel/cmd/ccc"
 	"github.com/spf13/cobra"
 )
 
@@ -31,5 +31,5 @@ func init() {
 	RootCmd.AddCommand(termdash.Cmd)
 	RootCmd.AddCommand(wait.Cmd)
 	RootCmd.AddCommand(worker.Cmd)
-  RootCmd.AddCommand(ccc.Cmd)
+	RootCmd.AddCommand(ccc.Cmd)
 }

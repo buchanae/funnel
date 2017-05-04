@@ -98,6 +98,14 @@ func (storage Storage) WithConfig(conf *config.StorageConfig) (*Storage, error) 
 		out, err = storage.WithBackend(local)
 	}
 
+	if conf.CCC.Valid() {
+		ccc, err := NewCCCBackend(conf.CCC)
+		if err != nil {
+			return nil, err
+		}
+		out, err = storage.WithBackend(ccc)
+	}
+
 	if conf.S3.Valid() {
 		s3, err := NewS3Backend(conf.S3)
 		if err != nil {

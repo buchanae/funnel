@@ -7,7 +7,7 @@ func (c *Client) SetFileSites(id string, sites []string) {
 	for _, site := range sites {
 		locs = append(locs, dts.Location{Site: site})
 	}
-	c.On("GetFile", id).Return(&dts.Entry{
+	c.On("Get", id).Return(&dts.Record{
 		ID:       id,
 		Location: locs,
 	}, nil)

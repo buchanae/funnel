@@ -33,7 +33,7 @@ func routeTask(conf config.Config, dts dts.Client, task *tes.Task) (string, erro
 		// Ignore non-CCC input URLs.
 		if url, ok := cccInputURL(input.Url); ok {
 			// Get the DTS entry
-			entry, err := dts.GetFile(url)
+			entry, err := dts.Get(url)
 			if err != nil {
 				return "", err
 			}

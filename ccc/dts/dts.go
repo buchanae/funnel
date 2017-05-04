@@ -1,38 +1,55 @@
 package dts
 
 import (
+	"bytes"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"github.com/ohsu-comp-bio/funnel/logger"
-	"io/ioutil"
+	"github.com/ohsu-comp-bio/funnel/util"
 	"net/http"
 	"net/url"
+	"os"
+	"path/filepath"
+	"strings"
 	"time"
 )
 
 var log = logger.New("CCC DTS")
 
 type Client interface {
-	GetFile(id string) (*Entry, error)
+	Get(id string) (*Record, error)
+	Post(msg []byte) error
+	Put(msg []byte) error
 }
 
 // NewClient returns a new HTTP client for accessing
 // Create/List/Get/Cancel Task endpoints. "address" is the address
 // of the CCC Central Function server.
 func NewClient(address string) (Client, error) {
+	// Strip trailing slash. A quick and dirty fix.
+	address = strings.TrimSuffix(address, "/")
 	u, err := url.Parse(address)
 	if err != nil {
 		log.Error("Can't parse DTS address", err)
 		return nil, err
 	}
-	if u.Scheme != "http" || u.Scheme != "https" {
-		errors.New("Invalid URL scheme.")
-		log.Error("Invalid DTS URL scheme", err)
+	if u.Scheme != "http" && u.Scheme != "https" {
+		err := fmt.Errorf("Invalid URL scheme: { %s }", u.Scheme)
+		log.Error("Error parsing URL", err)
+		return nil, err
+	}
+	if u.Host == "" {
+		err := fmt.Errorf("Invalid host: { %s }", u.Host)
+		log.Error("Error parsing URL", err)
+		return nil, err
+	}
+	if u.Path != "" {
+		err := fmt.Errorf("Invalid path: { %s }", u.Path)
+		log.Error("Error parsing URL", err)
 		return nil, err
 	}
 	c := &client{
-		address: u,
+		address: u.String(),
 		client: &http.Client{
 			Timeout: 10 * time.Second,
 		},
@@ -42,37 +59,62 @@ func NewClient(address string) (Client, error) {
 
 // Client represents the HTTP Task client.
 type client struct {
-	address *url.URL
+	address string
 	client  *http.Client
 }
 
-// Entry represents a DTS entry
-type Entry struct {
-	ID       string
+// Record represents a DTS record
+type Record struct {
+	ID       string `json:"cccId"`
 	Name     string
-	Size     uint32
+	Size     int64
 	Location []Location
+}
+
+type User struct {
+	Name string
 }
 
 // Location represents a DTS location
 type Location struct {
 	Site             string
 	Path             string
-	TimestampUpdated uint32
-	User             struct {
-		Name string
+	TimestampUpdated int64 `json:"timestampUpdated"`
+	User             User
+}
+
+// SitePath returns the absolute path of the file/directory at the specified site
+func (r *Record) SitePath(site string) string {
+	for _, location := range r.Location {
+		if location.Site == site {
+			return filepath.Join(location.Path, r.Name)
+		}
 	}
+	return ""
+}
+
+// HasSiteLocation returns true if the record contains a Location with this Site
+func (r *Record) HasSiteLocation(site string) bool {
+	for _, location := range r.Location {
+		if location.Site == site {
+			return true
+		}
+	}
+	return false
 }
 
 // Get returns the raw bytes from GET /api/v1/dts/file/<id>
-func (c *client) GetFile(id string) (*Entry, error) {
+func (c *client) Get(id string) (*Record, error) {
+	// convert ID to be URL safe
+	cccID := url.PathEscape(id)
 	// Send request
-	body, err := check(c.client.Get("api/v1/dts/file/" + id))
+	u := c.address + "/api/v1/dts/file/" + cccID
+	body, err := util.CheckHTTPResponse(c.client.Get(u))
 	if err != nil {
 		return nil, err
 	}
 	// Parse response
-	resp := &Entry{}
+	resp := &Record{}
 	err = json.Unmarshal(body, resp)
 	if err != nil {
 		return nil, err
@@ -80,20 +122,76 @@ func (c *client) GetFile(id string) (*Entry, error) {
 	return resp, nil
 }
 
-// check does some basic error handling
-// and reads the response body into a byte array
-func check(resp *http.Response, err error) ([]byte, error) {
+// Post returns the raw bytes from POST /api/v1/dts/file
+func (c *client) Post(msg []byte) error {
+	err := isRecord(msg)
 	if err != nil {
-		return nil, err
+		return fmt.Errorf("Not a valid DTS Record message: %v", err)
 	}
 
-	defer resp.Body.Close()
-	body, err := ioutil.ReadAll(resp.Body)
+	// Send request
+	r := bytes.NewReader(msg)
+	u := c.address + "/api/v1/dts/file"
+	_, err = util.CheckHTTPResponse(c.client.Post(u, "application/json", r))
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// Put returns the raw bytes from PUT /api/v1/dts/file
+func (c *client) Put(msg []byte) error {
+	err := isRecord(msg)
+	if err != nil {
+		return fmt.Errorf("Not a valid DTS Record message: %v", err)
+	}
+
+	// Send request
+	r := bytes.NewReader(msg)
+	u := c.address + "/api/v1/dts/file"
+	req, err := http.NewRequest(http.MethodPut, u, r)
+	if err != nil {
+		return err
+	}
+	req.Header.Add("Content-Type", "application/json")
+	_, err = util.CheckHTTPResponse(c.client.Do(req))
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// GenerateRecord is a helper method for creating Records
+func GenerateRecord(path string, site string) (*Record, error) {
+	f, err := os.Open(path)
 	if err != nil {
 		return nil, err
 	}
-	if (resp.StatusCode / 100) != 2 {
-		return nil, fmt.Errorf("[STATUS CODE - %d]\t%s", resp.StatusCode, body)
+	fi, err := f.Stat()
+	if err != nil {
+		return nil, err
 	}
-	return body, nil
+	defer f.Close()
+	r := &Record{
+		ID:   path,
+		Name: fi.Name(),
+		Size: fi.Size(),
+		Location: []Location{
+			{
+				Site:             site,
+				Path:             filepath.Dir(path),
+				TimestampUpdated: fi.ModTime().Unix(),
+				User: User{
+					Name: os.Getenv("USER"),
+				},
+			},
+		},
+	}
+	return r, nil
+}
+
+// TODO replace with proper message validation
+func isRecord(b []byte) error {
+	var js Record
+	return json.Unmarshal(b, &js)
 }
