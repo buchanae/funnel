@@ -1,20 +1,20 @@
 package dts
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/ohsu-comp-bio/funnel/logger"
+	"io/ioutil"
 	"net/http"
 	"net/url"
-  "github.com/ohsu-comp-bio/funnel/logger"
-  "time"
-  "encoding/json"
-  "io/ioutil"
+	"time"
 )
 
 var log = logger.New("CCC DTS")
 
 type Client interface {
-  GetFile(id string) (*Entry, error)
+	GetFile(id string) (*Entry, error)
 }
 
 // NewClient returns a new HTTP client for accessing

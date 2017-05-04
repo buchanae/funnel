@@ -6,6 +6,10 @@ import (
 	"testing"
 )
 
+func init() {
+	//logger.Discard()
+}
+
 func TestListNoCacheHeader(t *testing.T) {
 	srv := NewFunnel(NewConfig())
 	srv.Start()
