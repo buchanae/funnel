@@ -44,11 +44,7 @@ func NewFunnel(conf config.Config) *Funnel {
 	}
 
 	// Create server
-	srv, err := server.NewServer(db, conf)
-	if err != nil {
-		panic(err)
-	}
-
+	srv := server.DefaultServer(db, conf)
 	sched, _ := scheduler.NewScheduler(db, conf)
 
 	return &Funnel{
@@ -84,7 +80,7 @@ func (m *Funnel) Client() scheduler.Client {
 func (m *Funnel) Start() {
 	ctx, stop := context.WithCancel(context.Background())
 	m.stop = stop
-	err := m.Server.Start(ctx)
+	err := m.Server.Serve(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -101,7 +97,6 @@ func (m *Funnel) Stop() {
 	m.stop()
 	m.stop = nil
 	m.Client().Close()
-	m.Server.Stop()
 }
 
 // Flush calls Schedule() and worker.Sync, which helps tests
