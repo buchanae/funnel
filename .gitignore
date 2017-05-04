@@ -12,3 +12,4 @@ bower_components
 .sass-cache/
 /build
 /website/public
+storage/_test_download
