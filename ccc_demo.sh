@@ -9,10 +9,10 @@ RED='\033[0;31m'
 NC='\033[0m'
 function demoRun() {
     echo -e "${RED}$@ --print${NC}"
-    $@ --print
+    eval "$@ --print | jq ." 
     read -n1 -r -p "Press space to continue..." key
     if [ "$key" = '' ]; then
-        $@ --wait
+        eval "$@ --wait" 
     fi
 }
 
@@ -45,13 +45,12 @@ echo 'LOCAL FILE' > $TEST_FILE
 ccc_client dts post -f $TEST_FILE -s ohsu -u strucka | cut -f 2 > $TEST_FILE_CCCID
 # ccc_client dts get $(cat $TEST_FILE_CCCID)
 
-demoRun funnel run 'md5sum $INFILE > $OUTFILE' \
+demoRun funnel run "'md5sum \$INFILE > \$OUTFILE'" \
 --server http://application-0-1:18000 \
 --container ubuntu \
 --in INFILE=ccc://$(cat $TEST_FILE_CCCID) \
 --out OUTFILE=ccc://$TEST_OUTFILE \
---tag strategy=routed_file \
---wait
+--tag strategy=routed_file
 
 # Check output
 demoCmd ls -a $DEMO_DIR/routed
@@ -73,13 +72,12 @@ echo 'LOCAL FILE' > $TEST_FILE
 ccc_client dts post -f $TEST_FILE -s ohsu -u strucka | cut -f 2 > $TEST_FILE_CCCID
 # ccc_client dts get $(cat $TEST_FILE_CCCID)
 
-demoRun funnel run 'md5sum $INFILE > $OUTFILE' \
+demoRun funnel run "'md5sum \$INFILE > \$OUTFILE'" \
 --server http://application-0-1:18000 \
 --container ubuntu \
 --in INFILE=ccc://$(cat $TEST_FILE_CCCID) \
 --out OUTFILE=ccc://$TEST_OUTFILE \
---tag strategy=push_file \
---wait
+--tag strategy=push_file
 
 # Check output
 demoCmd ls -a $DEMO_DIR/push
@@ -104,13 +102,12 @@ rm $TEST_FILE
 # ls -a $TEST_FILE
 # ccc_client dts get $(cat $TEST_FILE_CCCID)
 
-demoRun funnel run 'md5sum $INFILE > $OUTFILE' \
+demoRun funnel run "'md5sum \$INFILE > \$OUTFILE'" \
 --server http://application-0-1:18000 \
 --container ubuntu \
 --in INFILE=ccc://$(cat $TEST_FILE_CCCID) \
 --out OUTFILE=ccc://$TEST_OUTFILE \
---tag strategy=fetch_file \
---wait 
+--tag strategy=fetch_file
 
 # Input should have 2 locations now
 demoCmd ccc_client dts get $(cat $TEST_FILE_CCCID)
