@@ -2,6 +2,7 @@ package ccc
 
 import (
 	"errors"
+	dtsmocks "github.com/ohsu-comp-bio/funnel/ccc/dts/mocks"
 	"github.com/ohsu-comp-bio/funnel/ccc/dts"
 	"github.com/ohsu-comp-bio/funnel/config"
 	"github.com/ohsu-comp-bio/funnel/logger"
@@ -27,6 +28,16 @@ func NewTaskProxy(conf config.Config) (*TaskProxy, error) {
 	}
 	mapper := &siteMapper{conf: conf}
 	return &TaskProxy{conf, dtsClient, mapper}, nil
+}
+
+func NewDemoProxy(conf config.Config) *TaskProxy {
+	mapper := &siteMapper{conf: conf}
+	dtsMock := new(dtsmocks.Client)
+  for fileID, siteIDs := range conf.CCC.DTSDemo {
+    dtsMock.SetFileSites(fileID, siteIDs)
+  }
+  proxy := &TaskProxy{conf, dtsMock, mapper}
+  return proxy
 }
 
 // CreateTask

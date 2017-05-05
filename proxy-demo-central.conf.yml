@@ -1,0 +1,3 @@
+ServiceName: Central
+HTTPPort: 10001
+RPCPort: 10002

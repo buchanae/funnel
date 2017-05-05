@@ -1,0 +1,8 @@
+CCC:
+  DTSDemo:
+    file_one:
+      - http://ccc-pdx
+      - http://ccc-central
+    file_two:
+      - http://ccc-pdx
+      - http://ccc-other

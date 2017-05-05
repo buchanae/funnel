@@ -57,6 +57,7 @@ type Config struct {
 		DTSAddress  string
 		Sites       []string
 		CentralSite string
+    DTSDemo map[string][]string
 	}
 	ServiceName string
 }

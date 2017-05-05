@@ -1,0 +1,3 @@
+ServiceName: PDX
+HTTPPort: 11001
+RPCPort: 11002

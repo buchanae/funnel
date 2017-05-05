@@ -34,10 +34,7 @@ var Cmd = &cobra.Command{
 func Run(conf config.Config) error {
 	logutils.Configure(conf)
 
-	proxy, err := ccc.NewTaskProxy(conf)
-	if err != nil {
-		return err
-	}
+  proxy := ccc.NewDemoProxy(conf)
 
 	srv := server.Server{
 		RPCAddress:        conf.RPCAddress(),
