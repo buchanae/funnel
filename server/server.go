@@ -36,7 +36,7 @@ func DefaultServer(db Database, conf config.Config) *Server {
 	mux.Handle("/", webdash.Handler())
 
 	return &Server{
-		RPCAddress:             conf.RPCAddress(),
+		RPCAddress:             ":" + conf.RPCPort,
 		HTTPPort:               conf.HTTPPort,
 		TaskServiceServer:      db,
 		SchedulerServiceServer: db,

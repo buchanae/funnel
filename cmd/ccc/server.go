@@ -7,8 +7,10 @@ import (
 	"github.com/ohsu-comp-bio/funnel/logger"
 	"github.com/ohsu-comp-bio/funnel/logger/logutils"
 	"github.com/ohsu-comp-bio/funnel/server"
+	"github.com/ohsu-comp-bio/funnel/webdash"
 	"github.com/spf13/cobra"
 	"google.golang.org/grpc"
+	"net/http"
 )
 
 var log = logger.New("ccc")
@@ -35,10 +37,13 @@ func Run(conf config.Config) error {
 	logutils.Configure(conf)
 
   proxy := ccc.NewDemoProxy(conf)
+	mux := http.NewServeMux()
+	mux.Handle("/", webdash.Handler())
 
 	srv := server.Server{
-		RPCAddress:        conf.RPCAddress(),
+		RPCAddress:        ":" + conf.RPCPort,
 		HTTPPort:          conf.HTTPPort,
+    Handler: mux,
 		TaskServiceServer: proxy,
 		DisableHTTPCache:  conf.DisableHTTPCache,
 		DialOptions: []grpc.DialOption{

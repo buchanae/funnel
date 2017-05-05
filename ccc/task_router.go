@@ -25,6 +25,11 @@ func routeTask(conf config.Config, dts dts.Client, task *tes.Task) (string, erro
 		return "", err
 	}
 
+  // TODO move this hack
+  if len(task.Inputs) == 0 {
+    return conf.CCC.CentralSite, nil
+  }
+
 	// inputSites helps track which sites have input files available locally
 	// and which are fetchable from central. This helps make decisions based
 	// on the task strategy below.

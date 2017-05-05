@@ -1,0 +1,38 @@
+version: '3'
+services:
+  funnel-proxy:
+    container_name: ccc-proxy
+    command: /opt/funnel/funnel ccc --config /opt/funnel/config.yml
+    build: .
+    ports:
+    - "10001:8000"
+    - "9090"
+    volumes:
+    - ./proxy-demo-proxy.conf.yml:/opt/funnel/config.yml
+  funnel-pdx:
+    container_name: ccc-pdx-site
+    command: /opt/funnel/funnel server --config /opt/funnel/config.yml
+    build: .
+    ports:
+    - "10002:8000"
+    - "9090"
+    volumes:
+    - ./proxy-demo-pdx.conf.yml:/opt/funnel/config.yml
+  funnel-other:
+    container_name: ccc-other-site
+    command: /opt/funnel/funnel server --config /opt/funnel/config.yml
+    build: .
+    ports:
+    - "10003:8000"
+    - "9090"
+    volumes:
+    - ./proxy-demo-other.conf.yml:/opt/funnel/config.yml
+  funnel-central:
+    container_name: ccc-central-site
+    command: /opt/funnel/funnel server --config /opt/funnel/config.yml
+    build: .
+    ports:
+    - "10004:8000"
+    - "9090"
+    volumes:
+    - ./proxy-demo-central.conf.yml:/opt/funnel/config.yml

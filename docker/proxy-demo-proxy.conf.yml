@@ -1,0 +1,23 @@
+ServiceName: Proxy
+CCC:
+  CentralSite: http://ccc-central-site
+  Sites:
+    - http://ccc-pdx-site
+    - http://ccc-other-site
+    - http://ccc-central-site
+  DTSDemo:
+    file_pdx:
+      - http://ccc-pdx-site
+    file_other:
+      - http://ccc-other-site
+    file_central:
+      - http://ccc-central-site
+    file_pdx_central:
+      - http://ccc-central-site
+      - http://ccc-pdx-site
+    file_pdx_other:
+      - http://ccc-pdx-site
+      - http://ccc-other-site
+    file_other_central:
+      - http://ccc-central-site
+      - http://ccc-other-site

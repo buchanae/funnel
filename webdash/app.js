@@ -5,7 +5,7 @@ var mdl = require('material-design-lite')
 var app = angular.module('TESApp', ['ngRoute', 'ngTable']);
 
 function shortID(longID) {
-  return longID.split('-')[0];
+  return longID.slice(-10);
 }
 
 app.controller('PageController', function($scope, $http) {

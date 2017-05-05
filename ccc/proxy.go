@@ -101,7 +101,11 @@ func (p *TaskProxy) ListTasks(ctx context.Context, req *tes.ListTasksRequest) (*
 	// TODO this is shortcut and doesn't properly manage the sizes
 	//      of the respones, pagination, etc.
 	for _, site := range p.mapper.Sites() {
+    log.Debug("Proxy list task", "site", site)
 		client, err := p.mapper.Client(site)
+    if err != nil {
+      return nil, err
+    }
 
 		// Call ListTasks on the site
 		r, err := client.ListTasks(ctx, req)
@@ -138,5 +142,5 @@ func (p *TaskProxy) CancelTask(ctx context.Context, req *tes.CancelTaskRequest) 
 }
 
 func (p *TaskProxy) GetServiceInfo(ctx context.Context, info *tes.ServiceInfoRequest) (*tes.ServiceInfo, error) {
-	return &tes.ServiceInfo{}, nil
+	return &tes.ServiceInfo{Name: p.conf.ServiceName}, nil
 }

@@ -1,13 +1,19 @@
 package ccc
 
 import (
-	"errors"
+  "fmt"
 	"github.com/ohsu-comp-bio/funnel/config"
 	"github.com/ohsu-comp-bio/funnel/proto/tes"
 	"google.golang.org/grpc"
 	"net/url"
-	"strings"
+  "encoding/json"
+  "encoding/base64"
 )
+
+type giddata struct {
+  Site string
+  LocalID string
+}
 
 type SiteMapper interface {
 	GlobalID(site, lid string) string
@@ -24,11 +30,7 @@ type siteMapper struct {
 }
 
 func (s *siteMapper) Sites() []string {
-	var sites []string
-	for _, site := range s.conf.CCC.Sites {
-		sites = append(sites, normalize(site, "").String())
-	}
-	return sites
+  return s.conf.CCC.Sites
 }
 
 func (s *siteMapper) Site(gid string) (string, error) {
@@ -42,11 +44,17 @@ func (s *siteMapper) LocalID(gid string) (string, error) {
 }
 
 func (s *siteMapper) GlobalID(site, lid string) string {
-	return normalize(site, lid).String()
+  gid := giddata{site, lid}
+  js, _ := json.Marshal(gid)
+  return base64.StdEncoding.EncodeToString([]byte(js))
 }
 
 func (s *siteMapper) Client(site string) (tes.TaskServiceClient, error) {
 	u := normalize(site, "")
+  if u.Hostname() == "" {
+    return nil, fmt.Errorf("No site hostname")
+  }
+
 	address := u.Hostname() + ":" + s.conf.RPCPort
 	if s.getClient != nil {
 		return s.getClient(address)
@@ -73,12 +81,9 @@ func getClient(address string) (tes.TaskServiceClient, error) {
 	return tes.NewTaskServiceClient(conn), err
 }
 
-func parse(gid string) (string, string, error) {
-	u, err := url.Parse(gid)
-	if err != nil {
-		return "", "", errors.New("can't parse task URL")
-	}
-
-	p := strings.TrimPrefix(u.Path, "/")
-	return u.Hostname(), p, nil
+func parse(raw string) (string, string, error) {
+  js, _ := base64.StdEncoding.DecodeString(raw)
+  gid := giddata{}
+  json.Unmarshal(js, &gid)
+  return gid.Site, gid.LocalID, nil
 }
