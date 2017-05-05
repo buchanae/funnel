@@ -58,6 +58,7 @@ type Config struct {
 		Sites       []string
 		CentralSite string
 	}
+	ServiceName string
 }
 
 // HTTPAddress returns the HTTP address based on HostName and HTTPPort
@@ -106,6 +107,7 @@ func DefaultConfig() Config {
 			Metadata: map[string]string{},
 		},
 		DisableHTTPCache: true,
+		ServiceName:      "Funnel",
 	}
 
 	c.Backends.GCE.CacheTTL = time.Minute

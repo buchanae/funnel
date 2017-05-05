@@ -13,7 +13,7 @@
   </head>
 
   <body ng-app='TESApp'>
-    <div class="layout mdl-js-layout">
+    <div class="layout mdl-js-layout" ng-controller='PageController'>
 
       <header>
         <div class="header-row">
@@ -23,7 +23,7 @@
       </header>
 
       <div class="drawer">
-        <span class="layout-title">Menu</span>
+        <span class="layout-title">{{ SidebarTitle }}</span>
 
         <nav>
           <a href="/#/">Tasks</a>

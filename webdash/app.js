@@ -8,6 +8,15 @@ function shortID(longID) {
   return longID.split('-')[0];
 }
 
+app.controller('PageController', function($scope, $http) {
+  $scope.SidebarTitle = "";
+  $http.get("/v1/tasks/service-info").then(function(response) {
+    if (response.status == 200 && response.data.name != "") {
+      $scope.SidebarTitle = response.data.name;
+    }
+  })
+})
+
 app.controller('TaskListController', function($scope, NgTableParams, $http) {
   $scope.url = "/v1/tasks";
   $scope.shortID = shortID;
@@ -41,7 +50,6 @@ app.controller('WorkerListController', function($scope, $http) {
 
   $http.get($scope.url).then(function(result) {
     var workers = result.data.workers || [];
-console.log(workers)
     $scope.workers = workers;
   });
 });
