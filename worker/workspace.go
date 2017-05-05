@@ -20,13 +20,9 @@ func (w *Workspace) Writer(p string) (io.Writer, error) {
   if p == "" {
     return nil, nil
   }
-	p, perr := mapper.HostPath(src)
+	p, perr := w.Path(src)
 	if perr != nil {
 		return nil, perr
-	}
-	err := util.EnsurePath(p)
-	if err != nil {
-		return nil, err
 	}
 	f, oerr := os.Create(p)
 	if oerr != nil {
@@ -45,7 +41,7 @@ func (w *Workspace) Reader(p string) (io.Reader, error) {
   if p == "" {
     return nil, nil
   }
-	p, perr := mapper.HostPath(src)
+	p, perr := w.Path(src)
 	if perr != nil {
 		return nil, perr
 	}
@@ -56,24 +52,37 @@ func (w *Workspace) Reader(p string) (io.Reader, error) {
 	return f, nil
 }
 
-// HostPath returns a mapped path.
+// Path returns a mapped path.
 //
-// The path is concatenated to the mapper's base dir.
-// e.g. If the mapper is configured with a base dir of "/tmp/mapped_files", then
-// mapper.HostPath("/home/ubuntu/myfile") will return "/tmp/mapped_files/home/ubuntu/myfile".
+// The path is concatenated to the w's base dir.
+// e.g. If the w is configured with a base dir of "/tmp/mapped_files", then
+// w.Path("/home/ubuntu/myfile") will return "/tmp/mapped_files/home/ubuntu/myfile".
 //
-// The mapped path is required to be a subpath of the mapper's base directory.
-// e.g. mapper.HostPath("../../foo") should fail with an error.
-func (mapper *FileMapper) HostPath(src string) (string, error) {
-	p := path.Join(mapper.dir, src)
+// The mapped path is required to be a subpath of the w's base directory.
+// e.g. w.Path("../../foo") should fail with an error.
+func (w *Workspace) Path(src string) (string, error) {
+	p := path.Join(w.dir, src)
 	p = path.Clean(p)
-	if !mapper.IsSubpath(p, mapper.dir) {
-		return "", fmt.Errorf("Invalid path: %s is not a valid subpath of %s", p, mapper.dir)
+  // Path must be a subpath of
+  // TODO ensure this is the best way to check
+	if !isSubpath(p, w.dir) {
+		return "", fmt.Errorf("Invalid path: %s is not a valid subpath of %s", p, w.dir)
 	}
 	return p, nil
 }
 
-// IsSubpath returns true if the given path "p" is a subpath of "base".
-func (mapper *FileMapper) IsSubpath(p string, base string) bool {
+// isSubpath returns true if the given path "p" is a subpath of "base".
+func isSubpath(p string, base string) bool {
 	return strings.HasPrefix(p, base)
+}
+
+func (w *Workspace) MapVolumes(in []Volume) []Volume {
+  var volumes []Volume
+  for _, v := range in {
+  }
+  return volumes
+}
+
+func (w *Workspace) MapStorage(s storage.Storage) storage.Storage {
+  // TODO wrap Storage so that paths are mapped to workspace
 }

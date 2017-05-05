@@ -12,9 +12,15 @@ import (
 
 
 func NewDefaultBackend(conf config.Worker, taskID string) (*DefaultBackend, error) {
-  workspace, werr := NewWorkspace(conf.WorkDir, taskID)
+  workspace, werr := NewWorkspace(conf.WorkDir, task)
   store, serr := storage.FromConfig(conf.Storage)
   rpc, err := NewRPCTask(conf, taskID)
+  docker := DockerExecutor{
+    RemoveContainer: conf.RemoveContainer,
+    task: task,
+    logger: filetask,
+    workspace: workspace,
+  }
 
   if err := util.Check(werr, terr, serr); err != nil {
     return nil, err

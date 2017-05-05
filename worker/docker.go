@@ -13,6 +13,18 @@ import (
 	"time"
 )
 
+// Volume represents a volume mounted into a docker container.
+// This includes a HostPath, the path on the host file system,
+// and a ContainerPath, the path on the container file system,
+// and whether the volume is read-only.
+type Volume struct {
+	// The path in tes worker.
+	HostPath string
+	// The path in Docker.
+	ContainerPath string
+	Readonly      bool
+}
+
 type DockerExecutor struct {
   RemoveContainer bool
   task *tes.Task
@@ -21,12 +33,22 @@ type DockerExecutor struct {
 }
 
 func (b *DockerExecutor) Executor(i int) Executor {
+  d := b.task.Executors[i]
+
   stdin, ierr := b.workspace.Reader(d.Stdin)
 
   // TODO
   volumes := 
 
-  d := b.task.Executors[i]
+  // ensure volumes and output dirs exist
+  for _, volume := range b.task.Volumes {
+    workspace.EnsureDir(volume)
+  }
+  for _, output := range b.task.Outputs {
+    if output.Type == tes.FileType_FILE {
+      workspace.EnsureDir(output.Path)
+    }
+  }
 
   return &Docker{
     ContainerName:   fmt.Sprintf("%s-%d", b.task.Id, i),
