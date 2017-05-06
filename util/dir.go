@@ -34,10 +34,3 @@ func EnsureDir(p string) error {
 	}
 	return nil
 }
-
-// EnsurePath ensures a directory exists, given a file path. This calls path.Dir(p)
-// TODO probably just remove this
-func EnsurePath(p string) error {
-	dir := path.Dir(p)
-	return EnsureDir(dir)
-}

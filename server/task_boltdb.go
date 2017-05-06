@@ -57,7 +57,7 @@ type TaskBolt struct {
 // NewTaskBolt returns a new instance of TaskBolt, accessing the database at
 // the given path, and including the given ServerConfig.
 func NewTaskBolt(conf config.Config) (*TaskBolt, error) {
-	util.EnsurePath(conf.DBPath)
+	util.EnsureDir(path.Dir(conf.DBPath))
 	db, err := bolt.Open(conf.DBPath, 0600, &bolt.Options{
 		Timeout: time.Second * 5,
 	})

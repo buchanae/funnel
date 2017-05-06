@@ -106,7 +106,7 @@ func download(call *storage.ObjectsGetCall, hostPath string) error {
 		return derr
 	}
 
-	util.EnsurePath(hostPath)
+	util.EnsureDir(path.Dir(hostPath))
 	dest, cerr := os.Create(hostPath)
 	if cerr != nil {
 		return cerr

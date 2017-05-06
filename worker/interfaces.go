@@ -34,13 +34,21 @@ type TaskReader interface {
   State() tes.State
 }
 
+type ExecutorFactory interface {
+  Executor(int) (Executor, error)
+}
+
+type TaskRunner interface {
+  RunTask(context.Context, *tes.Task)
+}
+
 type Backend interface {
   logger.Logger
 	TaskLogger
   TaskReader
 	storage.Storage
+  ExecutorFactory
+  TaskRunner
 
-  RunTask(context.Context, *tes.Task)
-  Executor(int) (Executor, error)
   Close()
 }

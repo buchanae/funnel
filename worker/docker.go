@@ -13,6 +13,31 @@ import (
 	"time"
 )
 
+type DockerFactory struct {
+  TaskLogger
+  task *tes.Task
+  mapped *tes.Task
+  conf config.Worker
+}
+
+func (b *DockerFactory) Executor(i int) (Executor, error) {
+  e := b.task.Executors[i]
+  m := b.mapped.Executors[i]
+  return &Docker{
+    ContainerName:   fmt.Sprintf("%s-%d", b.task.Id, i),
+    ImageName:       e.ImageName,
+    Cmd:             e.Cmd,
+    Volumes:         MappedVolumes(b.task, b.mapped),
+    Workdir:         e.Workdir,
+    Ports:           e.Ports,
+    RemoveContainer: b.conf.RemoveContainer,
+    Environ:         e.Environ,
+    Stdin:           util.ReaderOrEmpty(m.Stdin),
+    Stdout:          b.TaskLogger.ExecutorStdout(m.Stdout),
+    Stderr:          b.TaskLogger.ExecutorStderr(m.Stderr),
+  }, nil
+}
+
 // Volume represents a volume mounted into a docker container.
 // This includes a HostPath, the path on the host file system,
 // and a ContainerPath, the path on the container file system,
@@ -25,48 +50,43 @@ type Volume struct {
 	Readonly      bool
 }
 
-type DockerExecutor struct {
-  RemoveContainer bool
-  task *tes.Task
-  logger TaskLogger
-  workspace Workspace
-}
+func MappedVolumes(task, mapped *tes.Task) []Volume {
+  var volumes []Volume
 
-func (b *DockerExecutor) Executor(i int) Executor {
-  d := b.task.Executors[i]
-
-  stdin, ierr := b.workspace.Reader(d.Stdin)
-
-  // TODO
-  volumes := 
-
-  // ensure volumes and output dirs exist
-  for _, volume := range b.task.Volumes {
-    workspace.EnsureDir(volume)
-  }
-  for _, output := range b.task.Outputs {
-    if output.Type == tes.FileType_FILE {
-      workspace.EnsureDir(output.Path)
+	for i, _ := range task.Inputs {
+    volumes = append(volumes, Volume{
+      HostPath: mapped.Inputs[i].Path,
+      ContainerPath: task.Inputs[i].Path,
+      Readonly: true,
     }
-  }
+	}
 
-  return &Docker{
-    ContainerName:   fmt.Sprintf("%s-%d", b.task.Id, i),
-    RemoveContainer: b.RemoveContainer,
-    ImageName:       d.ImageName,
-    Cmd:             d.Cmd,
-    Volumes:         volumes,
-    Workdir:         d.Workdir,
-    Ports:           d.Ports,
-    Environ:         d.Environ,
-    Stdin: stdin,
-    Stdout: b.logger.ExecutorStdout(i),
-    Stderr: b.logger.ExecutorStderr(i),
-  }, nil
+	for i, _ := range task.Volumes {
+    volumes = append(volumes, Volume{
+      HostPath: mapped.Volumes[i],
+      ContainerPath: task.Volumes[i],
+      Readonly: false,
+    }
+	}
+
+	for i, output := range task.Outputs {
+    hp := mapped.Outputs[i].Path
+    cp := output.Path
+
+    if output.Type == tes.FileType_FILE {
+      hp = filepath.Dir(hp)
+      containterPath = filepath.Dir(cp)
+    }
+
+    volumes = append(volumes, Volume{
+      HostPath: hp,
+      ContainerPath: cp,
+      Readonly: false,
+    }
+	}
+
+  return volumes
 }
-
-
-
 
 // Docker is responsible for configuring and running a docker container.
 type Docker struct {

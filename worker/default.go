@@ -1,46 +1,46 @@
 package worker
 
 import (
-	"context"
 	"github.com/ohsu-comp-bio/funnel/config"
 	"github.com/ohsu-comp-bio/funnel/logger"
-	pbf "github.com/ohsu-comp-bio/funnel/proto/funnel"
-	"github.com/ohsu-comp-bio/funnel/proto/tes"
-	"io"
-	"time"
 )
 
 
 func NewDefaultBackend(conf config.Worker, taskID string) (*DefaultBackend, error) {
-  workspace, werr := NewWorkspace(conf.WorkDir, task)
   store, serr := storage.FromConfig(conf.Storage)
-  rpc, err := NewRPCTask(conf, taskID)
-  docker := DockerExecutor{
-    RemoveContainer: conf.RemoveContainer,
-    task: task,
-    logger: filetask,
-    workspace: workspace,
-  }
+  rpc, rerr := NewRPCTask(conf, taskID)
+  task, terr := rpc.Task()
+  mapped, merr := MapTaskFiles(conf.WorkDir, task)
 
-  if err := util.Check(werr, terr, serr); err != nil {
+  if err := util.Check(serr, rerr, terr, merr); err != nil {
     return nil, err
   }
 
   return &DefaultBackend{
-    Logger: log.WithFields("task", taskID),
-    RPCTaskLogger: rpc,
-    RPCTaskReader: rpc,
-    Storage: store,
-    DockerExecutor: docker,
+    log.WithFields("task", taskID),
+    rpc,
+    storage,
+    &DefaultTaskRunner{
+      storage,
+      rpc,
+      rpc,
+      conf.PollRate,
+    },
+    &DockerFactory{
+      rpc,
+      task,
+      mapped,
+      conf,
+    },
   }, nil
 }
 
 type DefaultBackend struct {
   logger.Logger
-  *RPCTaskLogger
-  *RPCTaskReader
+  *RPCTask
   storage.Storage
-  *DockerExecutor
+  *DefaultTaskRunner
+  *DockerFactory
 }
 
 func (b *DefaultBackend) Close() {

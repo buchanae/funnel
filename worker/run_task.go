@@ -5,14 +5,14 @@ import (
 	"github.com/ohsu-comp-bio/funnel/util"
 )
 
-type TaskRunner struct {
+type DefaultTaskRunner struct {
   Storage
   TaskLogger
   TaskReader
   PollRate time.Duration
 }
 
-func (r *TaskRunner) RunTask(ctx context.Context, task *tes.Task) {
+func (r *DefaultTaskRunner) RunTask(ctx context.Context, task *tes.Task) {
   l := util.CallList{}
   task, err := r.Task()
   ctx = r.PollForCancel(ctx)
@@ -94,9 +94,7 @@ func (r *TaskRunner) RunTask(ctx context.Context, task *tes.Task) {
 }
 
 
-
-
-func (r *TaskRunner) PollForCancel(ctx context.Context) context.Context {
+func (r *DefaultTaskRunner) PollForCancel(ctx context.Context) context.Context {
   taskctx, cancel := context.WithCancel(ctx)
 
   // Start a goroutine that polls the server to watch for a canceled state.

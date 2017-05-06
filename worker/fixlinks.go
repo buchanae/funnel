@@ -22,7 +22,7 @@ func (r *taskRunner) fixLinks(basepath string) {
 				}
 				// Map symlink source (possible container path) to host path
         // TODO pass HostPath func as an argument and detatch this from taskRunner
-        //      so that ie becomes reusable across multiple runners.
+        //      so that it becomes reusable across multiple runners.
 				mapped, err := r.mapper.HostPath(src)
 				if err != nil {
 					return nil

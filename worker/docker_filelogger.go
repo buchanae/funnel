@@ -1,36 +1,45 @@
 package worker
 
+import (
+	"github.com/ohsu-comp-bio/funnel/config"
+	"github.com/ohsu-comp-bio/funnel/logger"
+)
+
 func NewFileBackend(conf config.Worker, taskID string) (*FileBackend, error) {
-  workspace, werr := NewWorkspace(conf.WorkDir, taskID)
   store, serr := storage.FromConfig(conf.Storage)
   filetask, fterr := NewFileTask(conf, taskID)
   task, terr := filetask.Task()
-  docker := DockerExecutor{
-    RemoveContainer: conf.RemoveContainer,
-    task: task,
-    logger: filetask,
-    workspace: workspace,
-  }
+  mapped, merr := MapTaskFiles(conf.WorkDir, task)
 
-  if err := util.Check(werr, terr, serr); err != nil {
+  if err := util.Check(serr, fterr, terr, merr); err != nil {
     return nil, err
   }
 
   return &FileBackend{
-    Logger: log.WithFields("task", taskID),
-    FileTaskLogger: filetask,
-    FileTaskReader: filetask,
-    Storage: store,
-    DockerExecutor: docker,
+    log.WithFields("task", taskID),
+    filetask,
+    storage,
+    &DefaultTaskRunner{
+      storage,
+      filetask,
+      filetask,
+      conf.PollRate,
+    },
+    &DockerFactory{
+      filetask,
+      task,
+      mapped,
+      conf,
+    },
   }, nil
 }
 
 type FileBackend struct {
   logger.Logger
-  *FileTaskLogger
-  *FileTaskReader
+  *FileTask
   storage.Storage
-  *DockerExecutor
+  *DefaultTaskRunner
+  *DockerFactory
 }
 
 func (b *FileBackend) Close() {}
