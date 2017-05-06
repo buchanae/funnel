@@ -53,6 +53,8 @@ func (r *DefaultTaskRunner) RunTask(ctx context.Context, task *tes.Task) {
 
       exec.Logger.Info("Running")
       r.TaskLogger.ExecutorStartTime(i, util.Now())
+      // TODO doesn't fit yet. TaskRunner calls every TaskLogger method
+      //      except Stdout/err
       exec.Stdout(r.TaskLogger.ExecutorStdout(i))
 
       // Run the executor
@@ -107,7 +109,7 @@ func (r *DefaultTaskRunner) PollForCancel(ctx context.Context) context.Context {
     case <-taskctx.Done():
       return
     case <-ticker.C:
-      state, err := reader.State()
+      state, err := r.TaskReader.State()
       if state == tes.State_CANCELED {
         cancel()
       }

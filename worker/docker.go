@@ -33,8 +33,8 @@ func (b *DockerFactory) Executor(i int) (Executor, error) {
     RemoveContainer: b.conf.RemoveContainer,
     Environ:         e.Environ,
     Stdin:           util.ReaderOrEmpty(m.Stdin),
-    Stdout:          b.TaskLogger.ExecutorStdout(m.Stdout),
-    Stderr:          b.TaskLogger.ExecutorStderr(m.Stderr),
+    Stdout:          b.TaskWriter.ExecutorStdout(m.Stdout),
+    Stderr:          b.TaskWriter.ExecutorStderr(m.Stderr),
   }, nil
 }
 
@@ -88,7 +88,17 @@ func MappedVolumes(task, mapped *tes.Task) []Volume {
   return volumes
 }
 
+type Docker struct {
+	ContainerName   string
+	Volumes         []Volume
+	RemoveContainer bool
+	Stdin           io.Reader
+	Stdout          io.Writer
+	Stderr          io.Writer
+}
+
 // Docker is responsible for configuring and running a docker container.
+/*
 type Docker struct {
 	ContainerName   string
 	ImageName       string
@@ -102,6 +112,7 @@ type Docker struct {
 	Stdout          io.Writer
 	Stderr          io.Writer
 }
+*/
 
 // Run runs the Docker command and blocks until done.
 func (dcmd Docker) Run(ctx context.Context) error {

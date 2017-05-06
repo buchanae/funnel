@@ -11,7 +11,7 @@ type Executor interface {
   Close()
 }
 
-type TaskLogger interface {
+type TaskWriter interface {
 	StartTime(t string)
 	EndTime(t string)
 	OutputFile(f string)
@@ -23,8 +23,6 @@ type TaskLogger interface {
   ExecutorHostIP(int, string)
   ExecutorStartTime(int, string)
   ExecutorEndTime(int, string)
-  // TODO should these get access to the tes.Executor ?
-  //      or even the whole task?
   ExecutorStdout(int) io.Writer
   ExecutorStderr(int) io.Writer
 }
@@ -44,7 +42,7 @@ type TaskRunner interface {
 
 type Backend interface {
   logger.Logger
-	TaskLogger
+	TaskWriter
   TaskReader
 	storage.Storage
   ExecutorFactory
