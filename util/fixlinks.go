@@ -1,6 +1,15 @@
-// fixLinks walks the output paths, fixing cases where a symlink is
+package util
+
+import (
+  "os"
+  "path/filepath"
+)
+
+type Fixer func(string) (string, error)
+
+// FixSymlinks walks the output paths, fixing cases where a symlink is
 // broken because it's pointing to a path inside a container volume.
-func (r *taskRunner) fixLinks(basepath string) {
+func FixSymlinks(basepath string, fixer Fixer) {
 	filepath.Walk(basepath, func(p string, f os.FileInfo, err error) error {
 		if err != nil {
 			// There's an error, so be safe and give up on this file
@@ -20,10 +29,9 @@ func (r *taskRunner) fixLinks(basepath string) {
 				if err != nil {
 					return nil
 				}
+
 				// Map symlink source (possible container path) to host path
-        // TODO pass HostPath func as an argument and detatch this from taskRunner
-        //      so that it becomes reusable across multiple runners.
-				mapped, err := r.mapper.HostPath(src)
+				mapped, err := fixer(src)
 				if err != nil {
 					return nil
 				}

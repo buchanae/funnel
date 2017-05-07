@@ -28,9 +28,9 @@ func (c *schedClient) UpdateWorker(req *pbf.Worker) (*pbf.UpdateWorkerResponse, 
 	return resp, err
 }
 
-func (c *schedClient) UpdateExecutorLogs(up *pbf.UpdateExecutorLogsRequest) error {
+func (c *schedClient) UpdateTask(up *pbf.UpdateTaskRequest) error {
 	ctx, cleanup := context.WithTimeout(context.Background(), c.conf.UpdateTimeout)
-	_, err := c.Client.UpdateExecutorLogs(ctx, up)
+	_, err := c.Client.UpdateTask(ctx, up)
 	cleanup()
 	return err
 }

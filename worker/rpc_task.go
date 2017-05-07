@@ -3,133 +3,170 @@ package worker
 import (
 	"context"
 	"github.com/ohsu-comp-bio/funnel/config"
-	"github.com/ohsu-comp-bio/funnel/logger"
 	pbf "github.com/ohsu-comp-bio/funnel/proto/funnel"
 	"github.com/ohsu-comp-bio/funnel/proto/tes"
 	"io"
-	"time"
 )
 
 // TODO document behavior of slow consumer of task log updates
 
 func NewRPCTask(conf config.Config, taskID string) (*RPCTask, error) {
-  reader := &RPCTaskReader{client, taskID}
-  logger := &RPCTaskLogger{client, taskID}
+  return &RPCTask{client, taskID}, nil
 }
 
 type RPCTask struct {
-  *RPCTaskReader
-  *RPCTaskLogger
-}
-
-type RPCTaskReader struct {
+  client schedClient
   taskID string
 }
 
-func (r *RPCTaskReader) Task() (*tes.Task, error) {
-  task, terr := r.client.GetTask(context.TODO(), &tes.GetTaskRequest{
+func (r *RPCTask) Close() {}
+
+func (r *RPCTask) Task() (*tes.Task, error) {
+  return r.client.GetTask(context.TODO(), &tes.GetTaskRequest{
     Id: r.taskID,
     View: tes.TaskView_FULL,
   })
 }
 
-func (r *RPCTaskReader) State() (*tes.State, error) {
-  task, terr := r.client.GetTask(context.TODO(), &tes.GetTaskRequest{
+func (r *RPCTask) State() (*tes.State, error) {
+  task, err := r.client.GetTask(context.TODO(), &tes.GetTaskRequest{
     Id: r.taskID,
+  })
+  if err != nil {
+    return nil, err
+  }
+  return task.State, nil
+}
+
+func (r *RPCTask) StartTime(t string) {
+  r.client.UpdateTask(context.TODO(), &pbf.UpdateTaskRequest{
+    Id: r.taskID,
+    TaskLog: &tes.TaskLog{
+      StartTime: t,
+    },
   })
 }
 
-
-type RPCTaskLogger struct {
-  client
-  taskID string
-}
-
-func (r *RPCTaskLogger) StartTime(t string) {
-  r.client.UpdateTaskLogs({
+func (r *RPCTask) EndTime(t string) {
+  r.client.UpdateTask(context.TODO(), &pbf.UpdateTaskRequest{
     Id: r.taskID,
-    StartTime: t,
+    TaskLog: &tes.TaskLog{
+      EndTime: t,
+    },
   })
 }
 
-func (r *RPCTaskLogger) EndTime(t string) {
-  r.client.UpdateTaskLogs({
+func (r *RPCTask) Outputs(f []string) {
+  r.client.UpdateTask(context.TODO(), &pbf.UpdateTaskRequest{
     Id: r.taskID,
-    EndTime: t,
+    TaskLog: &tes.TaskLog{
+      Outputs: f,
+    },
   })
 }
 
-func (r *RPCTaskLogger) OutputFiles(f []string) {
-  r.client.UpdateTaskLogs({
+func (r *RPCTask) Metadata(m map[string]string) {
+  r.client.UpdateTask(context.TODO(), &pbf.UpdateTaskRequest{
     Id: r.taskID,
-    EndTime: t,
+    TaskLog: &tes.TaskLog{
+      Metadata: m,
+    },
   })
 }
 
-func (r *RPCTaskLogger) Metadata(m map[string]string) {
-  r.client.UpdateTaskLogs({
-    Id: r.taskID,
-    EndTime: t,
-  })
-}
-
-func (r *RPCTaskLogger) Running() {
-  r.client.UpdateTaskState({
+func (r *RPCTask) Running() {
+  r.client.UpdateTask(context.TODO(), &pbf.UpdateTaskRequest{
     Id: r.taskID,
     State: tes.State_RUNNING,
   })
 }
 
-func (r *RPCTaskLogger) Result(err error) {
-  r.client.UpdateTaskState({
+func (r *RPCTask) Result(err error) {
+  var state tes.State
+  if err == nil {
+    state = tes.State_COMPLETE
+  } else {
+    state = tes.State_ERROR
+  }
+  // TODO SYSTEM_ERROR
+
+  r.client.UpdateTask(context.TODO(), &pbf.UpdateTaskRequest{
     Id: r.taskID,
-    State: tes.State_RUNNING,
+    State: state,
   })
 }
 
-func (r *RPCTaskLogger) Close() {}
-
-
-
-func (r *RPCTaskLogger) ExecutorStartTime(i int, t string) {
-  r.client.UpdateExecutorLogs({
-    TaskId: r.taskID,
-    Executor: i,
-    StartTime: t,
+func (r *RPCTask) ExecutorStartTime(i int, t string) {
+  r.client.UpdateTask(context.TODO(), &pbf.UpdateTaskRequest{
+    Id: r.taskID,
+    ExecutorIndex: i,
+    ExecutorLog: &tes.ExecutorLog{,
+      StartTime: t,
+    },
   })
 }
 
-func (r *RPCTaskLogger) ExecutorEndTime(i int, t string) {
-  r.client.UpdateExecutorLogs({
-    TaskId: r.taskID,
-    Executor: i,
-    EndTime: t,
+func (r *RPCTask) ExecutorEndTime(i int, t string) {
+  r.client.UpdateTask(context.TODO(), &pbf.UpdateTaskRequest{
+    Id: r.taskID,
+    ExecutorIndex: i,
+    ExecutorLog: &tes.ExecutorLog{,
+      EndTime: t,
+    },
   })
 }
 
-func (r *RPCTaskLogger) ExecutorExitCode(i int, x int) {
-  r.client.UpdateExecutorLogs({
-    TaskId: r.taskID,
-    Executor: i,
-    ExitCode: int32(x),
+func (r *RPCTask) ExecutorExitCode(i int, x int) {
+  r.client.UpdateTask(context.TODO(), &pbf.UpdateTaskRequest{
+    Id: r.taskID,
+    ExecutorIndex: i,
+    ExecutorLog: &tes.ExecutorLog{,
+      ExitCode: int32(x),
+    },
   })
 }
 
-func (r *RPCTaskLogger) ExecutorHostIP(i int, ip string) {
-  r.client.UpdateExecutorLogs({
-    TaskId: r.taskID,
-    Executor: i,
-    HostIP: ip,
+func (r *RPCTask) ExecutorPorts(i int, ports []*tes.Ports) {
+  r.client.UpdateTask(context.TODO(), &pbf.UpdateTaskRequest{
+    Id: r.taskID,
+    ExecutorIndex: i,
+    ExecutorLog: &tes.ExecutorLog{,
+      Ports: ports,
+    },
   })
 }
 
-func (r *RPCTaskLogger) ExecutorStdout(i int) io.Writer {
+func (r *RPCTask) ExecutorHostIP(i int, ip string) {
+  r.client.UpdateTask(context.TODO(), &pbf.UpdateTaskRequest{
+    Id: r.taskID,
+    ExecutorIndex: i,
+    ExecutorLog: &tes.ExecutorLog{,
+      HostIp: ip,
+    },
+  })
+}
+
+func (r *RPCTask) ExecutorStdout(i int) io.Writer {
   // tailer
     // TODO
     //Stdout: io.MultiWriter(stdout, log.Stdout())
     //Stderr: io.MultiWriter(stderr, log.Stderr())
+  r.client.UpdateTask(context.TODO(), &pbf.UpdateTaskRequest{
+    Id: r.taskID,
+    ExecutorIndex: i,
+    ExecutorLog: &tes.ExecutorLog{,
+      Stdout: "",
+    },
+  })
 }
 
-func (r *RPCTaskLogger) ExecutorStderr(i int) io.Writer {
+func (r *RPCTask) ExecutorStderr(i int) io.Writer {
   // tailer
+  r.client.UpdateTask(context.TODO(), &pbf.UpdateTaskRequest{
+    Id: r.taskID,
+    ExecutorIndex: i,
+    ExecutorLog: &tes.ExecutorLog{
+      Stderr: "",
+    },
+  })
 }

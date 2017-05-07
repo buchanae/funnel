@@ -1,0 +1,20 @@
+syntax = "proto3";
+
+package funnel;
+
+import "tes.proto";
+
+message UpdateTaskRequest {
+  string id = 1;
+  tes.State state = 2;
+  // TODO which task log entry? Last?
+  tes.TaskLog task_log = 3;
+  int64 executor_index = 7;
+  tes.ExecutorLog executor_log = 8;
+}
+
+message UpdateTaskResponse {}
+
+service TaskStateService {
+  rpc UpdateTask(UpdateTaskRequest) returns (UpdateTaskResponse);
+}

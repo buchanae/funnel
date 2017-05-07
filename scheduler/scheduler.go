@@ -35,6 +35,7 @@ func NewScheduler(db Database, conf config.Config) (*Scheduler, error) {
 
 // Scheduler handles scheduling tasks to workers and support many backends.
 type Scheduler struct {
+  // TODO switch to TaskQueue interface
 	db       Database
 	conf     config.Config
 	backends map[string]*BackendPlugin
@@ -58,14 +59,9 @@ func (s *Scheduler) Start(ctx context.Context) error {
 			return nil
 		case <-ticker.C:
 			var err error
-			err = s.Schedule(ctx)
+			err = s.Schedule()
 			if err != nil {
 				log.Error("Schedule error", err)
-				return err
-			}
-			err = s.Scale(ctx)
-			if err != nil {
-				log.Error("Scale error", err)
 				return err
 			}
 		}
@@ -76,75 +72,42 @@ func (s *Scheduler) Start(ctx context.Context) error {
 // in the database, gets a chunk of tasks from the queue (configurable by config.ScheduleChunk),
 // and calls the given scheduler. If the scheduler returns a valid offer, the
 // task is assigned to the offered worker.
-func (s *Scheduler) Schedule(ctx context.Context) error {
+func (s *Scheduler) Schedule() error {
+  // TODO try to get rid of this.
 	backend, err := s.backend()
 	if err != nil {
 		return err
 	}
 
+  // TODO move this elsewhere
 	s.db.CheckWorkers()
+
+  // TODO extract this into something that streams tasks into this schedule loop
 	for _, task := range s.db.ReadQueue(s.conf.ScheduleChunk) {
 		offer := backend.Schedule(task)
+
+    // In the future, a more advanced Funnel might make decisions between
+    // multiple offers here. For now, we just accept the first and only offer.
+
 		if offer != nil {
 			log.Info("Assigning task to worker",
 				"taskID", task.Id,
 				"workerID", offer.Worker.Id,
 			)
-			s.db.AssignTask(task, offer.Worker)
+
+      // offer.OnAccept allows the scheduler backend to act on the offer being
+      // accepted, e.g. to provision a worker in HTCondor.
+      if offer.OnAccept != nil {
+        if err := offer.OnAccept(); err != nil {
+          // The OnAccept callback failed, so consider the task scheduling failed.
+          // Break so that the task isn't marked as assigned.
+          log.Error("Task was scheduled, but OnAccept failed")
+          break
+        }
+      }
+			s.db.AssignTask(task.Id, offer.Worker.Id)
 		} else {
-			log.Info("No worker could be scheduled for task", "taskID", task.Id)
-		}
-	}
-	return nil
-}
-
-// Scale implements some common logic for allowing scheduler backends
-// to poll the database, looking for workers that need to be started
-// and shutdown.
-func (s *Scheduler) Scale(ctx context.Context) error {
-	backend, err := s.backend()
-	if err != nil {
-		return err
-	}
-
-	b, isScaler := backend.(Scaler)
-	// If the scheduler doesn't implement the Scaler interface,
-	// stop here.
-	if !isScaler {
-		return nil
-	}
-
-	resp, err := s.db.ListWorkers(ctx, &pbf.ListWorkersRequest{})
-	if err != nil {
-		log.Error("Failed ListWorkers request. Recovering.", err)
-		return nil
-	}
-
-	for _, w := range resp.Workers {
-
-		if !b.ShouldStartWorker(w) {
-			continue
-		}
-
-		serr := b.StartWorker(w)
-		if serr != nil {
-			log.Error("Error starting worker", serr)
-			continue
-		}
-
-		// TODO should the Scaler instance handle this? Is it possible
-		//      that Initializing is the wrong state in some cases?
-		w.State = pbf.WorkerState_INITIALIZING
-		_, err := s.db.UpdateWorker(ctx, w)
-
-		if err != nil {
-			// TODO an error here would likely result in multiple workers
-			//      being started unintentionally. Not sure what the best
-			//      solution is. Possibly a list of failed workers.
-			//
-			//      If the scheduler and database API live on the same server,
-			//      this *should* be very unlikely.
-			log.Error("Error marking worker as initializing", err)
+			log.Debug("No worker could be scheduled for task", "taskID", task.Id)
 		}
 	}
 	return nil

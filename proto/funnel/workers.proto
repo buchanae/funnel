@@ -1,0 +1,71 @@
+syntax = "proto3";
+
+package funnel;
+
+import "google/api/annotations.proto";
+
+message WorkerResources {
+  uint32 cpus = 1;
+  // In GB
+  double ram_gb = 2;
+  // In GB
+  double disk_gb = 3;
+  bool preemptible = 9;
+
+  // TODO where does this get updated?
+  repeated int32 active_ports = 10;
+
+  string zone = 11;
+}
+
+message Worker {
+
+  string id = 1;
+
+  // Tasks assigned to this worker.
+  // OUTPUT ONLY
+  repeated string task_ids = 2;
+
+  WorkerResources resources = 5;
+
+  // Unix timestamp of the last time the worker called SyncWorker.
+  // OUTPUT ONLY
+  int64 last_ping = 7;
+
+  // Hostname of the worker host.
+  string hostname  = 13;
+
+  // Version of the record in the database. Used to prevent write conflicts.
+  // OUTPUT ONLY
+  int64 version = 14;
+
+  // Signals the worker to shut down.
+  // OUTPUT ONLY
+  bool shutdown = 15;
+}
+
+message ListWorkersRequest {}
+
+message ListWorkersResponse {
+  repeated Worker workers = 1;
+}
+
+message GetWorkerRequest {
+  string id = 1;
+}
+
+service WorkerService {
+  rpc SyncWorker(Worker) returns (Worker) {};
+
+  rpc ListWorkers(ListWorkersRequest) returns (ListWorkersResponse) {
+    option (google.api.http) = {
+      get: "/v1/funnel/workers"
+    };
+  };
+
+  rpc GetWorker(GetWorkerRequest) returns (Worker) {
+    option (google.api.http) = {
+      get: "/v1/funnel/worker/{id}"
+    };
+  };
+}

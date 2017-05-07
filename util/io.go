@@ -1,43 +1,29 @@
 package util
 
-// CreateHostFile creates a file on the host file system at a mapped path.
-// "src" is an unmapped path. This function will handle mapping the path.
-//
-// This function calls os.Create
-//
-// If the path can't be mapped or the file can't be created, an error is returned.
-func (w *FileMapper) FileWriter(p string) (io.Writer, error) {
+import (
+  "io"
+  "io/ioutil"
+  "os"
+)
+
+func WriterOrDiscard(p string) io.Writer {
   if p == "" {
-    return nil, nil
+    return ioutil.Discard
   }
-	p, perr := w.Path(src)
-	if perr != nil {
-		return nil, perr
+	f, err := os.Create(p)
+	if err != nil {
+		return ioutil.Discard
 	}
-	f, oerr := os.Create(p)
-	if oerr != nil {
-		return nil, oerr
-	}
-	return f, nil
+	return f
 }
 
-// OpenHostFile opens a file on the host file system at a mapped path.
-// "src" is an unmapped path. This function will handle mapping the path.
-//
-// This function calls os.Open
-//
-// If the path can't be mapped or the file can't be opened, an error is returned.
-func (w *FileMapper) FileReader(p string) (io.Reader, error) {
+func ReaderOrEmpty(p string) io.Reader {
   if p == "" {
-    return nil, nil
+    return nil
   }
-	p, perr := w.Path(src)
-	if perr != nil {
-		return nil, perr
+	f, err := os.Open(p)
+	if err != nil {
+		return nil
 	}
-	f, oerr := os.Open(p)
-	if oerr != nil {
-		return nil, oerr
-	}
-	return f, nil
+	return f
 }

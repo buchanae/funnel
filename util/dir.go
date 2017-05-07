@@ -2,7 +2,6 @@ package util
 
 import (
 	"os"
-	"path"
 	"syscall"
 )
 

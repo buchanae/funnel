@@ -67,18 +67,17 @@ func (s *Backend) Schedule(t *tes.Task) *scheduler.Offer {
 			DiskGb: disk,
 		},
 	}
-	return scheduler.NewOffer(w, t, scheduler.Scores{})
-}
 
-// ShouldStartWorker is part of the Scaler interface and returns true
-// when the given worker needs to be started by Backend.StartWorker
-func (s *Backend) ShouldStartWorker(w *pbf.Worker) bool {
-	return strings.HasPrefix(w.Id, prefix) &&
-		w.State == pbf.WorkerState_UNINITIALIZED
+  return scheduler.Offer{
+    Worker: w,
+    OnAccept: func() error {
+      return startWorker(w)
+    },
+  }
 }
 
 // StartWorker submits a task via "condor_submit" to start a new worker.
-func (s *Backend) StartWorker(w *pbf.Worker) error {
+func startWorker(w *pbf.Worker) error {
 	log.Debug("Starting condor worker")
 	var err error
 

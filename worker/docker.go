@@ -13,30 +13,62 @@ import (
 	"time"
 )
 
-type DockerFactory struct {
+type DockerExecutor struct {
   TaskLogger
   task *tes.Task
   mapped *tes.Task
-  conf config.Worker
+  RemoveContainer bool
 }
 
-func (b *DockerFactory) Executor(i int) (Executor, error) {
+func (b *DockerExecutor) Execute(ctx context.Context, i int) error {
   e := b.task.Executors[i]
   m := b.mapped.Executors[i]
-  return &Docker{
-    ContainerName:   fmt.Sprintf("%s-%d", b.task.Id, i),
+
+  name := fmt.Sprintf("%s-%d", b.task.Id, i)
+  stdin := util.ReaderOrEmpty(m.Stdin)
+
+  stdout := util.WriterOrDiscard(m.Stdout)
+  stdout = io.MultiWriter(b.TaskLogger.ExecutorStdout(i), stdout)
+
+  stderr := util.WriterOrDiscard(m.Stderr)
+  stderr = io.MultiWriter(b.TaskLogger.ExecutorStderr(i), stderr)
+
+  cmd := Docker{
+    ContainerName:   name,
     ImageName:       e.ImageName,
     Cmd:             e.Cmd,
     Volumes:         MappedVolumes(b.task, b.mapped),
     Workdir:         e.Workdir,
     Ports:           e.Ports,
-    RemoveContainer: b.conf.RemoveContainer,
+    RemoveContainer: b.RemoveContainer,
     Environ:         e.Environ,
-    Stdin:           util.ReaderOrEmpty(m.Stdin),
-    Stdout:          b.TaskWriter.ExecutorStdout(m.Stdout),
-    Stderr:          b.TaskWriter.ExecutorStderr(m.Stderr),
-  }, nil
+    Stdin:           stdin,
+    Stdout:          stdout,
+    Stderr:          stderr,
+  }
+
+  go func() {
+	  d.Log.Info("Fetching container metadata")
+    ports := inspect(ctx, name)
+    b.TaskLogger.ExecutorPorts(i, ports)
+		log.Debug("Executor ports:", "ports", ports)
+  }()
+
+  ip, iperr := externalIP()
+  if iperr == nil {
+    b.TaskLogger.ExecutorHostIP(i, ip)
+  }
+
+  defer stop(name)
+
+  select {
+  case err := <-ctx.Done():
+    return err
+  case err := <-cmd.Run():
+    return err
+  }
 }
+
 
 // Volume represents a volume mounted into a docker container.
 // This includes a HostPath, the path on the host file system,
@@ -58,7 +90,7 @@ func MappedVolumes(task, mapped *tes.Task) []Volume {
       HostPath: mapped.Inputs[i].Path,
       ContainerPath: task.Inputs[i].Path,
       Readonly: true,
-    }
+    })
 	}
 
 	for i, _ := range task.Volumes {
@@ -66,7 +98,7 @@ func MappedVolumes(task, mapped *tes.Task) []Volume {
       HostPath: mapped.Volumes[i],
       ContainerPath: task.Volumes[i],
       Readonly: false,
-    }
+    })
 	}
 
 	for i, output := range task.Outputs {
@@ -82,23 +114,13 @@ func MappedVolumes(task, mapped *tes.Task) []Volume {
       HostPath: hp,
       ContainerPath: cp,
       Readonly: false,
-    }
+    })
 	}
 
   return volumes
 }
 
-type Docker struct {
-	ContainerName   string
-	Volumes         []Volume
-	RemoveContainer bool
-	Stdin           io.Reader
-	Stdout          io.Writer
-	Stderr          io.Writer
-}
-
 // Docker is responsible for configuring and running a docker container.
-/*
 type Docker struct {
 	ContainerName   string
 	ImageName       string
@@ -112,10 +134,9 @@ type Docker struct {
 	Stdout          io.Writer
 	Stderr          io.Writer
 }
-*/
 
 // Run runs the Docker command and blocks until done.
-func (dcmd Docker) Run(ctx context.Context) error {
+func (dcmd Docker) Run() error {
 	args := []string{"run", "-i"}
 
 	if dcmd.RemoveContainer {
@@ -170,11 +191,11 @@ func (dcmd Docker) Run(ctx context.Context) error {
 		cmd.Stderr = dcmd.Stderr
 	}
 	return cmd.Run()
-  // TODO watch context and call stop
 }
 
 // Inspect returns metadata about the container (calls "docker inspect").
-func (dcmd Docker) Inspect(ctx context.Context) ExecutorMetadata {
+func inspect(ctx context.Context, name string) []*tes.Ports {
+	dclient := setupDockerClient()
 	d.Log.Info("Fetching container metadata")
 	dclient, derr := util.NewDockerClient()
 	if derr != nil {
@@ -182,20 +203,15 @@ func (dcmd Docker) Inspect(ctx context.Context) ExecutorMetadata {
 	}
 	// close the docker client connection
 	defer dclient.Close()
+
 	for {
 		select {
 		case <-ctx.Done():
 			return nil, nil
 		default:
-			metadata, err := dclient.ContainerInspect(ctx, dcmd.ContainerName)
-			if client.IsErrContainerNotFound(err) {
-				break
-			}
-			if err != nil {
-				d.Log.Error("Error inspecting container", err)
-				break
-			}
-			if metadata.State.Running == true {
+			metadata, err := dclient.ContainerInspect(ctx, name)
+
+			if err == nil && metadata.State.Running == true {
 				var portMap []*tes.Ports
 				// extract exposed host port from
 				// https://godoc.org/github.com/docker/go-connections/nat#PortMap
@@ -215,7 +231,6 @@ func (dcmd Docker) Inspect(ctx context.Context) ExecutorMetadata {
 							Container: uint32(containerPort),
 							Host:      uint32(hostPort),
 						})
-						d.Log.Debug("Found port mapping:", "host", hostPort, "container", containerPort)
 					}
 				}
 				return portMap, nil
@@ -225,24 +240,19 @@ func (dcmd Docker) Inspect(ctx context.Context) ExecutorMetadata {
 }
 
 // Stop stops the container.
-func (dcmd Docker) stop() error {
+func stop(name string) error {
+  log.Info("Stopping container", "container", name)
 	log.Info("Stopping container", "container", dcmd.ContainerName)
 	dclient, derr := util.NewDockerClient()
 	if derr != nil {
 		return derr
 	}
-	// close the docker client connection
 	defer dclient.Close()
-	// Set timeout
 	timeout := time.Second * 10
-	// Issue stop call
-	// TODO is context.Background right?
-	err := dclient.ContainerStop(context.Background(), dcmd.ContainerName, &timeout)
-	return err
+  return dclient.ContainerStop(context.Background(), name, &timeout)
 }
 
 func formatVolumeArg(v Volume) string {
-	// `o` is structed as "HostPath:ContainerPath:Mode".
 	mode := "rw"
 	if v.Readonly {
 		mode = "ro"

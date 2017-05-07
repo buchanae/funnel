@@ -1,102 +1,102 @@
 package worker
 
 import (
-	"github.com/ohsu-comp-bio/funnel/config"
+  "context"
 	"github.com/ohsu-comp-bio/funnel/util"
+	"github.com/ohsu-comp-bio/funnel/storage"
+	"github.com/ohsu-comp-bio/funnel/proto/tes"
+  "time"
 )
 
-type DefaultTaskRunner struct {
-  Storage
+type DefaultRunner struct {
   TaskLogger
   TaskReader
+  Storage storage.Storage
   PollRate time.Duration
 }
 
-func (r *DefaultTaskRunner) RunTask(ctx context.Context, task *tes.Task) {
-  l := util.CallList{}
-  task, err := r.Task()
+func (r *DefaultRunner) Run(ctx context.Context) {
+
+  var err error
+  var task *tes.Task
+
+  // Watch for the task to be canceled.
   ctx = r.PollForCancel(ctx)
 
-  l.AddUnchecked(func() {
-    r.TaskLogger.StartTime(util.Now())
+  // If the context is canceled, set "err" so that steps below
+  // will be skipped (based on "err").
+  go func() {
+    <-ctx.Done()
+    err = ctx.Err()
+  }()
+
+  // Set the task result based on "err".
+  // This deferred func should be defined first,
+  // so that it will be run last.
+  defer func() {
+    r.TaskLogger.Result(err)
+  }()
+
+  // Recover from panics
+  defer handlePanic(func(e error) {
+    err = e
   })
+
+  // Get the task
+  task, err = r.Task()
+
+  // Start and end time
+  r.TaskLogger.StartTime(util.Now())
+  defer r.TaskLogger.EndTime(util.Now())
 
   // Validate the input and outputs
   for _, p := range append(task.Inputs, task.Outputs...) {
-    l.Add(func() error {
-      return r.Storage.Supports(p.Url, p.Path, p.Type) {
-    })
-  })
+    if err == nil {
+      err = r.Storage.Supports(p.Url, p.Path, p.Type)
+    }
+  }
 
 	// Download inputs
 	for _, input := range task.Inputs {
-		l.Add(func() error {
-			return r.Storage.Get(ctx, input.Url, input.Path, input.Type)
-		})
+    if err == nil {
+      err = r.Storage.Get(ctx, input.Url, input.Path, input.Type)
+		}
 	}
 
   // Set task to running state
-  l.AddUnchecked(func() {
+  if err == nil {
     r.TaskLogger.Running()
-  })
+  }
 
 	// Run executors
 	for i, d := range task.Executors {
-		l.Add(func() error {
-
+    if err == nil {
       // subctx ensures goroutines are cleaned up when the step exits.
       subctx, cleanup := context.WithCancel(ctx)
       defer cleanup()
 
-      exec := r.Executor(i, d)
-      defer exec.Close()
-
-      exec.Logger.Info("Running")
       r.TaskLogger.ExecutorStartTime(i, util.Now())
-      // TODO doesn't fit yet. TaskRunner calls every TaskLogger method
-      //      except Stdout/err
-      exec.Stdout(r.TaskLogger.ExecutorStdout(i))
 
-      // Run the executor
-      done := make(chan error)
-      go func() {
-        done <- exec.Run(subctx, d)
-      }()
+      err = r.Execute(subctx, i)
 
-      // Inspect the executor for metadata
-      go func() {
-        meta := exec.Inspect(subctx, d)
-        r.TaskLogger.ExecutorPorts(i, meta.Ports)
-        r.TaskLogger.ExecutorHostIP(i, meta.HostIP)
-      }()
-
-      // Wait for executor to exit
-      res := <-done
+      r.TaskLogger.ExecutorExitCode(i, getExitCode(err))
       r.TaskLogger.ExecutorEndTime(i, util.Now())
-      r.TaskLogger.ExecutorExitCode(i, getExitCode(res))
-      return res
-		})
+      cleanup()
+		}
 	}
 
 	// Upload outputs
 	for _, output := range task.Outputs {
-		l.Add(func() error {
-      filelist, err := r.Storage.Put(ctx, output.Url, output.Path, output.Type)
-      r.TaskLogger.OutputFiles(f)
-      return err
-		})
+    if err == nil {
+      // var filelist []string
+      err = r.Storage.Put(ctx, output.Url, output.Path, output.Type)
+      // TODO r.TaskLogger.Outputs(filelist)
+    }
 	}
-
-  l.AddUnchecked(func() {
-    r.TaskLogger.EndTime(util.Now())
-  })
-
-  result := l.Run(ctx)
-  r.TaskLogger.Result(result)
 }
 
 
-func (r *DefaultTaskRunner) PollForCancel(ctx context.Context) context.Context {
+func (r *DefaultRunner) PollForCancel(ctx context.Context) context.Context {
   taskctx, cancel := context.WithCancel(ctx)
 
   // Start a goroutine that polls the server to watch for a canceled state.
@@ -106,14 +106,28 @@ func (r *DefaultTaskRunner) PollForCancel(ctx context.Context) context.Context {
     defer ticker.Stop()
 
     for {
-    case <-taskctx.Done():
-      return
-    case <-ticker.C:
-      state, err := r.TaskReader.State()
-      if state == tes.State_CANCELED {
-        cancel()
+      select {
+      case <-taskctx.Done():
+        return
+      case <-ticker.C:
+        state, err := r.TaskReader.State()
+        // TODO look for any terminal state?
+        if state == tes.State_CANCELED {
+          cancel()
+        }
       }
     }
   }()
   return taskctx
+}
+
+// recover from panic and call "cb" with an error value.
+func handlePanic(cb func(error)) {
+  if r := recover(); r != nil {
+    if e, ok := r.(error); ok {
+      cb(e)
+    } else {
+      cb(fmt.Errorf("Unknown task runner panic: %+v", r))
+    }
+  }
 }

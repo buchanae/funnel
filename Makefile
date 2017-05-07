@@ -16,7 +16,7 @@ install: depends
 	@go install github.com/ohsu-comp-bio/funnel
 
 # Generate the protobuf/gRPC code
-proto: depends
+proto:
 	@go get ./vendor/github.com/golang/protobuf/protoc-gen-go/
 	@go get ./vendor/github.com/grpc-ecosystem/grpc-gateway/protoc-gen-grpc-gateway/
 	@cd proto/tes && protoc \
@@ -29,7 +29,7 @@ proto: depends
 		-I ../tes \
 		--go_out=$(GRPC_HTTP_MOD),Mtes.proto=github.com/ohsu-comp-bio/funnel/proto/tes,plugins=grpc:. \
 		--grpc-gateway_out=logtostderr=true:. \
-		funnel.proto
+		*.proto
 
 # Update submodules and build code
 depends:

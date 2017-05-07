@@ -30,6 +30,7 @@ func NewBackend(conf config.Config) (scheduler.Backend, error) {
 	// TODO need GCE scheduler config validation. If zone is missing, nothing works.
 
 	// Create a client for talking to the funnel scheduler
+  // TODO switch to WorkerDB interface. Stick with simple in-memory for now.
 	client, err := scheduler.NewClient(conf.Worker)
 	if err != nil {
 		log.Error("Can't connect scheduler client", err)
@@ -61,10 +62,10 @@ type Backend struct {
 }
 
 // Schedule schedules a task on a Google Cloud VM worker instance.
-func (s *Backend) Schedule(j *tes.Task) *scheduler.Offer {
+func (s *Backend) Schedule(j *tes.Task) scheduler.Offer {
 	log.Debug("Running GCE scheduler")
 
-	offers := []*scheduler.Offer{}
+	offers := []scheduler.Offer{}
 	predicates := append(scheduler.DefaultPredicates, scheduler.WorkerHasTag("gce"))
 
 	for _, w := range s.getWorkers() {
@@ -73,19 +74,7 @@ func (s *Backend) Schedule(j *tes.Task) *scheduler.Offer {
 		if !scheduler.Match(w, j, predicates) {
 			continue
 		}
-
-		sc := scheduler.DefaultScores(w, j)
-		/*
-			    TODO?
-			    if w.State == pbf.WorkerState_Alive {
-					  sc["startup time"] = 1.0
-			    }
-		*/
-		weights := map[string]float32{}
-		sc = sc.Weighted(weights)
-
-		offer := scheduler.NewOffer(w, j, sc)
-		offers = append(offers, offer)
+		offers = append(offers, makeOffer(w, j))
 	}
 
 	// No matching workers were found.
@@ -95,6 +84,30 @@ func (s *Backend) Schedule(j *tes.Task) *scheduler.Offer {
 
 	scheduler.SortByAverageScore(offers)
 	return offers[0]
+}
+
+func (s *Backend) makeOffer(w *pbr.Worker, t *tes.Task) scheduler.Offer {
+
+  weights := map[string]float32{}
+  // TODO add useful weights:
+  //      - prefer workers that are already online.
+
+  return scheduler.Offer{
+    Worker: w,
+    Scores: scheduler.DefaultScores(w, t).Weighted(weights),
+    OnAccept: func() error {
+      // TODO check if this worker needs to be started
+
+      // Get the template ID from the worker metadata
+      template, ok := w.Metadata["gce-template"]
+      if !ok || template == "" {
+        return fmt.Errorf("Could not get GCE template ID from metadata")
+      }
+
+      // StartWorker calls out to GCE APIs to start a new worker instance.
+      return s.gce.StartWorker(template, s.conf.RPCAddress(), w.Id)
+    },
+  }
 }
 
 // getWorkers returns a list of all GCE workers and appends a set of
@@ -123,24 +136,4 @@ func (s *Backend) getWorkers() []*pbf.Worker {
 	}
 
 	return workers
-}
-
-// ShouldStartWorker tells the scaler loop which workers
-// belong to this scheduler backend, basically.
-func (s *Backend) ShouldStartWorker(w *pbf.Worker) bool {
-	// Only start works that are uninitialized and have a gce template.
-	tpl, ok := w.Metadata["gce-template"]
-	return ok && tpl != "" && w.State == pbf.WorkerState_UNINITIALIZED
-}
-
-// StartWorker calls out to GCE APIs to start a new worker instance.
-func (s *Backend) StartWorker(w *pbf.Worker) error {
-
-	// Get the template ID from the worker metadata
-	template, ok := w.Metadata["gce-template"]
-	if !ok || template == "" {
-		return fmt.Errorf("Could not get GCE template ID from metadata")
-	}
-
-	return s.gce.StartWorker(template, s.conf.RPCAddress(), w.Id)
 }

@@ -3,14 +3,18 @@ package worker
 import (
 	"github.com/ohsu-comp-bio/funnel/config"
 	"github.com/ohsu-comp-bio/funnel/logger"
+	"github.com/ohsu-comp-bio/funnel/storage"
+	"github.com/ohsu-comp-bio/funnel/worker/mapper"
+  "path/filepath"
 )
 
-
 func NewDefaultBackend(conf config.Worker, taskID string) (*DefaultBackend, error) {
-  store, serr := storage.FromConfig(conf.Storage)
+  base := filepath.Join(conf.WorkDir, taskID)
   rpc, rerr := NewRPCTask(conf, taskID)
   task, terr := rpc.Task()
-  mapped, merr := MapTaskFiles(conf.WorkDir, task)
+  mapped, merr := mapper.MapTask(base, task)
+  store, serr := storage.FromConfig(conf.Storage)
+  store = mapper.MapStorage(base, store)
 
   if err := util.Check(serr, rerr, terr, merr); err != nil {
     return nil, err
@@ -26,11 +30,11 @@ func NewDefaultBackend(conf config.Worker, taskID string) (*DefaultBackend, erro
       rpc,
       conf.PollRate,
     },
-    &DockerFactory{
+    &DockerExecutor{
       rpc,
       task,
       mapped,
-      conf,
+      true,
     },
   }, nil
 }
@@ -39,8 +43,8 @@ type DefaultBackend struct {
   logger.Logger
   *RPCTask
   storage.Storage
-  *DefaultTaskRunner
-  *DockerFactory
+  *DefaultRunner
+  *DockerExecutor
 }
 
 func (b *DefaultBackend) Close() {

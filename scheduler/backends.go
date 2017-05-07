@@ -16,36 +16,16 @@ import (
 // startup time, cost, etc. Scores and weights are used to control the behavior
 // of schedulers, and to combine offers from multiple schedulers.
 type Backend interface {
-	Schedule(*tes.Task) *Offer
-}
-
-// Scaler represents a service that can start worker instances, for example
-// the Google Cloud Scheduler backend.
-type Scaler interface {
-	// StartWorker is where the work is done to start a worker instance,
-	// for example, calling out to Google Cloud APIs.
-	StartWorker(*pbf.Worker) error
-	// ShouldStartWorker allows scalers to filter out workers they are interested in.
-	// If "true" is returned, Scaler.StartWorker() will be called with this worker.
-	ShouldStartWorker(*pbf.Worker) bool
+	Schedule(*tes.Task) Offer
 }
 
 // Offer describes a worker offered by a scheduler for a task.
 // The Scores describe how well the task fits this worker,
 // which could be used by other a scheduler to pick the best offer.
 type Offer struct {
-	TaskID string
 	Worker *pbf.Worker
 	Scores Scores
-}
-
-// NewOffer returns a new Offer instance.
-func NewOffer(w *pbf.Worker, t *tes.Task, s Scores) *Offer {
-	return &Offer{
-		TaskID: t.Id,
-		Worker: w,
-		Scores: s,
-	}
+  OnAccept func() error
 }
 
 // BackendPlugin is provided by backends when they register with Scheduler,

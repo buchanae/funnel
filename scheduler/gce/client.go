@@ -64,23 +64,17 @@ func (s *gceClient) Templates() []pbf.Worker {
 				"machineType", tpl.Properties.MachineType)
 			continue
 		}
-
 		disks := tpl.Properties.Disks
 
-		res := pbf.Resources{
-			Cpus:  uint32(mt.GuestCpus),
-			RamGb: float64(mt.MemoryMb) / float64(1024),
-			// TODO is there always at least one disk? Is the first the best choice?
-			//      how to know which to pick if there are multiple?
-			DiskGb: float64(disks[0].InitializeParams.DiskSizeGb),
-		}
-
-		// Copy resources struct for available
-		avail := res
 		workers = append(workers, pbf.Worker{
-			Resources: &res,
-			Available: &avail,
-			Zone:      s.zone,
+			Resources: &pbr.Resources{
+        Cpus:  uint32(mt.GuestCpus),
+        RamGb: float64(mt.MemoryMb) / float64(1024),
+        // TODO is there always at least one disk? Is the first the best choice?
+        //      how to know which to pick if there are multiple?
+        DiskGb: float64(disks[0].InitializeParams.DiskSizeGb),
+			  Zone:      s.zone,
+      },
 			Metadata: map[string]string{
 				"gce":          "yes",
 				"gce-template": id,

@@ -1,23 +1,21 @@
 package worker
 
-type ExecutorMetadata struct {
-	HostIP string
-	Ports  []*tes.Ports
-}
+import (
+  "context"
+	"github.com/ohsu-comp-bio/funnel/proto/tes"
+	"github.com/ohsu-comp-bio/funnel/storage"
+	"github.com/ohsu-comp-bio/funnel/logger"
+  "io"
+)
 
-type Executor interface {
-	Run(context.Context) error
-	Inspect(context.Context) ExecutorMetadata
-  Close()
-}
-
-type TaskWriter interface {
-	StartTime(t string)
-	EndTime(t string)
-	OutputFile(f string)
+type TaskLogger interface {
+	StartTime(string)
+	EndTime(string)
+	Outputs(string)
 	Metadata(map[string]string)
   Running()
   Result(error)
+
   ExecutorExitCode(int, int)
   ExecutorPorts(int, []*tes.Ports)
   ExecutorHostIP(int, string)
@@ -27,26 +25,26 @@ type TaskWriter interface {
   ExecutorStderr(int) io.Writer
 }
 
-type TaskReader interface {
+type TaskViewer interface {
   Task() (*tes.Task, error)
   State() tes.State
 }
 
-type ExecutorFactory interface {
-  Executor(int) (Executor, error)
+type Executor interface {
+  Execute(context.Context, int) error
 }
 
-type TaskRunner interface {
-  RunTask(context.Context, *tes.Task)
+type Runner interface {
+  Run(context.Context)
 }
 
 type Backend interface {
   logger.Logger
-	TaskWriter
-  TaskReader
 	storage.Storage
-  ExecutorFactory
-  TaskRunner
+	TaskLogger
+  TaskViewer
+  Executor
+  Runner
 
   Close()
 }

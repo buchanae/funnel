@@ -95,7 +95,7 @@ func DefaultConfig() Config {
 			LogLevel:      "debug",
 			TimestampLogs: true,
 			UpdateTimeout: time.Second,
-			Resources: &pbf.Resources{
+			Resources: &pbf.WorkerResources{
 				DiskGb: 100.0,
 			},
 			Metadata: map[string]string{},
@@ -129,7 +129,7 @@ type Worker struct {
 	LogPath       string
 	LogLevel      string
 	TimestampLogs bool
-	Resources     *pbf.Resources
+	Resources     *pbf.WorkerResources
 	// Timeout duration for UpdateWorker() and UpdateTaskLogs() RPC calls
 	UpdateTimeout time.Duration
 	Metadata      map[string]string

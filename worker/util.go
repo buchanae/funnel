@@ -1,7 +1,6 @@
 package worker
 
 import (
-	"github.com/ohsu-comp-bio/funnel/config"
 	pbf "github.com/ohsu-comp-bio/funnel/proto/funnel"
 	pscpu "github.com/shirou/gopsutil/cpu"
 	psmem "github.com/shirou/gopsutil/mem"
