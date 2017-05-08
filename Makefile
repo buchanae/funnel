@@ -171,6 +171,12 @@ website-dev:
 	@go get github.com/spf13/hugo
 	hugo --source ./website -w server
 
+docker: cross-compile
+	mkdir -p build/docker
+	cp build/bin/funnel-linux-amd64 build/docker/funnel
+	cp docker/* build/docker/
+	cd build/docker && docker build -t funnel .
+
 # Remove build/development files.
 clean:
 	@rm -rf ./bin ./pkg ./test_tmp ./build ./buildtools
