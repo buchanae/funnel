@@ -15,16 +15,16 @@ funnel run -S $PROXY 'echo $in' --name Other-task --container alpine --in in='cc
 # Route to file on Central site
 funnel run -S $PROXY 'echo $in' --name Central-task --container alpine --in in='ccc://file_central'
 
-# Default to PDX. Probably needs improvement based on submission site inference.
+# Default to Central. Probably needs improvement based on submission site inference.
 funnel run -S $PROXY 'echo $in' --container alpine --in in='ccc://file_pdx_central'
-
-# Two files + Fetch_file strategy.
-# Should run on PDX, not Central, because files need to be fetched to PDX.
-funnel run -S $PROXY 'echo $in $two' --name PDX-fetch --container alpine --in two='ccc://file_pdx' --in in='ccc://file_central' --tag strategy='fetch_file'
 
 # Two files without a shared site.
 # Should fail to be scheduled/routed.
 funnel run -S $PROXY 'echo $in $two' --name No-site --container alpine --in two='ccc://file_pdx' --in in='ccc://file_other'
+
+# Two files + Fetch_file strategy.
+# Should run on PDX, not Central, because files need to be fetched to PDX.
+funnel run -S $PROXY 'echo $in $two' --name PDX-fetch --container alpine --in two='ccc://file_pdx' --in in='ccc://file_central' --tag strategy='fetch_file'
 
 # Same as above, but fetch_file.
 funnel run -S $PROXY 'echo $in $two' --name No-site-fetch --container alpine --in two='ccc://file_pdx' --in in='ccc://file_other' --tag strategy='fetch_file'
