@@ -226,6 +226,11 @@ func run(cmd *cobra.Command, args []string) error {
 		extra = append(extra, string(b))
 	}
 
+	b, _ := ioutil.ReadAll(os.Stdin)
+	if len(b) > 0 {
+		extra = append(extra, string(b))
+	}
+
 	for _, ex := range extra {
 		sp, _ := shellquote.Split(ex)
 		cmd.ParseFlags(sp)
