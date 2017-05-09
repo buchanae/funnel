@@ -14,6 +14,15 @@ import (
 	"strings"
 )
 
+// Cmd represents the run command
+var Cmd = &cobra.Command{
+	Use:     "run [flags] --container IMAGE CMD",
+	Short:   "Run a task.",
+	Long:    ``,
+	Example: example,
+	RunE:    run,
+}
+
 var log = logger.New("run")
 
 type taskvars struct {
@@ -28,6 +37,7 @@ type taskvars struct {
 	stderr      string
 	preemptible bool
 	wait        bool
+	waitFor     []string
 	inputs      []string
 	inputDirs   []string
 	outputs     []string
@@ -74,15 +84,6 @@ var example = `
     --disk 100
 `
 
-// Cmd represents the run command
-var Cmd = &cobra.Command{
-	Use:     "run [flags] --container IMAGE CMD",
-	Short:   "Run a task.",
-	Long:    ``,
-	Example: example,
-	RunE:    run,
-}
-
 func init() {
 	f := Cmd.Flags()
 
@@ -122,6 +123,7 @@ func addTaskFlags(f *pflag.FlagSet, v *taskvars) {
 	//f.StringVar(&cmdFile, "cmd-file", cmdFile, "Read cmd template from file")
 	f.StringVarP(&v.server, "server", "S", v.server, "Address of Funnel server")
 	f.BoolVar(&v.wait, "wait", v.wait, "Wait for the task to finish before exiting")
+	f.StringSliceVar(&v.waitFor, "waitFor", v.waitFor, "Wait for")
 }
 
 func valsToTask(cmd []string, vals taskvars) (*tes.Task, error) {
@@ -179,6 +181,11 @@ func valsToTask(cmd []string, vals taskvars) (*tes.Task, error) {
 		vals.name = "Funnel run: " + strings.Join(cmd, " ")
 	}
 
+	var stdin string
+	if vals.stdin != "" {
+		stdin = "/opt/funnel/inputs/stdin"
+	}
+
 	// Build the task message
 	return &tes.Task{
 		Name:        vals.name,
@@ -199,7 +206,7 @@ func valsToTask(cmd []string, vals taskvars) (*tes.Task, error) {
 				Cmd:       cmd,
 				Environ:   environ,
 				Workdir:   vals.workdir,
-				Stdin:     vals.stdin,
+				Stdin:     stdin,
 				Stdout:    "/opt/funnel/outputs/stdout",
 				Stderr:    "/opt/funnel/outputs/stderr",
 				// TODO no ports
@@ -226,9 +233,12 @@ func run(cmd *cobra.Command, args []string) error {
 		extra = append(extra, string(b))
 	}
 
-	b, _ := ioutil.ReadAll(os.Stdin)
-	if len(b) > 0 {
-		extra = append(extra, string(b))
+	stat, _ := os.Stdin.Stat()
+	if (stat.Mode() & os.ModeCharDevice) == 0 {
+		b, _ := ioutil.ReadAll(os.Stdin)
+		if len(b) > 0 {
+			extra = append(extra, string(b))
+		}
 	}
 
 	for _, ex := range extra {
@@ -247,6 +257,7 @@ func run(cmd *cobra.Command, args []string) error {
 	cli := client.NewClient(vals.server)
 
 	if len(scatterFiles) > 0 {
+		tg := taskGroup{}
 		for _, sc := range scatterFiles {
 			fh, _ := os.Open(sc)
 			scanner := bufio.NewScanner(fh)
@@ -259,16 +270,16 @@ func run(cmd *cobra.Command, args []string) error {
 				sp, _ := shellquote.Split(scanner.Text())
 				fl.Parse(sp)
 				t, _ := valsToTask(executorCmd, tv)
-				runTask(t, cli)
+				tg.runTask(t, cli, tv.wait, tv.waitFor)
 			}
 		}
-		return nil
+		return tg.wait()
 	}
 
-	return runTask(task, cli)
+	return runTask(task, cli, vals.wait, vals.waitFor)
 }
 
-func runTask(task *tes.Task, cli *client.Client) error {
+func runTask(task *tes.Task, cli *client.Client, wait bool, waitFor []string) error {
 	// Marshal message to JSON
 	taskJSON, merr := cli.Marshaler.MarshalToString(task)
 	if merr != nil {
@@ -280,6 +291,12 @@ func runTask(task *tes.Task, cli *client.Client) error {
 		return nil
 	}
 
+	if len(waitFor) > 0 {
+		for _, tid := range waitFor {
+			cli.WaitForTask(tid)
+		}
+	}
+
 	resp, rerr := cli.CreateTask([]byte(taskJSON))
 	if rerr != nil {
 		return rerr
@@ -288,7 +305,7 @@ func runTask(task *tes.Task, cli *client.Client) error {
 	taskID := resp.Id
 	fmt.Println(taskID)
 
-	if vals.wait {
+	if wait {
 		return cli.WaitForTask(taskID)
 	}
 	return nil
