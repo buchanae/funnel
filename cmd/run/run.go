@@ -39,6 +39,7 @@ type taskvars struct {
 	inputDirs   []string
 	outputs     []string
 	outputDirs  []string
+	contents    []string
 	envVars     []string
 	tags        []string
 	volumes     []string
@@ -76,7 +77,7 @@ func init() {
 	f.StringVarP(&server, "server", "S", server, "")
 	f.BoolVarP(&printTask, "print", "p", printTask, "")
 	f.StringSliceVarP(&extra, "extra", "x", extra, "")
-	f.StringSliceVarP(&extraFiles, "extra-file", "f", extraFiles, "")
+	f.StringSliceVarP(&extraFiles, "extra-file", "X", extraFiles, "")
 	f.StringSliceVar(&scatterFiles, "scatter", scatterFiles, "")
 
 	// Add per-task flags.
@@ -97,6 +98,7 @@ func addTaskFlags(f *pflag.FlagSet, v *taskvars) {
 	f.StringVar(&v.stdin, "stdin", v.stdin, "")
 	f.StringVar(&v.stdout, "stdout", v.stdout, "")
 	f.StringVar(&v.stderr, "stderr", v.stderr, "")
+	f.StringSliceVarP(&v.contents, "contents", "C", v.contents, "")
 
 	// Resoures
 	f.IntVar(&v.cpu, "cpu", v.cpu, "")
@@ -138,9 +140,11 @@ func valsToTask(cmd []string, vals taskvars) (*tes.Task, error) {
 	checkErr(err)
 	tagsMap, err := parseCliVars(vals.tags)
 	checkErr(err)
+	contentsMap, err := parseCliVars(vals.contents)
+	checkErr(err)
 
 	// check for key collisions
-	err = compareKeys(inputFileMap, inputDirMap, outputFileMap, outputDirMap, envVarMap)
+	err = compareKeys(inputFileMap, inputDirMap, outputFileMap, outputDirMap, envVarMap, contentsMap)
 	checkErr(err)
 
 	// Create map of enviromental variables to be passed to the executor
@@ -152,7 +156,8 @@ func valsToTask(cmd []string, vals taskvars) (*tes.Task, error) {
 	checkErr(err)
 	outputDirEnvVars, err := fileMapToEnvVars(outputDirMap, "/opt/funnel/outputs/")
 	checkErr(err)
-	environ, err := mergeVars(inputEnvVars, inputDirEnvVars, outputEnvVars, outputDirEnvVars, envVarMap)
+	contentsEnvVars, err := fileMapToEnvVars(contentsMap, "/opt/funnel/inputs/")
+	environ, err := mergeVars(inputEnvVars, inputDirEnvVars, outputEnvVars, outputDirEnvVars, envVarMap, contentsEnvVars)
 	checkErr(err)
 
 	// Build task input parameters
@@ -160,7 +165,10 @@ func valsToTask(cmd []string, vals taskvars) (*tes.Task, error) {
 	checkErr(err)
 	inputDirs, err := createTaskParams(inputDirMap, "/opt/funnel/inputs/", tes.FileType_DIRECTORY)
 	checkErr(err)
+	contentsParams, err := createContentsParams(contentsMap, "/opt/funnel/inputs/")
+	checkErr(err)
 	inputs = append(inputs, inputDirs...)
+	inputs = append(inputs, contentsParams...)
 
 	// Build task output parameters
 	outputs, err := createTaskParams(outputFileMap, "/opt/funnel/outputs/", tes.FileType_FILE)

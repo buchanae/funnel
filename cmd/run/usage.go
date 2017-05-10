@@ -11,13 +11,14 @@ General flags:
       --wait        Wait for the task to finish before exiting.
       --wait-for    Wait for the given task IDs before running the task.
   -x, --extra       Parse funnel run arguments from the given string.
-  -f, --extra-file  Parse funnel run arguments from the given file.
+  -X, --extra-file  Parse funnel run arguments from the given file.
 
 Input/output file flags:
   -i, --in          Input file e.g. varname=/path/to/input.txt
   -I, --in-dir      Input directory e.g. varname=/path/to/dir
   -o, --out         Output file e.g. varname=/path/to/output.txt
   -O, --out-dir     Output directory e.g. varname=/path/to/dir
+  -C, --contents    Include input file contents a file e.g. varname=/path/to/in.txt
       --stdin       File to write to stdin to the command.
       --stdout      File to write to stdout of the command.
       --stderr      File to write to stderr of the command.

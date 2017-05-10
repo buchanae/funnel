@@ -6,6 +6,7 @@ import (
 	set "github.com/deckarep/golang-set"
 	"github.com/imdario/mergo"
 	"github.com/ohsu-comp-bio/funnel/proto/tes"
+	"io/ioutil"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -147,5 +148,38 @@ func createTaskParams(params map[string]string, path string, t tes.FileType) ([]
 		}
 		result = append(result, param)
 	}
+	return result, nil
+}
+
+func createContentsParams(params map[string]string, path string) ([]*tes.TaskParameter, error) {
+	result := []*tes.TaskParameter{}
+
+	for key, val := range params {
+		url, err := resolvePath(val)
+		if err != nil {
+			return nil, err
+		}
+
+		p, err := stripStoragePrefix(url)
+		if err != nil {
+			return nil, err
+		}
+
+		path := path + p
+
+		b, err := ioutil.ReadFile(val)
+		if err != nil {
+			return nil, err
+		}
+
+		param := &tes.TaskParameter{
+			Name:     key,
+			Contents: string(b),
+			Path:     path,
+			Type:     tes.FileType_FILE,
+		}
+		result = append(result, param)
+	}
+
 	return result, nil
 }
