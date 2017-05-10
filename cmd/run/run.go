@@ -124,7 +124,7 @@ func addTaskFlags(f *pflag.FlagSet, v *taskvars) {
 func valsToTask(cmd []string, vals taskvars) (*tes.Task, error) {
 
 	if vals.container == "" {
-		return nil, fmt.Errorf("You must specify a container.")
+		return nil, fmt.Errorf("you must specify a container")
 	}
 
 	// Get template variables from the command line.
@@ -223,7 +223,7 @@ func run(cmd *cobra.Command, args []string) error {
 
 	if len(args) < 1 {
 		cmd.Usage()
-		return fmt.Errorf("You must specify a command to run.")
+		return fmt.Errorf("you must specify a command to run")
 	}
 
 	if len(args) > 1 {

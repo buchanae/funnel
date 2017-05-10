@@ -104,10 +104,6 @@ func (f *textFormatter) Format(entry *logrus.Entry) ([]byte, error) {
 	return b.Bytes(), nil
 }
 
-func PrintSimpleError(err error) {
-	fmt.Printf("\x1b[%dm%s\x1b[0m %s\n", red, "ERROR:", err.Error())
-}
-
 func (f *textFormatter) printColored(b *bytes.Buffer, entry *logrus.Entry, keys []string, timestampFormat string, ns string) {
 	var levelColor int
 	switch entry.Level {
