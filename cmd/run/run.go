@@ -16,11 +16,9 @@ import (
 
 // Cmd represents the run command
 var Cmd = &cobra.Command{
-	Use:     "run [flags] --container IMAGE CMD",
-	Short:   "Run a task.",
-	Long:    ``,
-	Example: example,
-	RunE:    run,
+	Use:   "run 'CMD' [flags]",
+	Short: "Run a task.",
+	RunE:  run,
 }
 
 var log = logger.New("run")
@@ -28,8 +26,7 @@ var log = logger.New("run")
 type taskvars struct {
 	name        string
 	workdir     string
-	server      string
-	image       string
+	container   string
 	project     string
 	description string
 	stdin       string
@@ -52,6 +49,7 @@ type taskvars struct {
 }
 
 var printTask bool
+var server = "http://localhost:8000"
 
 // Scattering and loading extra args is currently only allowed
 // at the top level in order to avoid any issues with circular
@@ -62,74 +60,69 @@ var vals taskvars
 
 func init() {
 	vals.workdir = "/opt/funnel"
-	vals.server = "http://localhost:8000"
+	vals.container = "alpine"
 }
 
-// TODO with input contents, script could be loaded from file
-
-var example = `
-    funnel run
-    'bowtie2 -f $factor -x $other -p1 $pair1 -p2 $pair2 -o $alignments'
-    --container opengenomics/bowtie2:latest
-    --name 'Bowtie2 test'
-    --description 'Testings an example of using 'funnel run' for a bowtie2 command'
-    --in pair1=./pair1.fastq
-    --in pair2=./pair2.fastq
-    --out alignments=gs://bkt/bowtie/alignments.bam
-    --env factor=5
-    --vol /tmp 
-    --vol /opt
-    --cpu 8
-    --ram 32
-    --disk 100
-`
+//
+// Usage/help docs are defined in usage.go.
+// If you're updating flags, you probably need to update that file.
+//
 
 func init() {
 	f := Cmd.Flags()
 
 	// These flags are separate because they are not allowed
 	// in scattered tasks.
-	f.BoolVarP(&printTask, "print", "p", printTask, "Print the task, instead of running it")
-	f.StringSliceVar(&scatterFiles, "scatter", scatterFiles, "Scatter")
-	f.StringSliceVarP(&extra, "extra", "x", extra, "Extra")
-	f.StringSliceVarP(&extraFiles, "extra-file", "f", extraFiles, "Extra file")
+	f.StringVarP(&server, "server", "S", server, "")
+	f.BoolVarP(&printTask, "print", "p", printTask, "")
+	f.StringSliceVarP(&extra, "extra", "x", extra, "")
+	f.StringSliceVarP(&extraFiles, "extra-file", "f", extraFiles, "")
+	f.StringSliceVar(&scatterFiles, "scatter", scatterFiles, "")
 
 	// Add per-task flags.
 	addTaskFlags(f, &vals)
+	Cmd.SetUsageTemplate(usage)
 }
 
 func addTaskFlags(f *pflag.FlagSet, v *taskvars) {
-	f.StringVarP(&v.name, "name", "n", v.name, "Task name")
-	f.StringVar(&v.description, "description", v.description, "Task description")
-	f.StringVar(&v.project, "project", v.project, "Project")
-	f.StringVarP(&v.workdir, "workdir", "w", v.workdir, "Set the containter working directory")
-	f.StringVarP(&v.image, "container", "c", v.image, "Specify the containter image")
-	f.StringSliceVarP(&v.inputs, "in", "i", v.inputs, "A key-value map of input files")
-	f.StringSliceVarP(&v.inputDirs, "in-dir", "I", v.inputDirs, "A key-value map of input directories")
-	f.StringSliceVarP(&v.outputs, "out", "o", v.outputs, "A key-value map of output files")
-	f.StringSliceVarP(&v.outputDirs, "out-dir", "O", v.outputDirs, "A key-value map of output directories")
-	f.StringSliceVarP(&v.envVars, "env", "e", v.envVars, "A key-value map of enviromental variables")
-	f.StringVar(&v.stdin, "stdin", v.stdin, "File to pass via stdin to the command")
-	f.StringVar(&v.stdout, "stdout", v.stdout, "File to write the stdout of the command")
-	f.StringVar(&v.stderr, "stderr", v.stderr, "File to write the stderr of the command")
-	f.StringSliceVar(&v.volumes, "vol", v.volumes, "Volumes to be defined on the container")
-	f.StringSliceVar(&v.tags, "tag", v.tags, "A key-value map of arbitrary tags")
-	f.IntVar(&v.cpu, "cpu", v.cpu, "Number of CPUs requested")
-	f.Float64Var(&v.ram, "ram", v.ram, "Amount of RAM requested (in GB)")
-	f.Float64Var(&v.disk, "disk", v.disk, "Amount of disk space requested (in GB)")
-	f.BoolVar(&v.preemptible, "preemptible", v.preemptible, "Allow task to be scheduled on preemptible workers")
-	f.StringSliceVar(&v.zones, "zone", v.zones, "Require task be scheduled in certain zones")
+	// General
+	f.StringVarP(&v.container, "container", "c", v.container, "")
+	f.StringVarP(&v.workdir, "workdir", "w", v.workdir, "")
+
+	// Input/output
+	f.StringSliceVarP(&v.inputs, "in", "i", v.inputs, "")
+	f.StringSliceVarP(&v.inputDirs, "in-dir", "I", v.inputDirs, "")
+	f.StringSliceVarP(&v.outputs, "out", "o", v.outputs, "")
+	f.StringSliceVarP(&v.outputDirs, "out-dir", "O", v.outputDirs, "")
+	f.StringVar(&v.stdin, "stdin", v.stdin, "")
+	f.StringVar(&v.stdout, "stdout", v.stdout, "")
+	f.StringVar(&v.stderr, "stderr", v.stderr, "")
+
+	// Resoures
+	f.IntVar(&v.cpu, "cpu", v.cpu, "")
+	f.Float64Var(&v.ram, "ram", v.ram, "")
+	f.Float64Var(&v.disk, "disk", v.disk, "")
+	f.StringSliceVar(&v.zones, "zone", v.zones, "")
+	f.BoolVar(&v.preemptible, "preemptible", v.preemptible, "")
+
+	// Other
+	f.StringVarP(&v.name, "name", "n", v.name, "")
+	f.StringVar(&v.description, "description", v.description, "")
+	f.StringVar(&v.project, "project", v.project, "")
+	f.StringSliceVar(&v.volumes, "vol", v.volumes, "")
+	f.StringSliceVar(&v.tags, "tag", v.tags, "")
+	f.StringSliceVarP(&v.envVars, "env", "e", v.envVars, "")
+
 	// TODO
 	//f.StringVar(&cmdFile, "cmd-file", cmdFile, "Read cmd template from file")
-	f.StringVarP(&v.server, "server", "S", v.server, "Address of Funnel server")
-	f.BoolVar(&v.wait, "wait", v.wait, "Wait for the task to finish before exiting")
-	f.StringSliceVar(&v.waitFor, "waitFor", v.waitFor, "Wait for")
+	f.BoolVar(&v.wait, "wait", v.wait, "")
+	f.StringSliceVar(&v.waitFor, "wait-for", v.waitFor, "")
 }
 
 func valsToTask(cmd []string, vals taskvars) (*tes.Task, error) {
 
-	if vals.image == "" {
-		return nil, fmt.Errorf("You must specify an image to run your command in.")
+	if vals.container == "" {
+		return nil, fmt.Errorf("You must specify a container.")
 	}
 
 	// Get template variables from the command line.
@@ -202,7 +195,7 @@ func valsToTask(cmd []string, vals taskvars) (*tes.Task, error) {
 		},
 		Executors: []*tes.Executor{
 			{
-				ImageName: vals.image,
+				ImageName: vals.container,
 				Cmd:       cmd,
 				Environ:   environ,
 				Workdir:   vals.workdir,
@@ -221,10 +214,12 @@ func valsToTask(cmd []string, vals taskvars) (*tes.Task, error) {
 func run(cmd *cobra.Command, args []string) error {
 
 	if len(args) < 1 {
+		cmd.Usage()
 		return fmt.Errorf("You must specify a command to run.")
 	}
 
 	if len(args) > 1 {
+		cmd.Usage()
 		return fmt.Errorf("--in, --out and --env args should have the form 'KEY=VALUE' not 'KEY VALUE'. Extra args: %s", args[1:])
 	}
 
@@ -246,15 +241,15 @@ func run(cmd *cobra.Command, args []string) error {
 		cmd.ParseFlags(sp)
 	}
 
-	rawcmd := args[0]
-	executorCmd := []string{"bash", "-c", rawcmd}
+	executorCmd, _ := shellquote.Split(args[0])
 
 	task, err := valsToTask(executorCmd, vals)
 	if err != nil {
+		cmd.Usage()
 		return err
 	}
 
-	cli := client.NewClient(vals.server)
+	cli := client.NewClient(server)
 
 	if len(scatterFiles) > 0 {
 		tg := taskGroup{}
