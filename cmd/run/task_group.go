@@ -40,3 +40,35 @@ func (tg *taskGroup) wait() error {
 		return nil
 	}
 }
+
+func runTask(task *tes.Task, cli *client.Client, wait bool, waitFor []string) error {
+	// Marshal message to JSON
+	taskJSON, merr := cli.Marshaler.MarshalToString(task)
+	if merr != nil {
+		return merr
+	}
+
+	if printTask {
+		fmt.Println(taskJSON)
+		return nil
+	}
+
+	if len(waitFor) > 0 {
+		for _, tid := range waitFor {
+			cli.WaitForTask(tid)
+		}
+	}
+
+	resp, rerr := cli.CreateTask([]byte(taskJSON))
+	if rerr != nil {
+		return rerr
+	}
+
+	taskID := resp.Id
+	fmt.Println(taskID)
+
+	if wait {
+		return cli.WaitForTask(taskID)
+	}
+	return nil
+}

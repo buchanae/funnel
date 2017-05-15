@@ -11,103 +11,73 @@ import (
 	"strings"
 )
 
-func mergeVars(maps ...map[string]string) (map[string]string, error) {
-	var err error
-	merged := map[string]string{}
-	for _, m := range maps {
-		err = mergo.MergeWithOverwrite(&merged, m)
-		if err != nil {
-			return nil, err
-		}
-	}
-	return merged, nil
+var ErrKeyFmt = errors.New("Arguments passed to --in, --out and --env must be of the form: KEY=VALUE")
+		err := 
+var ErrStorageScheme = errors.New("File paths must be prefixed with one of:\n file://\n gs://\n s3://")
+
+func DuplicateKeyErr(key string) error {
+  return errors.New("Can't use the same KEY for multiple --in, --out, --env arguments: " + key)
 }
 
-func parseCliVars(args []string) (map[string]string, error) {
-	data := map[string]string{}
+// Parse all CLI variable definitions (e.g "varname=value") into usable task values.
+func parseAllCliVars() (err error) {
+  task := tes.Task{}
+  environ := map[string]string{}
 
-	if len(args) == 0 {
-		return data, nil
-	}
+  // Any error occuring during parsing the variables an preparing the task
+  // is a fatal error, so I'm using panic/recover to simplify error handling.
+  defer func() {
+    err = recover()
+  }()
 
-	for _, arg := range args {
-		re := regexp.MustCompile("=")
-		res := re.Split(arg, -1)
-		if len(res) != 2 {
-			err := errors.New("Arguments passed to --in, --out and --env must be of the form: KEY=VALUE")
-			return data, err
-		}
-		key := res[0]
-		val := res[1]
-		if _, ok := data[key]; ok {
-			err := errors.New("Can't use the same KEY for multiple --in, --out, --env arguments: " + key)
-			return data, err
-		}
-		data[key] = val
-	}
-	return data, nil
-}
+  // Helper to make sure variable keys are unique.
+  set := func(key, val string) {
+    _, exists := environ[key]
+    if exists {
+      panic(DuplicateKeyErr(key))
+    }
+    environ[key] = val
+  }
 
-func compareKeys(maps ...map[string]string) error {
-	keys := make(map[string]string)
-	for _, mymap := range maps {
-		for k := range mymap {
-			if _, ok := keys[k]; !ok {
-				keys[k] = ""
-			} else {
-				err := errors.New("Can't use the same KEY for multiple --in, --out, --env arguments: " + k)
-				return err
-			}
-		}
-	}
-	return nil
-}
+  for _, raw := range vals.inputs {
+    k, v, perr := parseCliVar(raw)
+    uerr := set(k, v)
+  }
 
-func stripStoragePrefix(url string) (string, error) {
-	re := regexp.MustCompile("[a-z0-9]+://")
-	if !re.MatchString(url) {
-		err := errors.New("File paths must be prefixed with one of:\n file://\n gs://\n s3://")
-		return "", err
-	}
-	path := re.ReplaceAllString(url, "")
-	return strings.TrimPrefix(path, "/"), nil
-}
+  for _, raw := range vals.inputDirs {
+    k, v, perr := parseCliVar(raw)
+    uerr := set(k, v)
+  }
 
-func resolvePath(url string) (string, error) {
-	local := strings.HasPrefix(url, "/") || strings.HasPrefix(url, ".") || strings.HasPrefix(url, "~")
-	re := regexp.MustCompile("[a-z0-9]+://")
-	prefixed := re.MatchString(url)
-	var path string
-	switch {
-	case local:
-		path, err := filepath.Abs(url)
-		if err != nil {
-			return "", err
-		}
-		return "file://" + path, nil
-	case prefixed:
-		path = url
-		return path, nil
-	default:
-		e := fmt.Sprintf("could not resolve filepath: %s", url)
-		return "", errors.New(e)
-	}
-}
+  for _, raw := range vals.contents {
+    k, v, perr := parseCliVar(raw)
+    uerr := set(k, v)
+  }
 
-func fileMapToEnvVars(m map[string]string, path string) (map[string]string, error) {
-	result := map[string]string{}
-	for k, v := range m {
-		url, err := resolvePath(v)
-		if err != nil {
-			return nil, err
-		}
-		p, err := stripStoragePrefix(url)
-		if err != nil {
-			return nil, err
-		}
-		result[k] = path + p
-	}
-	return result, nil
+  for _, raw := range vals.env {
+    k, v, perr := parseCliVar(raw)
+    uerr := set(k, v)
+  }
+
+  for _, raw := range vals.contents {
+    k, v := parseCliVar(raw)
+    set(k, v)
+  }
+
+  for _, raw := range vals.tags {
+    k, v := parseCliVar(raw)
+  }
+
+	contentsParams, err := createContentsParams(contentsMap, "/opt/funnel/inputs/")
+	inputs = append(inputs, inputDirs...)
+	inputs = append(inputs, contentsParams...)
+
+	// Build task output parameters
+	outputs, err := createTaskParams(outputFileMap, "/opt/funnel/outputs/", tes.FileType_FILE)
+	checkErr(err)
+	outputDirs, err := createTaskParams(outputDirMap, "/opt/funnel/outputs/", tes.FileType_DIRECTORY)
+	checkErr(err)
+	outputs = append(outputs, outputDirs...)
 }
 
 func createTaskParams(params map[string]string, path string, t tes.FileType) ([]*tes.TaskParameter, error) {
@@ -164,4 +134,55 @@ func createContentsParams(params map[string]string, path string) ([]*tes.TaskPar
 	}
 
 	return result, nil
+}
+
+
+func parseCliVar(raw string) (string, string) {
+  re := regexp.MustCompile("=")
+  res := re.Split(raw, -1)
+
+  if len(res) != 2 {
+    panic(ErrKeyFmt)
+  }
+
+  key := res[0]
+  val := res[1]
+  return key, val
+}
+
+// Give a input/output URL "raw", return the path of the file
+// relative to the container.
+func containerPath(raw, base string) string {
+  url := resolvePath(raw)
+  p := stripStoragePrefix(url)
+  return base + p
+}
+
+func stripStoragePrefix(url string) string {
+	re := regexp.MustCompile("[a-z0-9]+://")
+	if !re.MatchString(url) {
+    panic(ErrStorageScheme)
+	}
+	path := re.ReplaceAllString(url, "")
+	return strings.TrimPrefix(path, "/")
+}
+
+func resolvePath(url string) string {
+	local := strings.HasPrefix(url, "/") || strings.HasPrefix(url, ".") ||
+    strings.HasPrefix(url, "~")
+	re := regexp.MustCompile("[a-z0-9]+://")
+	prefixed := re.MatchString(url)
+
+	switch {
+	case local:
+		path, err := filepath.Abs(url)
+		if err != nil {
+      panic(err)
+		}
+		return "file://" + path
+	case prefixed:
+    return url
+	default:
+    panic(fmt.Errorf("could not resolve filepath: %s", url))
+	}
 }
