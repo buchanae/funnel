@@ -5,8 +5,6 @@ endif
 export SHELL=/bin/bash
 PATH := ${PATH}:${GOPATH}/bin
 export PATH
-PYTHONPATH := ${PYTHONPATH}:$(shell pwd)/python
-export PYTHONPATH
 
 PROTO_INC=-I ./ -I $(shell pwd)/vendor/github.com/grpc-ecosystem/grpc-gateway/third_party/googleapis
 GRPC_HTTP_MOD=Mgoogle/api/annotations.proto=github.com/grpc-ecosystem/grpc-gateway/third_party/googleapis/google/api
@@ -98,9 +96,10 @@ go-test:
 	@go test $(shell go list ./... | grep -v /vendor/)
 
 # Run all tests, including end-to-end Python tests
-test:	go-test
-	@docker build -t tes-wait -f tests/docker_files/tes-wait/Dockerfile tests/docker_files/tes-wait/
-	@pip2.7 install -q -r tests/requirements.txt
+test:	
+	#go-test
+	#@docker build -t tes-wait -f tests/docker_files/tes-wait/Dockerfile tests/docker_files/tes-wait/
+	#@pip2.7 install -q -r tests/requirements.txt
 	@nosetests-2.7 tests/
 
 # Build the web dashboard

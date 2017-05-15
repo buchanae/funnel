@@ -59,59 +59,62 @@ def config_seconds(sec):
     return int(sec * 1000000000)
 
 
+task_server = None
+tempdir = tempfile.mkdtemp(prefix="funnel-py-tests-")
+storage_dir = os.path.abspath(tempdir + ".storage")
+work_dir = os.path.abspath(tempdir + ".work-dir")
+
+
+def teardown_package():
+    if task_server is not None:
+        kill(task_server)
+
+signal.signal(signal.SIGINT, teardown_package)
+
+def setup_package():
+    global task_server
+    os.mkdir(storage_dir)
+    os.mkdir(work_dir)
+    # Build server config file (YAML)
+    rate = config_seconds(0.05)
+    configFile = temp_config({
+        "HostName": "localhost",
+        "HTTPPort": "8000",
+        "RPCPort": "9090",
+        "WorkDir": work_dir,
+        "Storage": [{
+            "Local": {
+                "AllowedDirs": [storage_dir]
+            },
+            "S3": {
+                "Endpoint": S3_ENDPOINT,
+                "Key": S3_ACCESS_KEY,
+                "Secret": S3_SECRET_KEY,
+            }
+        }],
+        "LogLevel": "info",
+        "Worker": {
+            "Timeout": -1,
+            "StatusPollRate": rate,
+            "LogUpdateRate": rate,
+            "NewJobPollRate": rate,
+            "UpdateRate": rate,
+            "TrackerRate": rate
+        },
+        "ScheduleRate": rate,
+    })
+    # Start server
+    cmd = ["funnel", "server", "--config", configFile.name]
+    logging.info("Running %s" % (" ".join(cmd)))
+    task_server = popen(cmd)
+    time.sleep(1)
+
+
 class SimpleServerTest(unittest.TestCase):
 
     def setUp(self):
-        self.addCleanup(self.cleanup)
-        if not os.path.exists("./test_tmp"):
-            os.mkdir("test_tmp")
-        self.task_server = None
-        f, db_path = tempfile.mkstemp(dir="./test_tmp", prefix="tes_task_db.")
-        os.close(f)
-        self.storage_dir = os.path.abspath(db_path + ".storage")
-        self.funnel_work_dir = os.path.abspath(db_path + ".work-dir")
-        os.mkdir(self.storage_dir)
-        os.mkdir(self.funnel_work_dir)
-
-        # Build server config file (YAML)
-        rate = config_seconds(0.05)
-        configFile = temp_config({
-            "HostName": "localhost",
-            "HTTPPort": "8000",
-            "RPCPort": "9090",
-            "DBPath": db_path,
-            "WorkDir": self.funnel_work_dir,
-            "Storage": [{
-                "Local": {
-                    "AllowedDirs": [self.storage_dir]
-                }
-            }],
-            "LogLevel": "debug",
-            "Worker": {
-                "Timeout": -1,
-                "StatusPollRate": rate,
-                "LogUpdateRate": rate,
-                "NewJobPollRate": rate,
-                "UpdateRate": rate,
-                "TrackerRate": rate
-            },
-            "ScheduleRate": rate,
-        })
-
-        # Start server
-        cmd = ["funnel", "server", "--config", configFile.name]
-        logging.info("Running %s" % (" ".join(cmd)))
-        self.task_server = popen(cmd)
-        signal.signal(signal.SIGINT, self.cleanup)
-        time.sleep(1)
+        self.storage_dir = storage_dir
         self.tes = py_tes.TES("http://localhost:8000")
-
-    # We're using this instead of tearDown because python doesn't call tearDown
-    # if setUp fails. Since our setUp is complex, that means things don't get
-    # properly cleaned up (e.g. processes are orphaned).
-    def cleanup(self, *args):
-        if self.task_server is not None:
-            kill(self.task_server)
 
     def storage_path(self, *args):
         return os.path.join(self.storage_dir, *args)
@@ -169,22 +172,11 @@ class SimpleServerTest(unittest.TestCase):
 
 class S3ServerTest(unittest.TestCase):
 
-    def setUp(self):
-        self.addCleanup(self.cleanup)
-
-        if not os.path.exists("./test_tmp"):
-            os.mkdir("test_tmp")
-        self.task_server = None
-        f, db_path = tempfile.mkstemp(dir="./test_tmp", prefix="tes_task_db.")
-        os.close(f)
-        self.storage_dir = db_path + ".storage"
-        self.output_dir = db_path + ".output"
-        self.funnel_work_dir = os.path.abspath(db_path + ".work-dir")
-        os.mkdir(self.storage_dir)
-        os.mkdir(self.output_dir)
-        os.mkdir(self.funnel_work_dir)
-
-        self.dir_name = os.path.basename(db_path)
+    @classmethod
+    def setUpClass(cls):
+        cls.output_dir = os.path.join(tempdir + ".s3-output")
+        os.mkdir(cls.output_dir)
+        cls.dir_name = os.path.basename(tempdir)
 
         # start s3 server
         cmd = [
@@ -194,52 +186,28 @@ class S3ServerTest(unittest.TestCase):
             "--name", "tes_minio_test",
             "-e", "MINIO_ACCESS_KEY=%s" % (S3_ACCESS_KEY),
             "-e", "MINIO_SECRET_KEY=%s" % (S3_SECRET_KEY),
-            "-v", "%s:/export" % (self.storage_dir),
+            "-v", "%s:/export" % (storage_dir),
             "minio/minio", "server", "/export"
         ]
 
         logging.info("Running %s" % (" ".join(cmd)))
-        self.s3_server = popen(cmd)
-
-        # Build server config file (YAML)
-        configFile = temp_config({
-            "HostName": "localhost",
-            "HTTPPort": "8000",
-            "RPCPort": "9090",
-            "DBPath": db_path,
-            "WorkDir": self.funnel_work_dir,
-            "Storage": [{
-                "S3": {
-                    "Endpoint": S3_ENDPOINT,
-                    "Key": S3_ACCESS_KEY,
-                    "Secret": S3_SECRET_KEY,
-                }
-            }]
-        })
-
-        # Start server
-        cmd = ["funnel", "server", "--config", configFile.name]
-        logging.info("Running %s" % (" ".join(cmd)))
-        self.task_server = popen(cmd)
-        time.sleep(5)
+        cls.s3_server = popen(cmd)
 
         # TES client
-        self.tes = py_tes.TES(
+        cls.tes = py_tes.TES(
             "http://localhost:8000",
             "http://" + S3_ENDPOINT,
             S3_ACCESS_KEY,
             S3_SECRET_KEY
         )
 
-        if not self.tes.bucket_exists(BUCKET_NAME):
-            self.tes.make_bucket(BUCKET_NAME)
+        if not cls.tes.bucket_exists(BUCKET_NAME):
+            cls.tes.make_bucket(BUCKET_NAME)
 
-    # We're using this instead of tearDown because python doesn't call tearDown
-    # if setUp fails. Since our setUp is complex, that means things don't get
-    # properly cleaned up (e.g. processes are orphaned).
-    def cleanup(self):
-        if self.s3_server is not None:
-            kill(self.s3_server)
+    @classmethod
+    def teardownClass(cls):
+        if cls.s3_server is not None:
+            kill(cls.s3_server)
             cmd = ["docker", "kill", "tes_minio_test"]
             logging.info("Running %s" % (" ".join(cmd)))
 
@@ -249,9 +217,6 @@ class S3ServerTest(unittest.TestCase):
             logging.info("Running %s" % (" ".join(cmd)))
 
             popen(cmd).communicate()
-
-        if self.task_server is not None:
-            kill(self.task_server)
 
     def get_storage_url(self, path):
         dstpath = "s3://%s/%s" % (

@@ -9,19 +9,16 @@ import shlex
 from common_test_util import SimpleServerTest
 
 
-TESTS_DIR = os.path.dirname(__file__)
-
-
 class TestClient(SimpleServerTest):
 
     def dumps(self, d):
         return json.dumps(d, indent=2, sort_keys=True)
 
-    def _submit_steps(self, *steps):
+    def submit(self, *steps):
         executor = []
         for s in steps:
             executor.append({
-                "image_name": "tes-wait",
+                "image_name": "ohsucompbio/tes-wait",
                 "cmd": shlex.split(s),
                 "stdout": "stdout",
                 "ports": [{
@@ -43,7 +40,7 @@ class TestClient(SimpleServerTest):
         '''
         Test a basic "Hello world" task and expected API result.
         '''
-        task_id = self._submit_steps("echo hello world")
+        task_id = self.submit("echo hello world")
         data = self.tes.wait(task_id)
         print(self.dumps(data))
         assert 'logs' in data
@@ -58,7 +55,7 @@ class TestClient(SimpleServerTest):
         This ensures that the streaming works even when a small
         amount of logs are written.
         '''
-        task_id = self._submit_steps("bash -c 'echo a; tes-wait step 1'")
+        task_id = self.submit("bash -c 'echo a; tes-wait step 1'")
         self.wait("step 1")
         time.sleep(0.1)
         data = self.tes.get_task(task_id)
@@ -72,7 +69,7 @@ class TestClient(SimpleServerTest):
         '''
         Ensure that ports are logged and returned correctly.
         '''
-        task_id = self._submit_steps("tes-wait step 1")
+        task_id = self.submit("tes-wait step 1")
         self.wait("step 1")
         time.sleep(0.1)
         data = self.tes.get_task(task_id)
@@ -83,7 +80,7 @@ class TestClient(SimpleServerTest):
         self.resume()
 
     def test_state_immutability(self):
-        task_id = self._submit_steps("echo hello world")
+        task_id = self.submit("echo hello world")
         data = self.tes.wait(task_id)
         self.tes.cancel_task(task_id)
         new_data = self.tes.get_task(task_id)
@@ -91,7 +88,7 @@ class TestClient(SimpleServerTest):
 
     def test_cancel(self):
         dclient = docker.from_env()
-        task_id = self._submit_steps("tes-wait step 1", "tes-wait step 2")
+        task_id = self.submit("tes-wait step 1", "tes-wait step 2")
         self.wait("step 1", timeout=20)
         # ensure the container was created
         self.wait_for_container(task_id + "-0")
@@ -112,7 +109,7 @@ class TestClient(SimpleServerTest):
         have been started or completed, i.e. steps that have yet to be started
         won't show up in Task.Logs[0].Logs
         '''
-        task_id = self._submit_steps(
+        task_id = self.submit(
             "tes-wait step 1",
             "echo done"
         )
@@ -129,7 +126,7 @@ class TestClient(SimpleServerTest):
         the first step completed, but the correct behavior is to mark the
         task complete after *all* steps have completed.
         '''
-        task_id = self._submit_steps(
+        task_id = self.submit(
             "echo step 1",
             "tes-wait step 2",
             "echo step 2",
