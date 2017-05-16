@@ -2,9 +2,9 @@ package tests
 
 import (
 	"errors"
+	"github.com/ohsu-comp-bio/funnel/cmd/client"
 	"github.com/ohsu-comp-bio/funnel/logger"
 	"github.com/ohsu-comp-bio/funnel/proto/tes"
-	"github.com/ohsu-comp-bio/funnel/cmd/client"
 	"golang.org/x/net/context"
 	"testing"
 	"time"

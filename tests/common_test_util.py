@@ -71,6 +71,7 @@ def teardown_package():
 
 signal.signal(signal.SIGINT, teardown_package)
 
+
 def setup_package():
     global task_server
     os.mkdir(storage_dir)

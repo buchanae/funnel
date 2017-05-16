@@ -1,31 +1,22 @@
 package run
 
 import (
-	"bufio"
-	"fmt"
-	"github.com/kballard/go-shellquote"
-	"github.com/ohsu-comp-bio/funnel/cmd/client"
-	"github.com/ohsu-comp-bio/funnel/logger"
-	"github.com/ohsu-comp-bio/funnel/proto/tes"
-	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
-	"io/ioutil"
-	"os"
 	"strings"
 )
 
-// cmdvars capture values from CLI flag parsing
+// flagVals captures values from CLI flag parsing
 type flagVals struct {
-  // Top-level flag values. These are not allowed to be redefined
-  // by scattered tasks or extra args, to avoid complexity in avoiding
-  // circular imports or nested scattering
-  printTask bool
-  server string
-  extra []string
-  extraFiles []string
-  scatterFiles []string
+	// Top-level flag values. These are not allowed to be redefined
+	// by scattered tasks or extra args, to avoid complexity in avoiding
+	// circular imports or nested scattering
+	printTask    bool
+	server       string
+	extra        []string
+	extraFiles   []string
+	scatterFiles []string
 
-  // Per-task flag values. These may be overridden by scattered tasks.
+	// Per-task flag values. These may be overridden by scattered tasks.
 	name        string
 	workdir     string
 	container   string
@@ -42,35 +33,35 @@ type flagVals struct {
 	outputs     []string
 	outputDirs  []string
 	contents    []string
-	env         []string
+	environ     []string
 	tags        []string
 	volumes     []string
 	zones       []string
 	cpu         int
 	ram         float64
 	disk        float64
-  cmd         []string
+	cmd         []string
 }
 
-func addTopLevelFlags(f *pflag.FlagSet, v *cmdvars) {
+func addTopLevelFlags(f *pflag.FlagSet, v *flagVals) {
 	// These flags are separate because they are not allowed
 	// in scattered tasks.
-  //
-  // Scattering and loading extra args is currently only allowed
-  // at the top level in order to avoid any issues with circular
-  // includes. If we want this to be per-task, it's possible,
-  // but more work.
-	f.StringVarP(&server, "server", "S", v.server, "")
-	f.BoolVarP(&printTask, "print", "p", v.printTask, "")
-	f.StringSliceVarP(&extra, "extra", "x", v.extra, "")
-	f.StringSliceVarP(&extraFiles, "extra-file", "X", v.extraFiles, "")
-	f.StringSliceVar(&scatterFiles, "scatter", v.scatterFiles, "")
+	//
+	// Scattering and loading extra args is currently only allowed
+	// at the top level in order to avoid any issues with circular
+	// includes. If we want this to be per-task, it's possible,
+	// but more work.
+	f.StringVarP(&v.server, "server", "S", v.server, "")
+	f.BoolVarP(&v.printTask, "print", "p", v.printTask, "")
+	f.StringSliceVarP(&v.extra, "extra", "x", v.extra, "")
+	f.StringSliceVarP(&v.extraFiles, "extra-file", "X", v.extraFiles, "")
+	f.StringSliceVar(&v.scatterFiles, "scatter", v.scatterFiles, "")
 
 	// Add per-task flags.
-	addTaskFlags(f, &v.task)
+	addTaskFlags(f, v)
 }
 
-func addTaskFlags(f *pflag.FlagSet, v *taskvars) {
+func addTaskFlags(f *pflag.FlagSet, v *flagVals) {
 	// General
 	f.StringVarP(&v.container, "container", "c", v.container, "")
 	f.StringVarP(&v.workdir, "workdir", "w", v.workdir, "")
@@ -98,10 +89,30 @@ func addTaskFlags(f *pflag.FlagSet, v *taskvars) {
 	f.StringVar(&v.project, "project", v.project, "")
 	f.StringSliceVar(&v.volumes, "vol", v.volumes, "")
 	f.StringSliceVar(&v.tags, "tag", v.tags, "")
-	f.StringSliceVarP(&v.envVars, "env", "e", v.envVars, "")
+	f.StringSliceVarP(&v.environ, "env", "e", v.environ, "")
 
 	// TODO
 	//f.StringVar(&cmdFile, "cmd-file", cmdFile, "Read cmd template from file")
 	f.BoolVar(&v.wait, "wait", v.wait, "")
 	f.StringSliceVar(&v.waitFor, "wait-for", v.waitFor, "")
+}
+
+// Set default flagVals
+func defaultVals(vals *flagVals) {
+	if vals.workdir == "" {
+		vals.workdir = "/opt/funnel"
+	}
+
+	if vals.container == "" {
+		vals.container = ""
+	}
+
+	// Default name
+	if vals.name == "" {
+		vals.name = "Funnel run: " + strings.Join(vals.cmd, " ")
+	}
+
+	if vals.server == "" {
+		vals.server = "http://localhost:8000"
+	}
 }

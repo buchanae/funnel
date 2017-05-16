@@ -6,14 +6,11 @@ import (
 	"github.com/kballard/go-shellquote"
 	"github.com/ohsu-comp-bio/funnel/cmd/client"
 	"github.com/ohsu-comp-bio/funnel/logger"
-	"github.com/ohsu-comp-bio/funnel/proto/tes"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"io/ioutil"
 	"os"
-	"strings"
 )
-
 
 // *********************************************************************
 // IMPORTANT:
@@ -21,9 +18,8 @@ import (
 // If you're updating flags, you probably need to update that file.
 // *********************************************************************
 
-
 var log = logger.New("run")
-var vars cmdvars
+var vals flagVals
 
 // Cmd represents the run command
 var Cmd = &cobra.Command{
@@ -34,7 +30,7 @@ var Cmd = &cobra.Command{
 
 func init() {
 	f := Cmd.Flags()
-  addCmdFlags(f, &vars)
+	addTopLevelFlags(f, &vals)
 	Cmd.SetUsageTemplate(usage)
 }
 
@@ -51,71 +47,74 @@ func runE(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("--in, --out and --env args should have the form 'KEY=VALUE' not 'KEY VALUE'. Extra args: %s", args[1:])
 	}
 
-  // Load CLI arguments from files, which allows reusing common CLI args.
-	for _, xf := range extraFiles {
+	// Load CLI arguments from files, which allows reusing common CLI args.
+	for _, xf := range vals.extraFiles {
 		b, _ := ioutil.ReadFile(xf)
-		extra = append(extra, string(b))
+		vals.extra = append(vals.extra, string(b))
 	}
 
-  // Load CLI arguments from stdin, which allows bash heredoc for easily
-  // spreading args over multiple lines.
+	// Load CLI arguments from stdin, which allows bash heredoc for easily
+	// spreading args over multiple lines.
 	stat, _ := os.Stdin.Stat()
 	if (stat.Mode() & os.ModeCharDevice) == 0 {
 		b, _ := ioutil.ReadAll(os.Stdin)
 		if len(b) > 0 {
-			extra = append(extra, string(b))
+			vals.extra = append(vals.extra, string(b))
 		}
 	}
 
-  // Load and parse all "extra" CLI arguments.
-	for _, ex := range extra {
+	// Load and parse all "extra" CLI arguments.
+	for _, ex := range vals.extra {
 		sp, _ := shellquote.Split(ex)
 		cmd.ParseFlags(sp)
 	}
 
-	task, err := valsToTask(executorCmd, vals)
-	if err != nil {
-		cmd.Usage()
-		return err
+	// Fill in empty values with defaults.
+	defaultVals(&vals)
+
+	// Split command string based on shell syntax.
+	vals.cmd, _ = shellquote.Split(args[0])
+
+	// TES HTTP client
+	tg := taskGroup{
+		printTask: vals.printTask,
+		client:    client.NewClient(vals.server),
 	}
 
-  // Split command string based on shell syntax.
-	executorCmd, _ := shellquote.Split(args[0])
-
-  // TES HTTP client
-	cli := client.NewClient(server)
-
-	if vals.container == "" {
-		return nil, fmt.Errorf("you must specify a container")
-	}
-
-	if len(scatterFiles) > 0 {
-		tg := taskGroup{}
-		for _, sc := range scatterFiles {
-			fh, _ := os.Open(sc)
-			scanner := bufio.NewScanner(fh)
-			for scanner.Scan() {
-				// Copy task vals to act as base task
-				tv := vals
-				// Per-scatter flags
-				fl := &pflag.FlagSet{}
-				addTaskFlags(fl, &tv)
-				sp, _ := shellquote.Split(scanner.Text())
-				fl.Parse(sp)
-				t, _ := valsToTask(executorCmd, tv)
-				tg.runTask(t, cli, tv.wait, tv.waitFor)
-			}
+	// Scatter all vals into tasks
+	for _, v := range append([]flagVals{vals}, scatter(vals)...) {
+		// Parse inputs, outputs, environ, and tags from flagVals
+		// and update the task.
+		task, err := valsToTask(v)
+		if err != nil {
+			cmd.Usage()
+			return err
 		}
-		return tg.wait()
+		tg.runTask(task, v.wait, v.waitFor)
 	}
 
-	return runTask(task, cli, vals.wait, vals.waitFor)
+	return tg.wait()
 }
 
+// scatter reads each line from each scatter file, extending "base" flagVals
+// with per-scatter vals from each line.
+func scatter(base flagVals) []flagVals {
+	out := []flagVals{}
 
-func checkErr(err error) {
-	if err != nil {
-		fmt.Println(err)
-		os.Exit(3)
+	for _, sc := range base.scatterFiles {
+		// Read each line of the scatter file.
+		fh, _ := os.Open(sc)
+		scanner := bufio.NewScanner(fh)
+		for scanner.Scan() {
+			tv := base
+			// Per-scatter flags
+			fl := &pflag.FlagSet{}
+			addTaskFlags(fl, &tv)
+			sp, _ := shellquote.Split(scanner.Text())
+			fl.Parse(sp)
+			// Parse scatter file flags into new flagVals
+			out = append(out, tv)
+		}
 	}
+	return out
 }
