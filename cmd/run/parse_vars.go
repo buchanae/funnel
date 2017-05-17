@@ -3,6 +3,7 @@ package run
 import (
 	"errors"
 	"fmt"
+	"github.com/kballard/go-shellquote"
 	"github.com/ohsu-comp-bio/funnel/proto/tes"
 	"io/ioutil"
 	"path/filepath"
@@ -18,11 +19,20 @@ func DuplicateKeyErr(key string) error {
 }
 
 // Parse CLI variable definitions (e.g "varname=value") into usable task values.
-func valsToTask(vals flagVals) (*tes.Task, error) {
-	var err error
+func valsToTask(vals flagVals) (task *tes.Task, err error) {
+
+	// Any error occuring during parsing the variables an preparing the task
+	// is a fatal error, so I'm using panic/recover to simplify error handling.
+	defer func() {
+		if x := recover(); x != nil {
+			err = x.(error)
+		}
+	}()
+
+	environ := map[string]string{}
 
 	// Build the task message
-	task := &tes.Task{
+	task = &tes.Task{
 		Name:        vals.name,
 		Project:     vals.project,
 		Description: vals.description,
@@ -33,92 +43,124 @@ func valsToTask(vals flagVals) (*tes.Task, error) {
 			Zones:       vals.zones,
 			Preemptible: vals.preemptible,
 		},
-		Executors: []*tes.Executor{
-			{
-				ImageName: vals.container,
-				Cmd:       vals.cmd,
-				Workdir:   vals.workdir,
-				Stdout:    "/opt/funnel/outputs/stdout",
-				Stderr:    "/opt/funnel/outputs/stderr",
-				// TODO no ports
-				Ports: nil,
-			},
-		},
 		Volumes: vals.volumes,
+		Tags:    map[string]string{},
 	}
 
-	// Only set the stdin path if the --stdin flag was used.
-	if vals.stdin != "" {
-		task.Executors[0].Stdin = "/opt/funnel/inputs/stdin"
-	}
+	// Create executors
+	for i, exec := range vals.execs {
+		// Split command string based on shell syntax.
+		cmd, _ := shellquote.Split(exec.cmd)
+		stdinPath := fmt.Sprintf("/opt/funnel/inputs/stdin-%d", i)
+		stdoutPath := fmt.Sprintf("/opt/funnel/outputs/stdout-%d", i)
+		stderrPath := fmt.Sprintf("/opt/funnel/outputs/stderr-%d", i)
 
-	// Any error occuring during parsing the variables an preparing the task
-	// is a fatal error, so I'm using panic/recover to simplify error handling.
-	defer func() {
-		err = recover().(error)
-	}()
+		// Only set the stdin path if the --stdin flag was used.
+		var stdin string
+		if exec.stdin != "" {
+			stdin = stdinPath
+			task.Inputs = append(task.Inputs, &tes.TaskParameter{
+				Name: fmt.Sprintf("stdin-%d", i),
+				Url:  resolvePath(exec.stdin),
+				Path: stdinPath,
+			})
+		}
+
+		if exec.stdout != "" {
+			task.Outputs = append(task.Outputs, &tes.TaskParameter{
+				Name: fmt.Sprintf("stdout-%d", i),
+				Url:  resolvePath(exec.stdout),
+				Path: stdoutPath,
+			})
+		}
+
+		if exec.stderr != "" {
+			task.Outputs = append(task.Outputs, &tes.TaskParameter{
+				Name: fmt.Sprintf("stderr-%d", i),
+				Url:  resolvePath(exec.stderr),
+				Path: stderrPath,
+			})
+		}
+
+		task.Executors = append(task.Executors, &tes.Executor{
+			ImageName: vals.container,
+			Cmd:       cmd,
+			Workdir:   vals.workdir,
+			Environ:   environ,
+			Stdin:     stdin,
+			Stdout:    stdoutPath,
+			Stderr:    stderrPath,
+			// TODO no ports
+			Ports: nil,
+		})
+	}
 
 	// Helper to make sure variable keys are unique.
 	setenv := func(key, val string) {
-		_, exists := task.Executors[0].Environ[key]
+		_, exists := environ[key]
 		if exists {
 			panic(DuplicateKeyErr(key))
 		}
-		task.Executors[0].Environ[key] = val
+		environ[key] = val
 	}
 
 	for _, raw := range vals.inputs {
 		k, v := parseCliVar(raw)
-		setenv(k, v)
 		url := resolvePath(v)
+		path := "/opt/funnel/inputs/" + stripStoragePrefix(url)
+		setenv(k, path)
 		task.Inputs = append(task.Inputs, &tes.TaskParameter{
 			Name: k,
 			Url:  url,
-			Path: "/opt/funnel/inputs/" + stripStoragePrefix(url),
+			Path: path,
 		})
 	}
 
 	for _, raw := range vals.inputDirs {
 		k, v := parseCliVar(raw)
-		setenv(k, v)
 		url := resolvePath(v)
+		path := "/opt/funnel/inputs/" + stripStoragePrefix(url)
+		setenv(k, path)
 		task.Inputs = append(task.Inputs, &tes.TaskParameter{
 			Name: k,
 			Url:  url,
-			Path: "/opt/funnel/inputs/" + stripStoragePrefix(url),
+			Path: path,
 			Type: tes.FileType_DIRECTORY,
 		})
 	}
 
 	for _, raw := range vals.contents {
 		k, v := parseCliVar(raw)
-		setenv(k, v)
+		path := "/opt/funnel/inputs/" + stripStoragePrefix(resolvePath(v))
+		setenv(k, path)
 		task.Inputs = append(task.Inputs, &tes.TaskParameter{
 			Name:     k,
-			Path:     "/opt/funnel/inputs/" + stripStoragePrefix(v),
+			Path:     path,
 			Contents: getContents(v),
 		})
 	}
 
 	for _, raw := range vals.outputs {
 		k, v := parseCliVar(raw)
-		setenv(k, v)
 		url := resolvePath(v)
+		path := "/opt/funnel/outputs/" + stripStoragePrefix(url)
+		setenv(k, path)
 		task.Outputs = append(task.Outputs, &tes.TaskParameter{
 			Name: k,
 			Url:  url,
-			Path: "/opt/funnel/outputs/" + stripStoragePrefix(url),
+			Path: path,
 		})
 	}
 
 	for _, raw := range vals.outputDirs {
 		k, v := parseCliVar(raw)
-		setenv(k, v)
 		url := resolvePath(v)
+		path := "/opt/funnel/outputs/" + stripStoragePrefix(url)
+		setenv(k, path)
 		task.Outputs = append(task.Outputs, &tes.TaskParameter{
 			Name: k,
 			Url:  url,
-			Path: "/opt/funnel/outputs/" + stripStoragePrefix(url),
+			Path: path,
 			Type: tes.FileType_DIRECTORY,
 		})
 	}
@@ -132,8 +174,7 @@ func valsToTask(vals flagVals) (*tes.Task, error) {
 		k, v := parseCliVar(raw)
 		task.Tags[k] = v
 	}
-
-	return task, err
+	return
 }
 
 func getContents(p string) string {

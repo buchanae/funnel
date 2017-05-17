@@ -1,9 +1,25 @@
 package run
 
 import (
+	"fmt"
+	"github.com/kballard/go-shellquote"
 	"github.com/spf13/pflag"
-	"strings"
+	"io/ioutil"
+	"os"
 )
+
+// *********************************************************************
+// IMPORTANT:
+// Usage/help docs are defined in usage.go.
+// If you're updating flags, you probably need to update that file.
+// *********************************************************************
+
+type executor struct {
+	cmd    string
+	stdin  string
+	stdout string
+	stderr string
+}
 
 // flagVals captures values from CLI flag parsing
 type flagVals struct {
@@ -15,16 +31,22 @@ type flagVals struct {
 	extra        []string
 	extraFiles   []string
 	scatterFiles []string
+	cmds         []string
+
+	// Internal tracking of executors. Not set by flags.
+	execs []executor
 
 	// Per-task flag values. These may be overridden by scattered tasks.
-	name        string
+	name string
+	// TODO all executors share the same container and workdir
+	//      but could possibly be separate.
 	workdir     string
 	container   string
 	project     string
 	description string
-	stdin       string
-	stdout      string
-	stderr      string
+	stdin       []string
+	stdout      []string
+	stderr      []string
 	preemptible bool
 	wait        bool
 	waitFor     []string
@@ -40,10 +62,11 @@ type flagVals struct {
 	cpu         int
 	ram         float64
 	disk        float64
-	cmd         []string
 }
 
-func addTopLevelFlags(f *pflag.FlagSet, v *flagVals) {
+func newFlags(v *flagVals) *pflag.FlagSet {
+	f := pflag.NewFlagSet("", pflag.ContinueOnError)
+
 	// These flags are separate because they are not allowed
 	// in scattered tasks.
 	//
@@ -56,12 +79,12 @@ func addTopLevelFlags(f *pflag.FlagSet, v *flagVals) {
 	f.StringSliceVarP(&v.extra, "extra", "x", v.extra, "")
 	f.StringSliceVarP(&v.extraFiles, "extra-file", "X", v.extraFiles, "")
 	f.StringSliceVar(&v.scatterFiles, "scatter", v.scatterFiles, "")
+	f.StringSliceVar(&v.cmds, "cmd", v.cmds, "")
 
-	// Add per-task flags.
-	addTaskFlags(f, v)
-}
+	// Disable sorting in order to visit flags in primordial order below.
+	// See buildExecs()
+	f.SortFlags = false
 
-func addTaskFlags(f *pflag.FlagSet, v *flagVals) {
 	// General
 	f.StringVarP(&v.container, "container", "c", v.container, "")
 	f.StringVarP(&v.workdir, "workdir", "w", v.workdir, "")
@@ -71,9 +94,9 @@ func addTaskFlags(f *pflag.FlagSet, v *flagVals) {
 	f.StringSliceVarP(&v.inputDirs, "in-dir", "I", v.inputDirs, "")
 	f.StringSliceVarP(&v.outputs, "out", "o", v.outputs, "")
 	f.StringSliceVarP(&v.outputDirs, "out-dir", "O", v.outputDirs, "")
-	f.StringVar(&v.stdin, "stdin", v.stdin, "")
-	f.StringVar(&v.stdout, "stdout", v.stdout, "")
-	f.StringVar(&v.stderr, "stderr", v.stderr, "")
+	f.StringSliceVar(&v.stdin, "stdin", v.stdin, "")
+	f.StringSliceVar(&v.stdout, "stdout", v.stdout, "")
+	f.StringSliceVar(&v.stderr, "stderr", v.stderr, "")
 	f.StringSliceVarP(&v.contents, "contents", "C", v.contents, "")
 
 	// Resoures
@@ -95,6 +118,7 @@ func addTaskFlags(f *pflag.FlagSet, v *flagVals) {
 	//f.StringVar(&cmdFile, "cmd-file", cmdFile, "Read cmd template from file")
 	f.BoolVar(&v.wait, "wait", v.wait, "")
 	f.StringSliceVar(&v.waitFor, "wait-for", v.waitFor, "")
+	return f
 }
 
 // Set default flagVals
@@ -109,10 +133,107 @@ func defaultVals(vals *flagVals) {
 
 	// Default name
 	if vals.name == "" {
-		vals.name = "Funnel run: " + strings.Join(vals.cmd, " ")
+		vals.name = "Funnel run: " + vals.cmds[0]
 	}
 
 	if vals.server == "" {
 		vals.server = "http://localhost:8000"
 	}
+}
+
+func parseTopLevelArgs(vals *flagVals, args []string) error {
+	args = loadExtras(args)
+	flags := newFlags(vals)
+	err := flags.Parse(args)
+
+	if err != nil {
+		return err
+	}
+
+	if len(flags.Args()) > 1 {
+		return fmt.Errorf("--in, --out and --env args should have the form 'KEY=VALUE' not 'KEY VALUE'. Extra args: %s", flags.Args()[1:])
+	}
+
+	// Prepend command string given as positional argument to the args.
+	// Prepend it as a flag so that it works better with parseTaskArgs().
+	if len(flags.Args()) == 1 {
+		cmd := flags.Args()[0]
+		args = append([]string{"--cmd", cmd}, args...)
+	}
+
+	if len(vals.cmds) == 0 {
+		return fmt.Errorf("you must specify a command to run")
+	}
+
+	// Fill in empty values with defaults.
+	defaultVals(vals)
+	parseTaskArgs(vals, args)
+
+	return nil
+}
+
+func parseTaskArgs(vals *flagVals, args []string) {
+	fl := newFlags(vals)
+	fl.Parse(args)
+	buildExecs(fl, vals, args)
+}
+
+// Visit flags to determine commands + stdin/out/err
+// and build that information into vals.execs
+func buildExecs(flags *pflag.FlagSet, vals *flagVals, args []string) {
+	vals.execs = nil
+	vals.cmds = nil
+	var exec *executor
+	flags.ParseAll(args, func(f *pflag.Flag, value string) error {
+		switch f.Name {
+		case "cmd":
+			if exec != nil {
+				// Append the current executor and start a new one.
+				vals.execs = append(vals.execs, *exec)
+			}
+			exec = &executor{
+				cmd: value,
+			}
+		case "stdout":
+			exec.stdout = value
+		case "stderr":
+			exec.stderr = value
+		case "stdin":
+			exec.stdin = value
+		}
+		return nil
+	})
+	if exec != nil {
+		vals.execs = append(vals.execs, *exec)
+	}
+}
+
+// Load extra arguments from "--extra", "--extra-file", and stdin
+func loadExtras(args []string) []string {
+	vals := &flagVals{}
+	flags := newFlags(vals)
+	flags.Parse(args)
+
+	// Load CLI arguments from files, which allows reusing common CLI args.
+	for _, xf := range vals.extraFiles {
+		b, _ := ioutil.ReadFile(xf)
+		vals.extra = append(vals.extra, string(b))
+	}
+
+	// Load CLI arguments from stdin, which allows bash heredoc for easily
+	// spreading args over multiple lines.
+	stat, _ := os.Stdin.Stat()
+	if (stat.Mode() & os.ModeCharDevice) == 0 {
+		b, _ := ioutil.ReadAll(os.Stdin)
+		if len(b) > 0 {
+			vals.extra = append(vals.extra, string(b))
+		}
+	}
+
+	// Load and parse all "extra" CLI arguments.
+	for _, ex := range vals.extra {
+		sp, _ := shellquote.Split(ex)
+		args = append(args, sp...)
+	}
+	return args
 }
