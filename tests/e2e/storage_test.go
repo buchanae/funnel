@@ -44,8 +44,9 @@ func TestLocalFilesystemHardLink(t *testing.T) {
 	if !ok {
 		panic("can't retrieve Stat_t")
 	}
+	log.Debug("NLINK", s.Nlink)
 	if uint16(s.Nlink) != uint16(2) {
-		t.Fatal("expected to links")
+		t.Fatal("expected two links")
 	}
 }
 

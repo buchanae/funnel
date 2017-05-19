@@ -6,6 +6,8 @@ import (
 	"syscall"
 )
 
+const DefaultMode = os.ModePerm
+
 // exists returns whether the given file or directory exists or not
 func exists(p string) (bool, error) {
 	_, err := os.Stat(p)
@@ -19,15 +21,14 @@ func exists(p string) (bool, error) {
 }
 
 // EnsureDir ensures a directory exists.
-func EnsureDir(p string) error {
+func EnsureDir(p string, mode os.FileMode) error {
 	e, err := exists(p)
 	if err != nil {
 		return err
 	}
 	if !e {
-		// TODO configurable mode?
-		_ = syscall.Umask(0000)
-		err := os.MkdirAll(p, 0777)
+		syscall.Umask(0000)
+		err := os.MkdirAll(p, mode)
 		if err != nil {
 			return err
 		}
@@ -39,5 +40,5 @@ func EnsureDir(p string) error {
 // TODO probably just remove this
 func EnsurePath(p string) error {
 	dir := path.Dir(p)
-	return EnsureDir(dir)
+	return EnsureDir(dir, DefaultMode)
 }

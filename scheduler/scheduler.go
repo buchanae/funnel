@@ -25,7 +25,7 @@ type Database interface {
 func NewScheduler(db Database, conf config.Config) (*Scheduler, error) {
 	backends := map[string]*BackendPlugin{}
 
-	err := util.EnsureDir(conf.WorkDir)
+	err := util.EnsureDir(conf.WorkDir, util.DefaultMode)
 	if err != nil {
 		return nil, err
 	}

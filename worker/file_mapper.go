@@ -183,7 +183,7 @@ func (mapper *FileMapper) AddTmpVolume(mountPoint string) error {
 		return err
 	}
 
-	err = util.EnsureDir(hostPath)
+	err = util.EnsureDir(hostPath, util.DefaultMode)
 	if err != nil {
 		return err
 	}
@@ -251,7 +251,7 @@ func (mapper *FileMapper) AddOutput(output *tes.TaskParameter) error {
 		mountDir = path.Dir(output.Path)
 	}
 
-	err = util.EnsureDir(hostDir)
+	err = util.EnsureDir(hostDir, util.DefaultMode)
 	if err != nil {
 		return err
 	}

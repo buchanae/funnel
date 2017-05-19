@@ -207,7 +207,7 @@ func (r *taskRunner) prepareDir() error {
 	if err != nil {
 		return err
 	}
-	return util.EnsureDir(dir)
+	return util.EnsureDir(dir, util.DefaultMode|os.ModeSetgid)
 }
 
 // Prepare file mapper, which maps task file URLs to host filesystem paths
