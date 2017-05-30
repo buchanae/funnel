@@ -182,6 +182,7 @@ func (taskBolt *TaskBolt) CreateTask(ctx context.Context, task *tes.Task) (*tes.
 		return nil, err
 	}
 	a := <-ch
+	log.Info("Task created", "taskID", a.Id)
 	return a, err
 }
 

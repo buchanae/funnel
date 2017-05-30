@@ -100,9 +100,6 @@ func NewFunnel() *Funnel {
 		},
 	)
 
-	go server.Run(conf)
-	time.Sleep(time.Second)
-
 	conn, err := grpc.Dial(conf.RPCAddress(), grpc.WithInsecure())
 	if err != nil {
 		panic(err)
@@ -123,6 +120,11 @@ func NewFunnel() *Funnel {
 		startTime:  fmt.Sprintf("%d", time.Now().Unix()),
 		rate:       rate,
 	}
+}
+
+func (f *Funnel) StartServer() {
+	go server.Run(f.Conf)
+	time.Sleep(time.Second)
 }
 
 // wait for a "destroy" event from docker for the given container ID

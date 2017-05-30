@@ -1,5 +1,0 @@
-package perf
-
-import (
-	"testing"
-)

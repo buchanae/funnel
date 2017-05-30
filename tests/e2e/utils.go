@@ -7,3 +7,7 @@ import (
 
 var log = logger.New("e2e")
 var fun = testutils.NewFunnel()
+
+func init() {
+	fun.StartServer()
+}
