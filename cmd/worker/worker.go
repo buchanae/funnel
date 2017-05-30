@@ -1,7 +1,6 @@
 package worker
 
 import (
-	"github.com/imdario/mergo"
 	"github.com/ohsu-comp-bio/funnel/config"
 	"github.com/ohsu-comp-bio/funnel/logger/logutils"
 	"github.com/ohsu-comp-bio/funnel/scheduler"
@@ -9,40 +8,48 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var configFile string
-var flagConf = config.Config{}
-
 // Cmd represents the worker command
 var Cmd = &cobra.Command{
-	Use:     "worker",
-	Aliases: []string{"workers"},
-	Short:   "Starts a Funnel worker.",
+	Use:                "worker",
+	Aliases:            []string{"workers"},
+	Short:              "Starts a Funnel worker.",
+	DisableFlagParsing: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		conf := config.DefaultConfig()
-		config.ParseFile(configFile, &conf)
 
-		workerDconf := config.WorkerInheritConfigVals(flagConf)
+		var configFile string
+		c := config.DefaultConfig()
 
-		// file vals <- cli val
-		err := mergo.MergeWithOverwrite(&conf.Worker, workerDconf)
-		if err != nil {
+		f := cmd.Flags()
+		f.StringVarP(&configFile, "config", "c", "", "Config File")
+		f.StringVar(&c.Worker.ID, "id", c.Worker.ID, "Worker ID")
+		f.DurationVar(&c.Worker.Timeout, "timeout", c.Worker.Timeout, "Timeout in seconds")
+		f.StringVar(&c.HostName, "hostname", c.HostName, "Host name or IP")
+		f.StringVar(&c.RPCPort, "rpc-port", c.RPCPort, "RPC Port")
+		f.StringVar(&c.WorkDir, "work-dir", c.WorkDir, "Working Directory")
+		f.StringVar(&c.LogLevel, "log-level", c.LogLevel, "Level of logging")
+		f.StringVar(&c.LogPath, "log-path", c.LogPath, "File path to write logs to")
+
+		// Parse flags only to get config file.
+		if err := f.Parse(args); err != nil {
 			return err
 		}
 
-		return Run(conf)
+		// Load the config file.
+		config.ParseFile(configFile, &c)
+
+		// Parse flags again to overwrite default config values.
+		if err := f.Parse(args); err != nil {
+			return err
+		}
+
+		// The worker config inherits a few parts of the root config.
+		c = config.WorkerInheritConfigVals(c)
+
+		return Run(c)
 	},
 }
 
 func init() {
-	flags := Cmd.Flags()
-	flags.StringVar(&flagConf.Worker.ID, "id", flagConf.Worker.ID, "Worker ID")
-	flags.DurationVar(&flagConf.Worker.Timeout, "timeout", flagConf.Worker.Timeout, "Timeout in seconds")
-	flags.StringVarP(&configFile, "config", "c", "", "Config File")
-	flags.StringVar(&flagConf.HostName, "hostname", flagConf.HostName, "Host name or IP")
-	flags.StringVar(&flagConf.RPCPort, "rpc-port", flagConf.RPCPort, "RPC Port")
-	flags.StringVar(&flagConf.WorkDir, "work-dir", flagConf.WorkDir, "Working Directory")
-	flags.StringVar(&flagConf.LogLevel, "log-level", flagConf.LogLevel, "Level of logging")
-	flags.StringVar(&flagConf.LogPath, "log-path", flagConf.LogLevel, "File path to write logs to")
 }
 
 // Run runs a worker with the given config, blocking until the worker exits.

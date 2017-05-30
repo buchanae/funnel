@@ -2,7 +2,7 @@ package server
 
 import (
 	"context"
-	"github.com/imdario/mergo"
+
 	"github.com/ohsu-comp-bio/funnel/config"
 	"github.com/ohsu-comp-bio/funnel/logger"
 	"github.com/ohsu-comp-bio/funnel/logger/logutils"
@@ -17,43 +17,45 @@ import (
 )
 
 var log = logger.New("server cmd")
-var configFile string
-var flagConf = config.Config{}
 
 // Cmd represents the `funnel server` CLI command set.
 var Cmd = &cobra.Command{
-	Use:   "server",
-	Short: "Starts a Funnel server.",
-	Long:  ``,
+	Use:                "server",
+	Short:              "Starts a Funnel server.",
+	DisableFlagParsing: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		var err error
-		var conf = config.DefaultConfig()
-		config.ParseFile(configFile, &conf)
 
-		// file vals <- cli val
-		err = mergo.MergeWithOverwrite(&conf, flagConf)
-		if err != nil {
+		var configFile string
+		c := config.DefaultConfig()
+
+		f := cmd.Flags()
+		f.StringVarP(&configFile, "config", "c", "", "Config File")
+		f.StringVar(&c.HostName, "hostname", c.HostName, "Host name or IP")
+		f.StringVar(&c.RPCPort, "rpc-port", c.RPCPort, "RPC Port")
+		f.StringVar(&c.WorkDir, "work-dir", c.WorkDir, "Working Directory")
+		f.StringVar(&c.LogLevel, "log-level", c.LogLevel, "Level of logging")
+		f.StringVar(&c.LogPath, "log-path", c.LogPath, "File path to write logs to")
+		f.StringVar(&c.HTTPPort, "http-port", c.HTTPPort, "HTTP Port")
+		f.StringVar(&c.DBPath, "db-path", c.DBPath, "Database path")
+		f.StringVar(&c.Scheduler, "scheduler", c.Scheduler, "Name of scheduler to enable")
+
+		// Parse flags only to get config file.
+		if err := f.Parse(args); err != nil {
 			return err
 		}
 
-		// make sure the proper defaults are set
-		conf.Worker = config.WorkerInheritConfigVals(conf)
+		// Load the config file.
+		config.ParseFile(configFile, &c)
 
-		return Run(conf)
+		// Parse flags again to overwrite default config values.
+		if err := f.Parse(args); err != nil {
+			return err
+		}
+
+		// The worker config inherits a few parts of the root config.
+		c = config.WorkerInheritConfigVals(c)
+		return Run(c)
 	},
-}
-
-func init() {
-	flags := Cmd.Flags()
-	flags.StringVarP(&configFile, "config", "c", "", "Config File")
-	flags.StringVar(&flagConf.HostName, "hostname", flagConf.HostName, "Host name or IP")
-	flags.StringVar(&flagConf.RPCPort, "rpc-port", flagConf.RPCPort, "RPC Port")
-	flags.StringVar(&flagConf.WorkDir, "work-dir", flagConf.WorkDir, "Working Directory")
-	flags.StringVar(&flagConf.LogLevel, "log-level", flagConf.LogLevel, "Level of logging")
-	flags.StringVar(&flagConf.LogPath, "log-path", flagConf.LogLevel, "File path to write logs to")
-	flags.StringVar(&flagConf.HTTPPort, "http-port", flagConf.HTTPPort, "HTTP Port")
-	flags.StringVar(&flagConf.DBPath, "db-path", flagConf.DBPath, "Database path")
-	flags.StringVar(&flagConf.Scheduler, "scheduler", flagConf.Scheduler, "Name of scheduler to enable")
 }
 
 // Run runs a default Funnel server.
@@ -63,7 +65,7 @@ func Run(conf config.Config) error {
 	logutils.Configure(conf)
 
 	// make sure the proper defaults are set
-	conf.Worker = config.WorkerInheritConfigVals(conf)
+	conf = config.WorkerInheritConfigVals(conf)
 
 	db, err := server.NewTaskBolt(conf)
 	if err != nil {

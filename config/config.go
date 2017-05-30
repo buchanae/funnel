@@ -91,7 +91,6 @@ func DefaultConfig() Config {
 			UpdateRate:    time.Second * 5,
 			LogUpdateRate: time.Second * 5,
 			LogTailSize:   10000,
-			LogLevel:      "debug",
 			Resources: Resources{
 				DiskGb: 100.0,
 			},
@@ -133,7 +132,6 @@ type Worker struct {
 	LogTailSize   int64
 	Storage       []*StorageConfig
 	LogPath       string
-	LogLevel      string
 	TimestampLogs bool
 	Resources     Resources
 	// Timeout duration for UpdateWorker() and UpdateTaskLogs() RPC calls
@@ -142,15 +140,14 @@ type Worker struct {
 }
 
 // WorkerInheritConfigVals is a utility to help ensure the Worker inherits the proper config values from the parent Config
-func WorkerInheritConfigVals(c Config) Worker {
+func WorkerInheritConfigVals(c Config) Config {
 	if (c.HostName != "") && (c.RPCPort != "") {
 		c.Worker.ServerAddress = c.HostName + ":" + c.RPCPort
 	}
 	c.Worker.Storage = c.Storage
 	c.Worker.WorkDir = c.WorkDir
-	c.Worker.LogLevel = c.LogLevel
 	c.Worker.TimestampLogs = c.TimestampLogs
-	return c.Worker
+	return c
 }
 
 // StorageConfig describes configuration for all storage types
