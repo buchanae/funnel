@@ -23,6 +23,9 @@ func NewDockerClient() (*client.Client, error) {
 		if err != nil {
 			re := regexp.MustCompile(`([0-9\.]+)`)
 			version := re.FindAllString(err.Error(), -1)
+			if version == nil {
+				return nil, err
+			}
 			// Error message example:
 			//   Error getting metadata for container: Error response from daemon: client is newer than server (client API version: 1.26, server API version: 1.24)
 			os.Setenv("DOCKER_API_VERSION", version[1])
