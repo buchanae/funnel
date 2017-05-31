@@ -63,7 +63,7 @@ var Cmd = &cobra.Command{
 // This opens a database, and starts an API server and scheduler.
 // This blocks indefinitely.
 func Run(conf config.Config) error {
-  conf.LogLevel = "debug"
+	conf.LogLevel = "debug"
 	logutils.Configure(conf)
 
 	// make sure the proper defaults are set
@@ -74,13 +74,13 @@ func Run(conf config.Config) error {
 		log.Error("Couldn't open database", err)
 		return err
 	}
-  /*
-	db, err := server.NewTaskBolt(conf)
-	if err != nil {
-		log.Error("Couldn't open database", err)
-		return err
-	}
-  */
+	/*
+		db, err := server.NewTaskBolt(conf)
+		if err != nil {
+			log.Error("Couldn't open database", err)
+			return err
+		}
+	*/
 
 	srv := server.DefaultServer(db, conf)
 
