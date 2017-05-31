@@ -74,6 +74,13 @@ func Run(conf config.Config) error {
 		log.Error("Couldn't open database", err)
 		return err
 	}
+  /*
+	db, err := server.NewTaskBolt(conf)
+	if err != nil {
+		log.Error("Couldn't open database", err)
+		return err
+	}
+  */
 
 	srv := server.DefaultServer(db, conf)
 

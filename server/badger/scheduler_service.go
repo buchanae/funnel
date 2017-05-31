@@ -39,6 +39,7 @@ func (tb *TaskBadger) UpdateWorker(ctx context.Context, req *pbf.Worker) (*pbf.U
 }
 
 func (tb *TaskBadger) updateWorker(req *pbf.Worker) error {
+  log.Debug("updateworker", req)
 	worker, _ := tb.getWorker(req.Id)
 
 	if worker.Version != 0 && req.Version != 0 && worker.Version != req.Version {
@@ -106,7 +107,13 @@ func (tb *TaskBadger) AssignTask(t *tes.Task, w *pbf.Worker) {
   //      when a task is assigned, its state is immediately Initializing
   //      even before the worker has received it.
   tb.transitionTaskState(t.Id, tes.State_INITIALIZING)
+  t.State = tes.State_INITIALIZING
+  if w.Tasks == nil {
+    w.Tasks = map[string]*pbf.TaskWrapper{}
+  }
   w.Tasks[t.Id] = &pbf.TaskWrapper{Task: t}
+  log.Debug("ASSIGN", w)
+  tb.putWorker(w)
   tb.updateWorker(w)
 }
 
@@ -172,6 +179,10 @@ func (tb *TaskBadger) ListWorkers(ctx context.Context, req *pbf.ListWorkersReque
     val := item.Value()
     var worker pbf.Worker
     proto.Unmarshal(val, &worker)
+    // TODO hack hack hack
+    if worker.Tasks == nil {
+      worker.Tasks = map[string]*pbf.TaskWrapper{}
+    }
     workers = append(workers, &worker)
   }
 
@@ -282,10 +293,17 @@ func (tb *TaskBadger) getWorker(id string) (*pbf.Worker, error) {
   var worker pbf.Worker
 	proto.Unmarshal(data, &worker)
 
+  // TODO hackity hack
+  worker.Id = id
+  if worker.Tasks == nil {
+    worker.Tasks = map[string]*pbf.TaskWrapper{}
+  }
+
 	return &worker, nil
 }
 
 func (tb *TaskBadger) putWorker(worker *pbf.Worker) {
+  log.Debug("putWorker", worker)
 	data, _ := proto.Marshal(worker)
   key := workerKey(worker.Id)
   tb.db.Set(key, data)
