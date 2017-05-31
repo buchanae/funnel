@@ -13,6 +13,7 @@ import (
 	"github.com/ohsu-comp-bio/funnel/scheduler/manual"
 	"github.com/ohsu-comp-bio/funnel/scheduler/openstack"
 	"github.com/ohsu-comp-bio/funnel/server"
+	"github.com/ohsu-comp-bio/funnel/server/badger"
 	"github.com/spf13/cobra"
 )
 
@@ -62,12 +63,13 @@ var Cmd = &cobra.Command{
 // This opens a database, and starts an API server and scheduler.
 // This blocks indefinitely.
 func Run(conf config.Config) error {
+  conf.LogLevel = "debug"
 	logutils.Configure(conf)
 
 	// make sure the proper defaults are set
 	conf = config.WorkerInheritConfigVals(conf)
 
-	db, err := server.NewTaskBolt(conf)
+	db, err := badger.NewTaskBadger(conf)
 	if err != nil {
 		log.Error("Couldn't open database", err)
 		return err
