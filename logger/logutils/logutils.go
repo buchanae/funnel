@@ -1,10 +1,40 @@
 package logutils
 
 import (
+	"fmt"
 	"github.com/ohsu-comp-bio/funnel/config"
 	"github.com/ohsu-comp-bio/funnel/logger"
+	"google.golang.org/grpc/grpclog"
 	"os"
 )
+
+// Wrap our logger to fit the grpc logger interface
+type grpclogger struct {
+}
+
+func (g *grpclogger) Fatal(args ...interface{}) {
+	logger.Error("grpc", "msg", fmt.Sprint(args))
+}
+func (g *grpclogger) Fatalf(format string, args ...interface{}) {
+	logger.Error("grpc", "msg", fmt.Sprint(args))
+}
+func (g *grpclogger) Fatalln(args ...interface{}) {
+	logger.Error("grpc", "msg", fmt.Sprint(args))
+}
+func (g *grpclogger) Print(args ...interface{}) {
+	logger.Info("grpc", "msg", fmt.Sprint(args))
+}
+func (g *grpclogger) Printf(format string, args ...interface{}) {
+	logger.Info("grpc", "msg", fmt.Sprint(args))
+}
+func (g *grpclogger) Println(args ...interface{}) {
+	logger.Info("grpc", "msg", fmt.Sprint(args))
+}
+
+func init() {
+	// grpclog says to only call this from init(), so here we are
+	grpclog.SetLogger(&grpclogger{})
+}
 
 // Configure configures the logging level and output path.
 func Configure(conf config.Config) {
