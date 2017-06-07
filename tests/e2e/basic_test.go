@@ -1,10 +1,20 @@
 package e2e
 
 import (
+	"github.com/ohsu-comp-bio/funnel/logger"
 	"github.com/ohsu-comp-bio/funnel/proto/tes"
+	"os"
 	"testing"
 	"time"
 )
+
+func TestMain(m *testing.M) {
+	logger.ForceColors()
+	log.Debug("STARTGIN")
+	fun.StartServer()
+	e := m.Run()
+	os.Exit(e)
+}
 
 func TestHelloWorld(t *testing.T) {
 	id := fun.Run(`
