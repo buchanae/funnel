@@ -6,8 +6,6 @@ import (
 	pscpu "github.com/shirou/gopsutil/cpu"
 	psmem "github.com/shirou/gopsutil/mem"
 	"net"
-	"os/exec"
-	"syscall"
 )
 
 func externalIP() (string, error) {
@@ -48,23 +46,6 @@ func externalIP() (string, error) {
 		}
 	}
 	return "", nil
-}
-
-// getExitCode gets the exit status (i.e. exit code) from the result of an executed command.
-// The exit code is zero if the command completed without error.
-func getExitCode(err error) int {
-	if err != nil {
-		if exiterr, exitOk := err.(*exec.ExitError); exitOk {
-			if status, statusOk := exiterr.Sys().(syscall.WaitStatus); statusOk {
-				return status.ExitStatus()
-			}
-		} else {
-			log.Info("Could not determine exit code. Using default -999")
-			return -999
-		}
-	}
-	// The error is nil, the command returned successfully, so exit status is 0.
-	return 0
 }
 
 // detectResources helps determine the amount of resources to report.

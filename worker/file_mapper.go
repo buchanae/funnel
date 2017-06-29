@@ -31,9 +31,7 @@ type FileMapper struct {
 // and a ContainerPath, the path on the container file system,
 // and whether the volume is read-only.
 type Volume struct {
-	// The path in tes worker.
 	HostPath string
-	// The path in Docker.
 	ContainerPath string
 	Readonly      bool
 }

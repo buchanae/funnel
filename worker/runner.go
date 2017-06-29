@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/ohsu-comp-bio/funnel/config"
 	"github.com/ohsu-comp-bio/funnel/logger"
+	"github.com/ohsu-comp-bio/funnel/docker"
 	pbf "github.com/ohsu-comp-bio/funnel/proto/funnel"
 	"github.com/ohsu-comp-bio/funnel/proto/tes"
 	"github.com/ohsu-comp-bio/funnel/storage"
@@ -30,6 +31,7 @@ func runTask(ctrl TaskControl, conf config.Worker, t *pbf.TaskWrapper) {
 		mapper:  NewFileMapper(baseDir),
 		store:   storage.Storage{},
 		conf:    conf,
+    newExecutor: ExecutorFactory,
 		taskLogger: &RPCTask{
 			client: client,
 			taskID: t.Task.Id,
@@ -89,14 +91,8 @@ func (r *taskRunner) Run() {
 	for i, d := range task.Executors {
 		stepName := fmt.Sprintf("step-%d", i)
 		r.step(stepName, func() error {
-			s := &stepRunner{
-				TaskID:     task.Id,
-				Conf:       r.conf,
-				Num:        i,
-				Log:        r.log.WithFields("step", i),
-				TaskLogger: r.taskLogger,
-				IP:         r.ip,
-				Cmd: &DockerCmd{
+
+      exec, exerr := r.newExecutor(ExecConfig{
 					ImageName:     d.ImageName,
 					Cmd:           d.Cmd,
 					Environ:       d.Environ,
@@ -106,7 +102,16 @@ func (r *taskRunner) Run() {
 					ContainerName: fmt.Sprintf("%s-%d", task.Id, i),
 					// TODO make RemoveContainer configurable
 					RemoveContainer: true,
-				},
+      })
+
+			s := &stepRunner{
+				TaskID:     task.Id,
+				Conf:       r.conf,
+				Num:        i,
+				Log:        r.log.WithFields("step", i),
+				TaskLogger: r.taskLogger,
+				IP:         r.ip,
+        Exec:       exec,
 			}
 
 			// Opens stdin/out/err files and updates those fields on "cmd".

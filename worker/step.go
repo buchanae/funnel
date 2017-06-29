@@ -12,7 +12,7 @@ type stepRunner struct {
 	TaskID     string
 	Conf       config.Worker
 	Num        int
-	Cmd        *DockerCmd
+  Exec       ExecutorBackend
 	Log        logger.Logger
 	TaskLogger TaskLogger
 	IP         string
@@ -30,9 +30,9 @@ func (s *stepRunner) Run(ctx context.Context) error {
 	subctx, cleanup := context.WithCancel(ctx)
 	defer cleanup()
 
-	// tailLogs modifies the cmd Stdout/err fields, so should be called before Run.
-	done := make(chan error, 1)
+	done := make(chan int64, 1)
 
+	// tailLogs modifies the cmd Stdout/err fields, so should be called before Run.
 	stdout, stderr := s.logTails()
 	defer stdout.Flush()
 	defer stderr.Flush()
@@ -41,7 +41,11 @@ func (s *stepRunner) Run(ctx context.Context) error {
 	defer ticker.Stop()
 
 	go func() {
-		done <- s.Cmd.Run()
+    code, err := s.Exec.Run(ctx)
+    if err != nil {
+      code = int64(-999)
+    }
+		done <- code
 	}()
 	go s.inspectContainer(subctx)
 
@@ -49,7 +53,7 @@ func (s *stepRunner) Run(ctx context.Context) error {
 		select {
 		case <-ctx.Done():
 			// Likely the task was canceled.
-			s.Cmd.Stop()
+			s.Exec.Stop(ctx)
 			s.TaskLogger.ExecutorEndTime(s.Num, time.Now())
 			return ctx.Err()
 
@@ -57,9 +61,9 @@ func (s *stepRunner) Run(ctx context.Context) error {
 			stdout.Flush()
 			stderr.Flush()
 
-		case result := <-done:
+		case exitCode := <-done:
 			s.TaskLogger.ExecutorEndTime(s.Num, time.Now())
-			s.TaskLogger.ExecutorExitCode(s.Num, getExitCode(result))
+			s.TaskLogger.ExecutorExitCode(s.Num, exitCode)
 			return result
 		}
 	}
@@ -83,7 +87,7 @@ func (s *stepRunner) logTails() (*tailer, *tailer) {
 
 // inspectContainer calls Inspect on the DockerCmd, and sends an update with the results.
 func (s *stepRunner) inspectContainer(ctx context.Context) {
-	ports, err := s.Cmd.Inspect(ctx)
+	ports, err := s.Exec.Inspect(ctx)
 	if err != nil {
 		s.Log.Error("Error inspecting container", err)
 		return
