@@ -17,6 +17,8 @@ type Wrapper interface {
 	InsertInstance(project, zone string, instance *compute.Instance) (*compute.Operation, error)
 	ListMachineTypes(project, zone string) (*compute.MachineTypeList, error)
 	ListInstanceTemplates(project string) (*compute.InstanceTemplateList, error)
+  GetMachineType(project, zone, machineType string) (*compute.MachineType, error)
+  GetInstanceTemplate(project, zone, template string) (*compute.InstanceTemplate, error)
 }
 
 func newWrapper(ctx context.Context, conf config.Config) (Wrapper, error) {

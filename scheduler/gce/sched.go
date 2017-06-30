@@ -2,6 +2,7 @@ package gce
 
 // TODO
 // - resource tracking via GCP APIs
+//   - check project/region quotas
 // - provisioning limits, e.g. don't create more than 100 VMs, or
 //   maybe use N VCPUs max, across all VMs
 // - act on failed machines?
@@ -27,7 +28,9 @@ var Plugin = &scheduler.BackendPlugin{
 
 // NewBackend returns a new Google Cloud Engine Backend instance.
 func NewBackend(conf config.Config) (scheduler.Backend, error) {
-	// TODO need GCE scheduler config validation. If zone is missing, nothing works.
+  if conf.Zone == "" || conf.Project == "" {
+    return nil, fmt.Error("invalid GCE config: missing zone or project")
+  }
 
 	// Create a client for talking to the funnel scheduler
 	client, err := scheduler.NewClient(conf.Worker)
@@ -37,92 +40,43 @@ func NewBackend(conf config.Config) (scheduler.Backend, error) {
 	}
 
 	// Create a client for talking to the GCE API
-	gce, gerr := newClientFromConfig(conf)
+	gce, gerr := newCachingClientFromConfig(conf)
 	if gerr != nil {
 		log.Error("Can't connect GCE client", gerr)
 		return nil, gerr
 	}
 
-	s := &Backend{
-		conf:   conf,
-		client: client,
+  return &Backend{
 		gce:    gce,
-	}
-
-	return scheduler.Backend(s), nil
+    workers: &workers{
+      project: conf.Backends.GCE.Project,
+      zone: conf.Backends.GCE.Zone,
+      sched: sched,
+      client: gce,
+      disableDefaults: conf.Backends.GCE.DisableDefaultTemplates,
+    },
+    project: conf.Backends.GCE.Project,
+    zone: conf.Backends.GCE.Zone,
+    serverAddress: conf.RPCAddress(),
+	}, nil
 }
 
 // Backend represents the GCE backend, which provides
 // and interface for both scheduling and scaling.
 type Backend struct {
-	conf   config.Config
-	client scheduler.Client
 	gce    Client
+  workers Workers
+  project string
+  zone string
+  serverAddress string
 }
 
 // Schedule schedules a task on a Google Cloud VM worker instance.
-func (s *Backend) Schedule(j *tes.Task) *scheduler.Offer {
+func (s *Backend) Schedule(task *tes.Task) *scheduler.Offer {
 	log.Debug("Running GCE scheduler")
-
-	offers := []*scheduler.Offer{}
-	predicates := append(scheduler.DefaultPredicates, scheduler.WorkerHasTag("gce"))
-
-	for _, w := range s.getWorkers() {
-		// Filter out workers that don't match the task request.
-		// Checks CPU, RAM, disk space, ports, etc.
-		if !scheduler.Match(w, j, predicates) {
-			continue
-		}
-
-		sc := scheduler.DefaultScores(w, j)
-		/*
-			    TODO?
-			    if w.State == pbf.WorkerState_Alive {
-					  sc["startup time"] = 1.0
-			    }
-		*/
-		weights := map[string]float32{}
-		sc = sc.Weighted(weights)
-
-		offer := scheduler.NewOffer(w, j, sc)
-		offers = append(offers, offer)
-	}
-
-	// No matching workers were found.
-	if len(offers) == 0 {
-		return nil
-	}
-
-	scheduler.SortByAverageScore(offers)
-	return offers[0]
-}
-
-// getWorkers returns a list of all GCE workers and appends a set of
-// uninitialized workers, which the scheduler can use to create new worker VMs.
-func (s *Backend) getWorkers() []*pbf.Worker {
-
-	// Get the workers from the funnel server
-	workers := []*pbf.Worker{}
-	req := &pbf.ListWorkersRequest{}
-	resp, err := s.client.ListWorkers(context.Background(), req)
-
-	// If there's an error, return an empty list
-	if err != nil {
-		log.Error("Failed ListWorkers request. Recovering.", err)
-		return workers
-	}
-
-	workers = resp.Workers
-
-	// Include unprovisioned (template) workers.
-	// This is how the scheduler can schedule tasks to workers that
-	// haven't been started yet.
-	for _, t := range s.gce.Templates() {
-		t.Id = scheduler.GenWorkerID("funnel")
-		workers = append(workers, &t)
-	}
-
-	return workers
+  workers := s.workers.List(task)
+  weights := map[string]float32{}
+  return scheduler.DefaultScheduleAlgorithm(task, workers, weights)
 }
 
 // ShouldStartWorker tells the scaler loop which workers
@@ -134,13 +88,61 @@ func (s *Backend) ShouldStartWorker(w *pbf.Worker) bool {
 }
 
 // StartWorker calls out to GCE APIs to start a new worker instance.
-func (s *Backend) StartWorker(w *pbf.Worker) error {
+func (s *Backend) StartWorker(worker *pbf.Worker) error {
 
 	// Get the template ID from the worker metadata
-	template, ok := w.Metadata["gce-template"]
-	if !ok || template == "" {
+	tplID, ok := worker.Metadata["gce-template"]
+	if !ok || tplID == "" {
 		return fmt.Errorf("Could not get GCE template ID from metadata")
 	}
 
-	return s.gce.StartWorker(template, s.conf.RPCAddress(), w.Id)
+	// Get the instance template from the GCE API
+  tpl, ok := s.gce.Template(tplID)
+	if !ok {
+		return fmt.Errorf("Instance template not found: %s", tplName)
+	}
+
+	// Add GCE instance metadata
+  serverAddress := s.serverAddress
+	props := tpl.Properties
+
+	// Create the instance on GCE
+  instance := &compute.Instance{
+		Name:              worker.Id,
+		CanIpForward:      props.CanIpForward,
+		Description:       props.Description,
+		Disks:             props.Disks,
+		MachineType:       props.MachineType,
+		NetworkInterfaces: props.NetworkInterfaces,
+		Scheduling:        props.Scheduling,
+		ServiceAccounts:   props.ServiceAccounts,
+		Tags:              props.Tags,
+		Metadata:          &compute.Metadata{
+      Items: append(props.Metadata.Items, &compute.MetadataItems{
+        Key:   "funnel-worker-serveraddress",
+        Value: &serverAddress,
+      }),
+    },
+	}
+
+  // Localize values to the zone
+  instance.MachineType = localize(s.zone, "machineTypes", instance.MachineType)
+	for _, disk := range instance.Disks {
+		dt := localize(s.zone, "diskTypes", disk.InitializeParams.DiskType)
+		disk.InitializeParams.DiskType = dt
+	}
+
+	op, ierr := s.gce.InsertInstance(s.project, s.zone, instance)
+	if ierr != nil {
+		log.Error("Couldn't insert GCE VM instance", ierr)
+		return ierr
+	}
+
+	log.Debug("GCE VM instance created", "details", op)
+  return nil
+}
+
+// localize helps make a resource string zone-specific
+func localize(zone, resourceType, val string) string {
+	return fmt.Sprintf("zones/%s/%s/%s", zone, resourceType, val)
 }
