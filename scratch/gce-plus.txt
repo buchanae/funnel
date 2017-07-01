@@ -1,0 +1,146 @@
+scalability
+
+- server in managed instance group
+  - http load balancer + health check
+  - app engine would help make this easy and cheap
+
+- where are task assignments stored?
+  - Datastore
+  - pub/sub
+    - pub/sub -> trigger autoscaler?
+    - benefit: global, reliable
+  - with worker-per-task, assignments aren't even needed.
+    CreateTask starts the worker.
+
+- don't write logs via RPC
+  - write to object storage?
+  - to stack driver?
+  - to pub/sub?
+  - directly to datastore?
+
+- how are logs gathered
+  - stream from pub/sub?
+  - read from stackdriver?
+  - stream to object storage?
+
+- autoscale: default templates
+
+- how does worker communicate availability? to datastore?
+  - remove worker state writes. worker per task is easier and fast enough.
+    a system could still coordinate persistent disk mounting if cached data
+    is needed.
+
+- write funnel logs to stack driver
+
+- write tasks to datastore or object storage?
+  - object store read/write latency too high?
+    - write full task to storage, keep memory cache of basic view?
+  - datastore requires extra work during deployment?
+  - object store will not support list task filtering and search
+    - could use datastore or other to build desired index
+  - datastore more expensive
+    - likely 10x
+    - but only sums to dozens of dollars a month?
+  - is object store easier to access outside of funnel?
+  - write tail to datastore and full log to storage?
+    - worker manages summary in datastore?
+  - worker writes tail to object storage?
+
+
+- write throughput from worker to server
+  - having contention issues, rpc failures
+  - pub/sub would add global, scalable buffer
+
+
+State
+- permanent
+  - tasks (at least incomplete tasks)
+- transient
+  - worker resource pings
+    - but, just start a worker per task?
+
+
+
+Pub/sub:
+- 10GB per month free
+- $0.06 per GB (for first 50TB)
+
+StackDriver free:
+- 5 GB per project per month
+  - 5 GB free tier too low? Charge is by transfer, not storage?
+  - $0.5 per GB
+- 7 day retention
+
+
+Datastore free:
+- 1 GB storage per month
+  - $0.18 per GB/month
+- 50 K reads per day
+  - $0.06 per 100K per day
+- 20 K write/delete per day
+  - $0.18 per 100K per day
+
+
+Object storage:
+- 5GB free, 5K class A (update) ops free
+- $0.02 GB/month
+- $0.05 per 10K class A (update) ops
+- "buckets have an initial IO capacity of around 1000 write requests per second and 5000 read requests per second"
+
+
+
+enable "free" mode, which flushes task history once free tier limits are reached?
+
+
+multi-tenancy
+- need to maximize the ability for each operation to be billed to a tenant's account.
+
+
+
+CreateTask
+GetTask
+ListTasks
+CancelTask
+
+ReadQueue
+- called by Scheduler
+AssignTask (pub/sub)
+- called by Scheduler
+CheckWorkers (remove)
+- called by scheduler
+
+UpdateWorker (remove)
+- Resources/Available
+- Health check/state
+- metadata (from assignment -> worker insert)
+- called by Scaler
+- called by worker
+
+GetWorker (remove)
+- called by worker service to sync
+  - sync task assignments
+  - used to sync resources/metadata/state back
+
+ListWorkers (remove)
+- called by Scaler
+- called by scheduler backends to get workers
+
+UpdateTaskState, UpdateTaskLogs, UpdateExecutorLogs
+- called by worker + rpc task logger
+- ok to write to funnel server/database?
+- write to storage and crawl/collect?
+- write to pub/sub?
+
+
+
+
+// Database represents the interface to the database used by the scheduler, scaler, etc.
+// Mostly, this exists so it can be mocked during testing.
+Scheduler.Database
+type Database interface {
+	ReadQueue(n int) []*tes.Task
+	AssignTask(*tes.Task, *pbf.Worker) error
+	CheckWorkers() error
+	ListWorkers(context.Context, *pbf.ListWorkersRequest) (*pbf.ListWorkersResponse, error)
+	UpdateWorker(context.Context, *pbf.Worker) (*pbf.UpdateWorkerResponse, error)
+}
