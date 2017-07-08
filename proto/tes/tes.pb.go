@@ -198,7 +198,7 @@ type Task struct {
 	// OPTIONAL
 	//
 	// A key-value map of arbitrary tags.
-	Tags map[string]string `protobuf:"bytes,11,rep,name=tags" json:"tags,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	Tags map[string]string `protobuf:"bytes,11,rep,name=tags" json:"tags,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value" datastore:"-"`
 	// OUTPUT ONLY
 	//
 	// Task logging information.
@@ -379,12 +379,12 @@ type Ports struct {
 	// REQUIRED
 	//
 	// Port number opened inside the container.
-	Container uint32 `protobuf:"varint,1,opt,name=container" json:"container,omitempty"`
+	Container uint32 `protobuf:"varint,1,opt,name=container" json:"container,omitempty" datastore:"-"`
 	// OPTIONAL
 	//
 	// Port number opened on the host. Must be greater than 1024.
 	// Defaults to 0, which assigns a random port on the host.
-	Host uint32 `protobuf:"varint,2,opt,name=host" json:"host,omitempty"`
+	Host uint32 `protobuf:"varint,2,opt,name=host" json:"host,omitempty" datastore:"-"`
 }
 
 func (m *Ports) Reset()                    { *m = Ports{} }
@@ -447,7 +447,7 @@ type Executor struct {
 	// OPTIONAL
 	//
 	// Enviromental variables to set within the container.
-	Environ map[string]string `protobuf:"bytes,8,rep,name=environ" json:"environ,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	Environ map[string]string `protobuf:"bytes,8,rep,name=environ" json:"environ,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value" datastore:"-"`
 }
 
 func (m *Executor) Reset()                    { *m = Executor{} }
@@ -516,7 +516,7 @@ type Resources struct {
 	// OPTIONAL
 	//
 	// Requested number of CPUs
-	CpuCores uint32 `protobuf:"varint,1,opt,name=cpu_cores,json=cpuCores" json:"cpu_cores,omitempty"`
+	CpuCores uint32 `protobuf:"varint,1,opt,name=cpu_cores,json=cpuCores" json:"cpu_cores,omitempty" datastore:"-"`
 	// OPTIONAL
 	//
 	// Is the task allowed to run on preemptible compute instances (e.g. AWS Spot)?
@@ -586,7 +586,7 @@ type TaskLog struct {
 	// OPTIONAL
 	//
 	// Arbitrary logging metadata included by the implementation.
-	Metadata map[string]string `protobuf:"bytes,2,rep,name=metadata" json:"metadata,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	Metadata map[string]string `protobuf:"bytes,2,rep,name=metadata" json:"metadata,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value" datastore:"-"`
 	// OPTIONAL
 	//
 	// When the task started, in RFC 3339 format.
