@@ -29,8 +29,7 @@ type Server struct {
 	DialOptions            []grpc.DialOption
 }
 
-// DefaultServer returns a new server instance.
-func DefaultServer(db Database, conf config.Config) *Server {
+func NewServer(conf config.Config) *Server {
 	log.Debug("Server Config", "config.Config", conf)
 
 	mux := http.NewServeMux()
@@ -39,14 +38,20 @@ func DefaultServer(db Database, conf config.Config) *Server {
 	return &Server{
 		RPCAddress:             ":" + conf.RPCPort,
 		HTTPPort:               conf.HTTPPort,
-		TaskServiceServer:      db,
-		SchedulerServiceServer: db,
 		Handler:                mux,
 		DisableHTTPCache:       conf.DisableHTTPCache,
 		DialOptions: []grpc.DialOption{
 			grpc.WithInsecure(),
 		},
 	}
+}
+
+// DefaultServer returns a new server instance.
+func DefaultServer(db Database, conf config.Config) *Server {
+  srv := NewServer(conf)
+  srv.TaskServiceServer = db
+  srv.SchedulerServiceServer = db
+  return srv
 }
 
 // Serve starts the server and does not block. This will open TCP ports

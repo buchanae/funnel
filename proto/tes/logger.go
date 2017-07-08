@@ -5,36 +5,36 @@ import (
 	"golang.org/x/net/context"
 )
 
-func WithLogging(s TaskService, l logger.Logger) TaskService {
-  return logger{s, l}
+func WithLogging(s TaskServiceServer, l logger.Logger) TaskServiceServer {
+  return &teslogger{s, l}
 }
 
-type logger struct {
-  TaskService
+type teslogger struct {
+  tes TaskServiceServer
   log logger.Logger
 }
 
-func (l *logger) CreateTask(ctx context.Context, task *Task) (*CreateTaskResponse, error) {
+func (l *teslogger) CreateTask(ctx context.Context, task *Task) (*CreateTaskResponse, error) {
   l.log.Debug("Create task", "task", task)
-  return l.TaskService.CreateTask(ctx, task)
+  return l.tes.CreateTask(ctx, task)
 }
 
-func (l *logger) GetTask(ctx context.Context, req *GetTaskRequest) (*Task, error) {
+func (l *teslogger) GetTask(ctx context.Context, req *GetTaskRequest) (*Task, error) {
   l.log.Debug("Get task", "req", req)
-  return l.TaskService.GetTask(ctx, req)
+  return l.tes.GetTask(ctx, req)
 }
 
-func (l *logger) ListTasks(ctx context.Context, req *ListTasksRequest) (*ListTasksResponse, error) {
+func (l *teslogger) ListTasks(ctx context.Context, req *ListTasksRequest) (*ListTasksResponse, error) {
   l.log.Debug("List tasks", "req", req)
-  return l.TaskService.ListTasks(ctx, req)
+  return l.tes.ListTasks(ctx, req)
 }
 
-func (l *logger) CancelTask(ctx context.Context, req *CancelTaskRequest) (*CancelTaskResponse, error) {
+func (l *teslogger) CancelTask(ctx context.Context, req *CancelTaskRequest) (*CancelTaskResponse, error) {
   l.log.Debug("Cancel task", "req", req)
-  return l.TaskService.CancelTask(ctx, req)
+  return l.tes.CancelTask(ctx, req)
 }
 
-func (l *logger) GetServiceInfo(ctx context.Context, req *ServiceInfoRequest) (*ServiceInfo, error) {
+func (l *teslogger) GetServiceInfo(ctx context.Context, req *ServiceInfoRequest) (*ServiceInfo, error) {
   l.log.Debug("Get service info", "req", req)
-  return l.TaskService.GetServiceInfo(ctx, req)
+  return l.tes.GetServiceInfo(ctx, req)
 }
