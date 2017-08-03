@@ -96,6 +96,10 @@ test-backends:
 	@go test -timeout 120s ./tests/e2e/htcondor -run-test
 	@go test -timeout 120s ./tests/e2e/pbs -run-test
 
+# Tests meant to run in an OpenStack environment
+test-openstack:
+	@go test ./tests/e2e/openstack -openstack-e2e-config ${FUNNEL_OPENSTACK_TEST_CONFIG}
+
 test-verbose:
 	@go run tests/fmt/fmt.go -v $(TESTS)
 
