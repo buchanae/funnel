@@ -259,6 +259,7 @@ func (l S3Storage) Valid() bool {
 	return l.Endpoint != "" && l.Key != "" && l.Secret != ""
 }
 
+// SwiftStorage configures OpenStack Swift object storage.
 type SwiftStorage struct {
 	UserName   string
 	Password   string
