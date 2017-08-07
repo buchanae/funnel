@@ -162,6 +162,8 @@ type Worker struct {
 	UpdateTimeout  time.Duration
 	Metadata       map[string]string
 	ServerPassword string
+	// If true, task runner working directories will not be removed.
+	LeaveRunnerWorkDir bool
 }
 
 // WorkerInheritConfigVals is a utility to help ensure the Worker inherits the proper config values from the parent Config
