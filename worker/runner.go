@@ -66,6 +66,10 @@ func (r *DefaultRunner) Run(pctx context.Context) {
 	// - run the steps (docker)
 	// - upload the outputs
 
+	defer func() {
+		r.Mapper.Cleanup()
+	}()
+
 	var run helper
 	var task *tes.Task
 

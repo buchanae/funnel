@@ -273,3 +273,8 @@ func (mapper *FileMapper) AddOutput(output *tes.TaskParameter) error {
 func (mapper *FileMapper) IsSubpath(p string, base string) bool {
 	return strings.HasPrefix(p, base)
 }
+
+// Cleanup removes the FileMapper's working directory.
+func (mapper *FileMapper) Cleanup() {
+	os.RemoveAll(mapper.dir)
+}

@@ -28,13 +28,10 @@ func TestFileMount(t *testing.T) {
 func TestLocalFilesystemHardLinkInput(t *testing.T) {
 	fun.WriteFile("test_hard_link_input", "content")
 	id := fun.Run(`
-    --cmd "echo foo"
+    --cmd "sleep 2"
     -i in={{ .storage }}/test_hard_link_input
   `)
-	task := fun.Wait(id)
-	if task.State != tes.State_COMPLETE {
-		t.Fatal("unexpected task failure")
-	}
+	fun.WaitForRunning(id)
 	name := fun.StorageDir + "/test_hard_link_input"
 	fi, sterr := os.Lstat(name)
 	if sterr != nil {
@@ -46,6 +43,11 @@ func TestLocalFilesystemHardLinkInput(t *testing.T) {
 	}
 	if uint16(s.Nlink) != uint16(2) {
 		t.Fatal("expected two links", s.Nlink)
+	}
+
+	task := fun.Wait(id)
+	if task.State != tes.State_COMPLETE {
+		t.Fatal("unexpected task failure")
 	}
 }
 
