@@ -81,7 +81,7 @@ func (sw *SwiftBackend) Get(ctx context.Context, rawurl string, hostPath string,
 				return oerr
 			}
 
-			if err := sw.get(f, path.Join(hostPath, obj.Name)); err != nil {
+			if err := sw.get(f, path.Join(hostPath, strings.TrimPrefix(obj.Name, url.path))); err != nil {
 				return err
 			}
 		}
