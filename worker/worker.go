@@ -76,7 +76,9 @@ func (r *DefaultWorker) Run(pctx context.Context) {
 	// - upload the outputs
 
 	defer func() {
-		r.Mapper.Cleanup()
+		if !r.Conf.LeaveWorkDir {
+			r.Mapper.Cleanup()
+		}
 	}()
 
 	var run helper

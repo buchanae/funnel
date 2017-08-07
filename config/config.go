@@ -216,6 +216,8 @@ type Worker struct {
 	BufferSize int64
 	Storage    StorageConfig
 	Logger     logger.Config
+	// If true, task runner working directories will not be removed.
+	LeaveWorkDir bool
 }
 
 // StorageConfig describes configuration for all storage types
