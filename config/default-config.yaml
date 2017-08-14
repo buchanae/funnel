@@ -222,6 +222,18 @@ Worker:
     #     # Automatically discover credentials from the environment.
     #     FromEnv: true
 
+    #Swift:
+    # UserName:
+    # Password:
+    # AuthURL:
+    # TenantName:
+    # TenantID:
+    # RegionName:
+
+# The name of the active scheduler backend
+# Available backends: local, condor, gce, openstack
+>>>>>>> Add swift storage config example
+
   # For low-level tuning.
   # How often to send task log updates to the Funnel server.
   # In nanoseconds.
