@@ -57,6 +57,14 @@ Storage:
   #     # Automatically discover credentials from the environment.
   #     FromEnv: true
 
+  #Swift:
+  # UserName:
+  # Password:
+  # AuthURL:
+  # TenantName:
+  # TenantID:
+  # RegionName:
+
 # The name of the active scheduler backend
 # Available backends: local, condor, gce, openstack
 Scheduler: local
