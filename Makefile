@@ -98,7 +98,7 @@ test-backends:
 
 # Tests meant to run in an OpenStack environment
 test-openstack:
-	@go test ./tests/e2e/openstack -config ${FUNNEL_OPENSTACK_TEST_CONFIG}
+	@go test ./tests/e2e/openstack -openstack-e2e-config ${FUNNEL_OPENSTACK_TEST_CONFIG}
 
 test-verbose:
 	@go run tests/fmt/fmt.go -v $(TESTS)
