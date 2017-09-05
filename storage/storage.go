@@ -123,8 +123,7 @@ func (storage Storage) WithConfig(conf config.StorageConfig) (Storage, error) {
 	if conf.Swift.Valid() {
 		s, err := NewSwiftBackend(conf.Swift)
 		if err != nil {
-			log.Error("Swift storage backend", err)
-			return storage, err
+			return storage, fmt.Errorf("can't configure Swift storage backend: %s", err)
 		}
 		storage = storage.WithBackend(s)
 	}

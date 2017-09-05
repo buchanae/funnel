@@ -45,7 +45,6 @@ func NewSwiftBackend(conf config.SwiftStorage) (*SwiftBackend, error) {
 
 // Get copies an object from storage to the host path.
 func (sw *SwiftBackend) Get(ctx context.Context, rawurl string, hostPath string, class tes.FileType) error {
-	log.Info("Starting download", "url", rawurl)
 
 	url, perr := sw.parse(rawurl)
 	if perr != nil {
@@ -64,7 +63,6 @@ func (sw *SwiftBackend) Get(ctx context.Context, rawurl string, hostPath string,
 			return err
 		}
 
-		log.Info("Finished file download", "url", rawurl, "hostPath", hostPath)
 		return nil
 
 	case tes.FileType_DIRECTORY:
@@ -86,7 +84,6 @@ func (sw *SwiftBackend) Get(ctx context.Context, rawurl string, hostPath string,
 			}
 		}
 
-		log.Info("Finished directory download", "url", rawurl, "hostPath", hostPath)
 		return nil
 
 	default:
@@ -110,7 +107,6 @@ func (sw *SwiftBackend) get(src io.Reader, hostPath string) error {
 
 // Put copies an object (file) from the host path to storage.
 func (sw *SwiftBackend) Put(ctx context.Context, rawurl string, hostPath string, class tes.FileType) ([]*tes.OutputFileLog, error) {
-	log.Info("Starting upload", "url", rawurl)
 
 	var out []*tes.OutputFileLog
 
@@ -151,7 +147,6 @@ func (sw *SwiftBackend) Put(ctx context.Context, rawurl string, hostPath string,
 		return nil, fmt.Errorf("Unknown file class: %s", class)
 	}
 
-	log.Info("Finished upload", "url", rawurl, "hostPath", hostPath)
 	return out, nil
 }
 
