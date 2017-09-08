@@ -1,10 +1,14 @@
 package openstack
 
 import (
+	"context"
 	"flag"
 	"github.com/ohsu-comp-bio/funnel/config"
 	"github.com/ohsu-comp-bio/funnel/logger"
+	"github.com/ohsu-comp-bio/funnel/proto/tes"
+	"github.com/ohsu-comp-bio/funnel/storage"
 	"github.com/ohsu-comp-bio/funnel/tests/e2e"
+	"io/ioutil"
 	"os"
 	"testing"
 )
@@ -12,6 +16,7 @@ import (
 var fun *e2e.Funnel
 var confPath = flag.String("openstack-e2e-config", "", "OpenStack end-to-end test config file")
 var log = logger.New("e2e-openstack")
+var conf config.Config
 
 func TestMain(m *testing.M) {
 	log.Configure(logger.DebugConfig())
@@ -22,7 +27,7 @@ func TestMain(m *testing.M) {
 		os.Exit(0)
 	}
 
-	conf := e2e.DefaultConfig()
+	conf = e2e.DefaultConfig()
 	if err := config.ParseFile(*confPath, &conf); err != nil {
 		panic(err)
 	}
@@ -34,16 +39,38 @@ func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
 
-func TestSwiftStorage(t *testing.T) {
+func TestSwiftStorageTask(t *testing.T) {
 	id := fun.Run(`
-    --cmd "sh -c 'md5sum $in'"
+    --cmd "sh -c 'md5sum $in > $out'"
     -i in=swift://buchanan-scratch/funnel
+    -o out=swift://buchanan-scratch/funnel-md5
   `)
 	task := fun.Wait(id)
 
 	expect := "da385a552397a4ac86ee6444a8f9ae3e  /opt/funnel/inputs/buchanan-scratch/funnel\n"
 
-	if task.Logs[0].Logs[0].Stdout != expect {
-		t.Fatal("Missing stdout")
+	if task.State != tes.State_COMPLETE {
+		t.Fatal("Unexpected task failure")
+	}
+
+	s := storage.Storage{}
+	s, serr := s.WithConfig(conf.Worker.Storage)
+	if serr != nil {
+		t.Fatal("Error configuring storage", serr)
+	}
+
+	ctx := context.Background()
+	gerr := s.Get(ctx, "swift://buchanan-scratch/funnel-md5", "swift-md5-out", tes.FileType_FILE)
+	if gerr != nil {
+		t.Fatal("Failed get", gerr.Error())
+	}
+
+	b, err := ioutil.ReadFile("swift-md5-out")
+	if err != nil {
+		t.Fatal("Failed read", err)
+	}
+
+	if string(b) != expect {
+		t.Fatal("unexpected content", string(b))
 	}
 }
