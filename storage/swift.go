@@ -82,6 +82,10 @@ func (sw *SwiftBackend) Get(ctx context.Context, rawurl string, hostPath string,
 			if err := sw.get(f, path.Join(hostPath, strings.TrimPrefix(obj.Name, url.path))); err != nil {
 				return err
 			}
+
+			if err := f.Close(); err != nil {
+				return err
+			}
 		}
 
 		return nil
@@ -102,7 +106,7 @@ func (sw *SwiftBackend) get(src io.Reader, hostPath string) error {
 	if werr != nil {
 		return werr
 	}
-	return nil
+	return dest.Close()
 }
 
 // Put copies an object (file) from the host path to storage.
@@ -166,8 +170,10 @@ func (sw *SwiftBackend) put(rawurl, hostPath string) error {
 	if err != nil {
 		return err
 	}
-	_, cerr := io.Copy(writer, reader)
-	return cerr
+	if _, cerr := io.Copy(writer, reader); cerr != nil {
+		return cerr
+	}
+	return writer.Close()
 }
 
 func (sw *SwiftBackend) parse(rawurl string) (*urlparts, error) {
