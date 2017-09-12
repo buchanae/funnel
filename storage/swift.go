@@ -71,7 +71,7 @@ func (sw *SwiftBackend) Get(ctx context.Context, rawurl string, hostPath string,
 
 	case tes.FileType_DIRECTORY:
 		objs, err := sw.conn.ObjectsAll(url.bucket, &swift.ObjectsOpts{
-			Path: url.path,
+			Prefix: url.path,
 		})
 		if err != nil {
 			return err
@@ -176,6 +176,9 @@ func (sw *SwiftBackend) put(rawurl, hostPath string) error {
 	}
 	if _, cerr := io.Copy(writer, reader); cerr != nil {
 		return cerr
+	}
+	if err := reader.Close(); err != nil {
+		return err
 	}
 	return writer.Close()
 }
