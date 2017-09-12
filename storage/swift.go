@@ -63,6 +63,10 @@ func (sw *SwiftBackend) Get(ctx context.Context, rawurl string, hostPath string,
 			return err
 		}
 
+		if err := f.Close(); err != nil {
+			return err
+		}
+
 		return nil
 
 	case tes.FileType_DIRECTORY:
