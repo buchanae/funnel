@@ -1,33 +1,33 @@
 package worker
 
 import (
-  "fmt"
-  "io"
-  "io/ioutil"
-  "bufio"
-  "os"
+	"bufio"
+	"fmt"
+	"io"
+	"io/ioutil"
+	"os"
 )
 
 type Stdio struct {
-  In  io.Reader
-  Out io.Writer
-  Err io.Writer
+	In  io.Reader
+	Out io.Writer
+	Err io.Writer
 }
 
 func OpenStdio(stdin, stdout, stderr string) (*Stdio, error) {
-  s := Stdio{
-    In: ioutil.NopCloser(bufio.NewReader(nil)),
-    Out: ioutil.Discard,
-    Err: ioutil.Discard,
-  }
-  var err error
+	s := Stdio{
+		In:  ioutil.NopCloser(bufio.NewReader(nil)),
+		Out: ioutil.Discard,
+		Err: ioutil.Discard,
+	}
+	var err error
 
 	if stdin != "" {
-    s.In, err = os.Open(stdin)
+		s.In, err = os.Open(stdin)
 		if err != nil {
 			return nil, fmt.Errorf("couldn't open stdin: %s", err)
 		}
-  }
+	}
 
 	if stdout != "" {
 		s.Out, err = os.Create(stdout)

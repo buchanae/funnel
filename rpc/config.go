@@ -1,14 +1,15 @@
 package rpc
 
 import (
-  "time"
+	"time"
 )
 
 type Config struct {
-  Host, Port, Password string
+	Host, Port, Password string
 	// Timeout duration for gRPC calls
-  Timeout time.Duration
+	Timeout time.Duration
 }
+
 func (c Config) Address() string {
 	if c.Host != "" && c.Port != "" {
 		return c.Host + ":" + c.Port

@@ -1,6 +1,5 @@
 package storage
 
-
 // Config describes configuration for all storage types
 type Config struct {
 	Local LocalConfig

@@ -5,9 +5,9 @@ import (
 	tl "github.com/ohsu-comp-bio/funnel/proto/tasklogger"
 	"github.com/ohsu-comp-bio/funnel/proto/tes"
 	"github.com/ohsu-comp-bio/funnel/rpc"
+	"io"
+	"io/ioutil"
 	"time"
-  "io"
-  "io/ioutil"
 )
 
 // TODO document behavior of slow consumer of task log updates
@@ -25,14 +25,14 @@ type taskClient struct {
 }
 
 func newRPCTask(conf rpc.Config, taskID string) (*RPCTask, error) {
-  conn, err := rpc.Dial(conf)
+	conn, err := rpc.Dial(conf)
 	if err != nil {
 		return nil, err
 	}
-  client := &taskClient{
-    tes.NewTaskServiceClient(conn),
-    tl.NewTaskLoggerServiceClient(conn),
-  }
+	client := &taskClient{
+		tes.NewTaskServiceClient(conn),
+		tl.NewTaskLoggerServiceClient(conn),
+	}
 	return &RPCTask{client, taskID, conf.Timeout}, nil
 }
 
@@ -157,10 +157,10 @@ func (r *RPCTask) ExecutorHostIP(i int, ip string) {
 }
 
 func (r *RPCTask) ExecutorStdout(i int) io.Writer {
-  return ioutil.Discard
+	return ioutil.Discard
 }
 func (r *RPCTask) ExecutorStderr(i int) io.Writer {
-  return ioutil.Discard
+	return ioutil.Discard
 }
 
 // AppendExecutorStdout appends to an executor's stdout log.

@@ -124,7 +124,7 @@ func (storage Storage) WithConfig(conf Config) (Storage, error) {
 }
 
 func WithConfig(conf Config) (Storage, error) {
-  return Storage{}.WithConfig(conf)
+	return Storage{}.WithConfig(conf)
 }
 
 type hostfile struct {

@@ -14,13 +14,13 @@ import (
 
 // DockerCmd is responsible for configuring and running a docker container.
 type DockerCmd struct {
-  TaskLogger
-  *Stdio
-  ExecIndex int
-  Exec *tes.Executor
-  Volumes []Volume
-  LeaveContainer bool
-  ContainerName string
+	TaskLogger
+	*Stdio
+	ExecIndex      int
+	Exec           *tes.Executor
+	Volumes        []Volume
+	LeaveContainer bool
+	ContainerName  string
 }
 
 func (dcmd *DockerCmd) Run(ctx context.Context) error {
@@ -30,25 +30,24 @@ func (dcmd *DockerCmd) Run(ctx context.Context) error {
 	go func() {
 		done <- dcmd.runcmd()
 	}()
-  go dcmd.Inspect(ctx)
+	go dcmd.Inspect(ctx)
 
-  select {
-  case <-ctx.Done():
-    // Likely the task was canceled.
-    dcmd.Stop()
-    return ctx.Err()
+	select {
+	case <-ctx.Done():
+		// Likely the task was canceled.
+		dcmd.Stop()
+		return ctx.Err()
 
-  case result := <-done:
-    code := GetExitCode(result)
-    dcmd.TaskLogger.ExecutorExitCode(dcmd.ExecIndex, code)
+	case result := <-done:
+		code := GetExitCode(result)
+		dcmd.TaskLogger.ExecutorExitCode(dcmd.ExecIndex, code)
 
-    if result != nil {
-      return ErrExecFailed(result)
-    }
-    return nil
-  }
+		if result != nil {
+			return ErrExecFailed(result)
+		}
+		return nil
+	}
 }
-
 
 // Run runs the Docker command and blocks until done.
 func (dcmd *DockerCmd) runcmd() error {
@@ -61,9 +60,9 @@ func (dcmd *DockerCmd) runcmd() error {
 	}
 
 	cmd := exec.Command("docker", dcmd.Args()...)
-  cmd.Stdin = dcmd.Stdio.In
-  cmd.Stdout = dcmd.Stdio.Out
-  cmd.Stderr = dcmd.Stdio.Err
+	cmd.Stdin = dcmd.Stdio.In
+	cmd.Stdout = dcmd.Stdio.Out
+	cmd.Stderr = dcmd.Stdio.Err
 
 	return cmd.Run()
 }
@@ -164,20 +163,20 @@ func formatVolumeArg(v Volume) string {
 }
 
 func (dcmd *DockerCmd) Args() []string {
-  e := dcmd.Exec
+	e := dcmd.Exec
 	args := []string{"run", "-i"}
 
 	if !dcmd.LeaveContainer {
 		args = append(args, "--rm")
 	}
 
-  for k, v := range e.Environ {
-    args = append(args, "-e", fmt.Sprintf("%s=%s", k, v))
-  }
+	for k, v := range e.Environ {
+		args = append(args, "-e", fmt.Sprintf("%s=%s", k, v))
+	}
 
-  for _, p := range e.Ports {
-    args = append(args, "-p", fmt.Sprintf("%d:%d", p.Host, p.Container))
-  }
+	for _, p := range e.Ports {
+		args = append(args, "-p", fmt.Sprintf("%d:%d", p.Host, p.Container))
+	}
 
 	if dcmd.ContainerName != "" {
 		args = append(args, "--name", dcmd.ContainerName)
@@ -194,5 +193,5 @@ func (dcmd *DockerCmd) Args() []string {
 
 	args = append(args, e.ImageName)
 	args = append(args, e.Cmd...)
-  return args
+	return args
 }

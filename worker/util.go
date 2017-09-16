@@ -2,11 +2,11 @@ package worker
 
 import (
 	"context"
+	"github.com/ohsu-comp-bio/funnel/proto/tes"
 	"net"
 	"os/exec"
 	"syscall"
-  "github.com/ohsu-comp-bio/funnel/proto/tes"
-  "time"
+	"time"
 )
 
 func externalIP() (string, error) {
@@ -90,7 +90,7 @@ func PollForCancel(ctx context.Context, get func() tes.State, rate time.Duration
 func LogHostIP(tl TaskLogger, i int) {
 	// Grab the IP address of this host. Used to send task metadata updates.
 	ip, err := externalIP()
-  if err == nil {
-    tl.ExecutorHostIP(i, ip)
-  }
+	if err == nil {
+		tl.ExecutorHostIP(i, ip)
+	}
 }

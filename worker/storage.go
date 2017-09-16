@@ -2,13 +2,12 @@ package worker
 
 import (
 	"context"
+	"fmt"
 	"github.com/ohsu-comp-bio/funnel/proto/tes"
 	"github.com/ohsu-comp-bio/funnel/storage"
-  "os"
-  "path/filepath"
-  "fmt"
+	"os"
+	"path/filepath"
 )
-
 
 type Mapper func(path string) string
 
@@ -16,17 +15,16 @@ func Upload(ctx context.Context, tp []*tes.TaskParameter, s storage.Storage) ([]
 	var outputs []*tes.OutputFileLog
 
 	for _, output := range tp {
-    var out []*tes.OutputFileLog
-    out, err := s.Put(ctx, output.Url, output.Path, output.Type)
-    if err != nil {
-      return nil, err
-    }
-    outputs = append(outputs, out...)
+		var out []*tes.OutputFileLog
+		out, err := s.Put(ctx, output.Url, output.Path, output.Type)
+		if err != nil {
+			return nil, err
+		}
+		outputs = append(outputs, out...)
 	}
 
-  return outputs, nil
+	return outputs, nil
 }
-
 
 // FixLinks walks the output paths, fixing cases where a symlink is
 // broken because it's pointing to a path inside a container volume.
@@ -73,12 +71,12 @@ func FixLinks(basepath string, m Mapper) {
 
 func Download(ctx context.Context, in []*tes.TaskParameter, s storage.Storage) error {
 	for _, input := range in {
-    err := s.Get(ctx, input.Url, input.Path, input.Type)
-    if err != nil {
-      return err
-    }
+		err := s.Get(ctx, input.Url, input.Path, input.Type)
+		if err != nil {
+			return err
+		}
 	}
-  return nil
+	return nil
 }
 
 func ValidateStorageURLs(in, out []*tes.TaskParameter, s storage.Storage) error {

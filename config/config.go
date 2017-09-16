@@ -53,8 +53,8 @@ type Config struct {
 // InheritServerProperties sets the ServerAddress and ServerPassword fields
 // in the Worker and Scheduler.Node configs based on the Server config
 func InheritServerProperties(c Config) Config {
-  c.Worker.RPC = c.Server.RPC
-  c.Scheduler.Node.RPC = c.Server.RPC
+	c.Worker.RPC = c.Server.RPC
+	c.Scheduler.Node.RPC = c.Server.RPC
 	return c
 }
 
@@ -174,8 +174,8 @@ type Node struct {
 	Timeout time.Duration
 	// How often the node sends update requests to the server.
 	UpdateRate time.Duration
-	Metadata      map[string]string
-	Logger         logger.Config
+	Metadata   map[string]string
+	Logger     logger.Config
 }
 
 // Worker contains worker configuration.

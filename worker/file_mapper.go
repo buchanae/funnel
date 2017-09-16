@@ -124,9 +124,9 @@ func (mapper *FileMapper) AddVolume(hostPath string, mountPoint string, readonly
 // The mapped path is required to be a subpath of the mapper's base directory.
 // e.g. mapper.HostPath("../../foo") should fail with an error.
 func (mapper *FileMapper) HostPath(src string) string {
-  if src == "" {
-    return src
-  }
+	if src == "" {
+		return src
+	}
 	p := path.Join(mapper.dir, src)
 	p = path.Clean(p)
 	return p
@@ -136,23 +136,23 @@ func (mapper *FileMapper) CheckPath(p string) error {
 	if !mapper.IsSubpath(p, mapper.dir) {
 		return fmt.Errorf("Invalid path: %s is not a valid subpath of %s", p, mapper.dir)
 	}
-  return nil
+	return nil
 }
 
 func (mapper *FileMapper) OpenStdio(in, out, err string) (*Stdio, error) {
-  return OpenStdio(
-    mapper.HostPath(in),
-    mapper.HostPath(out),
-    mapper.HostPath(err),
-  )
+	return OpenStdio(
+		mapper.HostPath(in),
+		mapper.HostPath(out),
+		mapper.HostPath(err),
+	)
 }
 
 func CreateWorkDir(dir string) error {
-  dir, err := filepath.Abs(dir)
-  if err != nil {
-    return err
-  }
-  return util.EnsureDir(dir)
+	dir, err := filepath.Abs(dir)
+	if err != nil {
+		return err
+	}
+	return util.EnsureDir(dir)
 }
 
 // AddTmpVolume creates a directory on the host based on the declared path in
