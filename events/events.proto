@@ -7,86 +7,66 @@ import "struct.proto";
 import "timestamp.proto";
 import "google/api/annotations.proto";
 
-message TaskState {
-  tes.State state = 1;
-}
-
-message TaskStartTime {
-  google.protobuf.Timestamp start_time = 1;
-}
-
-message TaskEndTime {
-  google.protobuf.Timestamp end_time = 1;
-}
-
-message TaskOutputs {
-  repeated tes.OutputFileLog outputs = 1;
-}
-
-message TaskMetadata {
-  map<string, string> metadata = 1;
-}
-
-message ExecutorStartTime {
-  google.protobuf.Timestamp start_time = 1;
-  uint32 index = 3;
-}
-
-message ExecutorEndTime {
-  google.protobuf.Timestamp end_time = 1;
-  uint32 index = 3;
-}
-
-message ExitCode {
-  int32  exit_code = 1;
-  uint32 index = 3;
-}
-
-message HostIp {
-  string host_ip = 1;
-  uint32 index = 3;
-}
-
-message Ports {
-  repeated tes.Ports ports = 1;
-  uint32 index = 3;
-}
-
-message Stdout {
-  string stdout = 1;
-  uint32 index = 3;
-}
-
-message Stderr {
-  string stderr = 1;
-  uint32 index = 3;
-}
-
 message SystemLog {
   string msg = 1;
   uint32 level = 2;
   google.protobuf.Struct fields = 3;
 }
 
+enum Type {
+  UNKNOWN = 0;
+  STATE = 1;
+  START_TIME = 2; 
+  END_TIME = 3;
+  OUTPUTS = 4;
+  METADATA = 5;
+  EXECUTOR_START_TIME = 6;
+  EXECUTOR_END_TIME = 7;
+  EXIT_CODE = 8;
+  HOST_IP = 9;
+  PORTS = 10;
+  STDOUT = 11;
+  STDERR = 12;
+  SYSLOG = 13;
+}
+
 message Event {
-  string id = 1;
-  uint32 attempt = 2;
-  google.protobuf.Timestamp timestamp = 3;
-  oneof event {
-    TaskState task_state = 4;
-    TaskStartTime task_start_time = 5;
-    TaskEndTime task_end_time = 6;
-    TaskOutputs task_outputs = 7;
-    TaskMetadata task_metadata = 8;
-    ExecutorStartTime executor_start_time = 9;
-    ExecutorEndTime executor_end_time = 10;
-    ExitCode exit_code = 11;
-    HostIp host_ip = 12;
-    Ports ports = 13;
-    Stdout stdout = 14;
-    Stderr stderr = 15;
-    SystemLog system_log = 16;
-  }
+  // The first group of fields is always set.
+
+  // Event type
+  Type type = 1;
+  // Task ID
+  string id = 2;
+  // Task attempt ID
+  uint32 attempt = 3;
+  // Event timestamp
+  google.protobuf.Timestamp timestamp = 4;
+
+  // The fields below are event specific.
+
+  // Task event fields:
+  // Only one field is set per event type.
+  tes.State state = 5;
+  google.protobuf.Timestamp start_time = 6;
+  google.protobuf.Timestamp end_time = 7;
+  repeated tes.OutputFileLog outputs = 8;
+  map<string, string> metadata = 9;
+
+  // Executor events:
+  // index is always set for executor events.
+  uint32 index = 10;
+
+  // Only one field is set per executor event type.
+  google.protobuf.Timestamp executor_start_time = 11;
+  google.protobuf.Timestamp executor_end_time = 12;
+  int32  exit_code = 13;
+  string host_ip = 14;
+  repeated tes.Ports ports = 15;
+  string stdout = 16;
+  string stderr = 17;
+
+  // System events:
+  SystemLog system_log = 18;
 }
 
 message CreateEventResponse{}
