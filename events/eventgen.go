@@ -8,7 +8,7 @@ import (
 )
 
 type Writer interface {
-  Write(*Event) error
+	Write(*Event) error
 }
 
 func convertTime(t time.Time) *tspb.Timestamp {
@@ -20,7 +20,7 @@ func convertTime(t time.Time) *tspb.Timestamp {
 func NewState(id string, attempt uint32, s tes.State) *Event {
 	return &Event{
 		Id:        id,
-		Attempt: attempt,
+		Attempt:   attempt,
 		Timestamp: ptypes.TimestampNow(),
 		Event: &Event_TaskState{
 			TaskState: &TaskState{
@@ -34,7 +34,7 @@ func NewState(id string, attempt uint32, s tes.State) *Event {
 func NewStartTime(id string, attempt uint32, t time.Time) *Event {
 	return &Event{
 		Id:        id,
-		Attempt: attempt,
+		Attempt:   attempt,
 		Timestamp: ptypes.TimestampNow(),
 		Event: &Event_TaskStartTime{
 			TaskStartTime: &TaskStartTime{
@@ -48,7 +48,7 @@ func NewStartTime(id string, attempt uint32, t time.Time) *Event {
 func NewEndTime(id string, attempt uint32, t time.Time) *Event {
 	return &Event{
 		Id:        id,
-		Attempt: attempt,
+		Attempt:   attempt,
 		Timestamp: ptypes.TimestampNow(),
 		Event: &Event_TaskEndTime{
 			TaskEndTime: &TaskEndTime{
@@ -62,7 +62,7 @@ func NewEndTime(id string, attempt uint32, t time.Time) *Event {
 func NewOutputs(id string, attempt uint32, f []*tes.OutputFileLog) *Event {
 	return &Event{
 		Id:        id,
-		Attempt: attempt,
+		Attempt:   attempt,
 		Timestamp: ptypes.TimestampNow(),
 		Event: &Event_TaskOutputs{
 			TaskOutputs: &TaskOutputs{
@@ -76,7 +76,7 @@ func NewOutputs(id string, attempt uint32, f []*tes.OutputFileLog) *Event {
 func NewMetadata(id string, attempt uint32, m map[string]string) *Event {
 	return &Event{
 		Id:        id,
-		Attempt: attempt,
+		Attempt:   attempt,
 		Timestamp: ptypes.TimestampNow(),
 		Event: &Event_TaskMetadata{
 			TaskMetadata: &TaskMetadata{
@@ -90,7 +90,7 @@ func NewMetadata(id string, attempt uint32, m map[string]string) *Event {
 func NewExecutorStartTime(id string, attempt uint32, i uint32, t time.Time) *Event {
 	return &Event{
 		Id:        id,
-		Attempt: attempt,
+		Attempt:   attempt,
 		Timestamp: ptypes.TimestampNow(),
 		Event: &Event_ExecutorStartTime{
 			ExecutorStartTime: &ExecutorStartTime{
@@ -105,7 +105,7 @@ func NewExecutorStartTime(id string, attempt uint32, i uint32, t time.Time) *Eve
 func NewExecutorEndTime(id string, attempt uint32, i uint32, t time.Time) *Event {
 	return &Event{
 		Id:        id,
-		Attempt: attempt,
+		Attempt:   attempt,
 		Timestamp: ptypes.TimestampNow(),
 		Event: &Event_ExecutorEndTime{
 			ExecutorEndTime: &ExecutorEndTime{
@@ -120,7 +120,7 @@ func NewExecutorEndTime(id string, attempt uint32, i uint32, t time.Time) *Event
 func NewExecutorExitCode(id string, attempt uint32, i uint32, x int32) *Event {
 	return &Event{
 		Id:        id,
-		Attempt: attempt,
+		Attempt:   attempt,
 		Timestamp: ptypes.TimestampNow(),
 		Event: &Event_ExecutorExitCode{
 			ExecutorExitCode: &ExecutorExitCode{
@@ -135,12 +135,12 @@ func NewExecutorExitCode(id string, attempt uint32, i uint32, x int32) *Event {
 func NewExecutorPorts(id string, attempt uint32, i uint32, ports []*tes.Ports) *Event {
 	return &Event{
 		Id:        id,
-		Attempt: attempt,
+		Attempt:   attempt,
 		Timestamp: ptypes.TimestampNow(),
 		Event: &Event_ExecutorPorts{
 			ExecutorPorts: &ExecutorPorts{
-				Ports:   ports,
-				Index:   i,
+				Ports: ports,
+				Index: i,
 			},
 		},
 	}
@@ -150,12 +150,12 @@ func NewExecutorPorts(id string, attempt uint32, i uint32, ports []*tes.Ports) *
 func NewExecutorHostIP(id string, attempt uint32, i uint32, ip string) *Event {
 	return &Event{
 		Id:        id,
-		Attempt: attempt,
+		Attempt:   attempt,
 		Timestamp: ptypes.TimestampNow(),
 		Event: &Event_ExecutorHostIp{
 			ExecutorHostIp: &ExecutorHostIp{
-				HostIp:  ip,
-				Index:   i,
+				HostIp: ip,
+				Index:  i,
 			},
 		},
 	}
@@ -165,12 +165,12 @@ func NewExecutorHostIP(id string, attempt uint32, i uint32, ip string) *Event {
 func NewExecutorStdout(id string, attempt uint32, i uint32, s string) *Event {
 	return &Event{
 		Id:        id,
-		Attempt: attempt,
+		Attempt:   attempt,
 		Timestamp: ptypes.TimestampNow(),
 		Event: &Event_ExecutorStdout{
 			ExecutorStdout: &ExecutorStdout{
-				Stdout:  s,
-				Index:   i,
+				Stdout: s,
+				Index:  i,
 			},
 		},
 	}
@@ -180,12 +180,12 @@ func NewExecutorStdout(id string, attempt uint32, i uint32, s string) *Event {
 func NewExecutorStderr(id string, attempt uint32, i uint32, s string) *Event {
 	return &Event{
 		Id:        id,
-		Attempt: attempt,
+		Attempt:   attempt,
 		Timestamp: ptypes.TimestampNow(),
 		Event: &Event_ExecutorStderr{
 			ExecutorStderr: &ExecutorStderr{
-				Stderr:  s,
-				Index:   i,
+				Stderr: s,
+				Index:  i,
 			},
 		},
 	}
@@ -204,38 +204,38 @@ func NewAttemptGenerator(taskID string, Attempt uint32) *AttemptGenerator {
 }
 
 func (g *AttemptGenerator) State(s tes.State) *Event {
-  return NewState(g.TaskID, g.Attempt, s)
+	return NewState(g.TaskID, g.Attempt, s)
 }
 func (g *AttemptGenerator) StartTime(t time.Time) *Event {
-  return NewStartTime(g.TaskID, g.Attempt, t)
+	return NewStartTime(g.TaskID, g.Attempt, t)
 }
 func (g *AttemptGenerator) EndTime(t time.Time) *Event {
-  return NewEndTime(g.TaskID, g.Attempt, t)
+	return NewEndTime(g.TaskID, g.Attempt, t)
 }
 func (g *AttemptGenerator) Outputs(f []*tes.OutputFileLog) *Event {
-  return NewOutputs(g.TaskID, g.Attempt, f)
+	return NewOutputs(g.TaskID, g.Attempt, f)
 }
 func (g *AttemptGenerator) Metadata(m map[string]string) *Event {
-  return NewMetadata(g.TaskID, g.Attempt, m)
+	return NewMetadata(g.TaskID, g.Attempt, m)
 }
 func (g *AttemptGenerator) ExecutorStartTime(i uint32, t time.Time) *Event {
-  return NewExecutorStartTime(g.TaskID, g.Attempt, i, t)
+	return NewExecutorStartTime(g.TaskID, g.Attempt, i, t)
 }
 func (g *AttemptGenerator) ExecutorEndTime(i uint32, t time.Time) *Event {
-  return NewExecutorEndTime(g.TaskID, g.Attempt, i, t)
+	return NewExecutorEndTime(g.TaskID, g.Attempt, i, t)
 }
 func (g *AttemptGenerator) ExecutorExitCode(i uint32, x int32) *Event {
-  return NewExecutorExitCode(g.TaskID, g.Attempt, i, x)
+	return NewExecutorExitCode(g.TaskID, g.Attempt, i, x)
 }
 func (g *AttemptGenerator) ExecutorPorts(i uint32, ports []*tes.Ports) *Event {
-  return NewExecutorPorts(g.TaskID, g.Attempt, i, ports)
+	return NewExecutorPorts(g.TaskID, g.Attempt, i, ports)
 }
 func (g *AttemptGenerator) ExecutorHostIP(i uint32, ip string) *Event {
-  return NewExecutorHostIP(g.TaskID, g.Attempt, i, ip)
+	return NewExecutorHostIP(g.TaskID, g.Attempt, i, ip)
 }
 func (g *AttemptGenerator) ExecutorStdout(i uint32, s string) *Event {
-  return NewExecutorStdout(g.TaskID, g.Attempt, i, s)
+	return NewExecutorStdout(g.TaskID, g.Attempt, i, s)
 }
 func (g *AttemptGenerator) ExecutorStderr(i uint32, s string) *Event {
-  return NewExecutorStderr(g.TaskID, g.Attempt, i, s)
+	return NewExecutorStderr(g.TaskID, g.Attempt, i, s)
 }

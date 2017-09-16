@@ -42,6 +42,14 @@ proto:
 	 	--go_out=plugins=grpc:. \
 	 	--grpc-gateway_out=logtostderr=true:. \
 	 	scheduler.proto
+	@cd events && protoc \
+		$(PROTO_INC) \
+		-I ../proto/tes \
+		-I $(shell pwd)/vendor/github.com/golang/protobuf/ptypes/struct/ \
+		-I $(shell pwd)/vendor/github.com/golang/protobuf/ptypes/timestamp/ \
+		--go_out=Mtes.proto=github.com/ohsu-comp-bio/funnel/proto/tes,plugins=grpc:. \
+		--grpc-gateway_out=logtostderr=true:. \
+		events.proto
 
 # Update submodules and build code
 depends:
