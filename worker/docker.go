@@ -19,7 +19,7 @@ type DockerCmd struct {
   ExecIndex int
   Exec *tes.Executor
   Volumes []Volume
-  RemoveContainer bool
+  LeaveContainer bool
   ContainerName string
 }
 
@@ -167,7 +167,7 @@ func (dcmd *DockerCmd) Args() []string {
   e := dcmd.Exec
 	args := []string{"run", "-i"}
 
-	if dcmd.RemoveContainer {
+	if !dcmd.LeaveContainer {
 		args = append(args, "--rm")
 	}
 

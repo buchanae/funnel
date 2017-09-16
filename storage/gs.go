@@ -5,7 +5,6 @@ package storage
 import (
 	"context"
 	"fmt"
-	"github.com/ohsu-comp-bio/funnel/config"
 	"github.com/ohsu-comp-bio/funnel/proto/tes"
 	"github.com/ohsu-comp-bio/funnel/util"
 	"golang.org/x/oauth2/google"
@@ -29,7 +28,7 @@ type GSBackend struct {
 
 // NewGSBackend creates an GSBackend client instance, give an endpoint URL
 // and a set of authentication credentials.
-func NewGSBackend(conf config.GSStorage) (*GSBackend, error) {
+func NewGSBackend(conf GSConfig) (*GSBackend, error) {
 	ctx := context.Background()
 	client := &http.Client{}
 

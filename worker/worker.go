@@ -3,60 +3,67 @@ package worker
 import (
 	"context"
 	"fmt"
-	"github.com/ohsu-comp-bio/funnel/config"
 	"github.com/ohsu-comp-bio/funnel/logger"
 	"github.com/ohsu-comp-bio/funnel/proto/tes"
 	"github.com/ohsu-comp-bio/funnel/storage"
+	"github.com/ohsu-comp-bio/funnel/rpc"
 	"path"
   "io"
   "strings"
+  "time"
 )
 
 // NewDefaultWorker returns the default task runner used by Funnel,
 // which uses gRPC to read/write task details.
-func NewDefaultWorker(conf config.Worker, taskID string) Worker {
-	return &DefaultWorker{conf, taskID}
+func NewDockerRPCWorker(taskID string, c DockerConfig, r rpc.Config) (*DockerWorker, error) {
+	svc, err := newRPCTask(r, taskID)
+  if err != nil {
+    return nil, err
+  }
+	return &DockerWorker{c, taskID, svc}, nil
+}
+
+type DockerConfig struct {
+  Storage storage.Config
+  LeaveContainer bool
+  UpdateRate time.Duration
+  WorkDir string
 }
 
 // DefaultWorker is the default task worker, which follows a basic,
 // sequential process of task initialization, execution, finalization,
 // and logging.
-type DefaultWorker struct {
-	Conf   config.Worker
-  TaskID string
+type DockerWorker struct {
+  conf DockerConfig
+  taskID string
+  svc TaskService
 }
 
 // Run runs the Worker.
-func (r *DefaultWorker) Run(ctx context.Context) {
+func (r *DockerWorker) Run(ctx context.Context) {
 
-	log := logger.Sub("worker", "taskID", r.TaskID)
+	log := logger.Sub("worker", "taskID", r.taskID)
 
-	svc, err := newRPCTask(r.Conf, r.TaskID)
-  if err != nil {
-    // TODO how to best expose this error?
-    return
-  }
+  Start(r.svc)
+  defer End(r.svc, log, nil)
 
-  Start(svc)
-  defer End(svc, log, nil)
-
-	task, err := svc.Task()
+	task, err := r.svc.Task()
   Must(err)
 
 	// Map files into this baseDir
-	baseDir := path.Join(r.Conf.WorkDir, r.TaskID)
+	baseDir := path.Join(r.conf.WorkDir, r.taskID)
   mapper := NewFileMapper(baseDir)
 
   // Poll the task service, looking for a cancel state.
   // If found, cancel the context.
-	ctx = PollForCancel(ctx, svc.State, r.Conf.UpdateRate)
+	ctx = PollForCancel(ctx, r.svc.State, r.conf.UpdateRate)
 
 	// Prepare file mapper, which maps task file URLs to host filesystem paths.
   Must(mapper.MapTask(task))
 
 	// Configure a task-specific storage backend.
 	// This provides download/upload for inputs/outputs.
-  store, err := storage.WithConfig(r.Conf.Storage)
+  store, err := storage.WithConfig(r.conf.Storage)
   Must(err)
 
   // Validate that the storage supports the input/output URLs.
@@ -66,12 +73,12 @@ func (r *DefaultWorker) Run(ctx context.Context) {
   Must(Download(ctx, task.Inputs, store))
 
   // Set to running.
-	svc.SetState(tes.State_RUNNING)
+	r.svc.SetState(tes.State_RUNNING)
 
 	// Run task executors
 	for i, exec := range task.Executors {
     // Wrap the executor to handle start/end time, context, etc.
-    Must(RunExec(ctx, svc, i, func(ctx context.Context) error {
+    Must(RunExec(ctx, r.svc, i, func(ctx context.Context) error {
 
       log := log.WithFields("executor_index", i)
       log.Debug("Running executor")
@@ -81,17 +88,16 @@ func (r *DefaultWorker) Run(ctx context.Context) {
       Must(err)
 
       // Write stdout/err to both the files and the task logger.
-      stdio.Out = io.MultiWriter(stdio.Out, svc.ExecutorStdout(i))
-      stdio.Err = io.MultiWriter(stdio.Err, svc.ExecutorStderr(i))
+      stdio.Out = io.MultiWriter(stdio.Out, r.svc.ExecutorStdout(i))
+      stdio.Err = io.MultiWriter(stdio.Err, r.svc.ExecutorStderr(i))
 
       cmd := DockerCmd{
-        TaskLogger:    svc,
+        TaskLogger:    r.svc,
         Stdio: stdio,
         ExecIndex: i,
         Exec: exec,
         Volumes: mapper.Volumes,
-        // TODO make RemoveContainer configurable
-        RemoveContainer: true,
+        LeaveContainer: r.conf.LeaveContainer,
         ContainerName: fmt.Sprintf("%s-%d", task.Id, i),
       }
 
@@ -112,5 +118,5 @@ func (r *DefaultWorker) Run(ctx context.Context) {
   Must(err)
 
   // Log task outputs.
-	svc.Outputs(outputs)
+	r.svc.Outputs(outputs)
 }

@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"github.com/minio/minio-go"
-	"github.com/ohsu-comp-bio/funnel/config"
 	"github.com/ohsu-comp-bio/funnel/proto/tes"
 	"strings"
 )
@@ -19,7 +18,7 @@ type S3Backend struct {
 
 // NewS3Backend creates an S3Backend client instance, give an endpoint URL
 // and a set of authentication credentials.
-func NewS3Backend(conf config.S3Storage) (*S3Backend, error) {
+func NewS3Backend(conf S3Config) (*S3Backend, error) {
 
 	// Initialize minio client object.
 	// TODO SSL config and support

@@ -2,11 +2,9 @@ package worker
 
 import (
 	"context"
-	"github.com/ohsu-comp-bio/funnel/config"
 	tl "github.com/ohsu-comp-bio/funnel/proto/tasklogger"
 	"github.com/ohsu-comp-bio/funnel/proto/tes"
-	"github.com/ohsu-comp-bio/funnel/util"
-	"google.golang.org/grpc"
+	"github.com/ohsu-comp-bio/funnel/rpc"
 	"time"
   "io"
   "io/ioutil"
@@ -21,12 +19,21 @@ type RPCTask struct {
 	updateTimeout time.Duration
 }
 
-func newRPCTask(conf config.Worker, taskID string) (*RPCTask, error) {
-	client, err := newTaskClient(conf)
+type taskClient struct {
+	tes.TaskServiceClient
+	tl.TaskLoggerServiceClient
+}
+
+func newRPCTask(conf rpc.Config, taskID string) (*RPCTask, error) {
+  conn, err := rpc.Dial(conf)
 	if err != nil {
 		return nil, err
 	}
-	return &RPCTask{client, taskID, conf.UpdateTimeout}, nil
+  client := &taskClient{
+    tes.NewTaskServiceClient(conn),
+    tl.NewTaskLoggerServiceClient(conn),
+  }
+	return &RPCTask{client, taskID, conf.Timeout}, nil
 }
 
 // Task returns the task descriptor.
@@ -196,27 +203,4 @@ func (r *RPCTask) updateTaskLogs(up *tl.UpdateTaskLogsRequest) error {
 	}
 	cleanup()
 	return err
-}
-
-type taskClient struct {
-	tes.TaskServiceClient
-	tl.TaskLoggerServiceClient
-}
-
-func newTaskClient(conf config.Worker) (*taskClient, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
-	defer cancel()
-
-	conn, err := grpc.DialContext(ctx,
-		conf.ServerAddress,
-		grpc.WithInsecure(),
-		grpc.WithBlock(),
-		util.PerRPCPassword(conf.ServerPassword),
-	)
-	if err != nil {
-		return nil, err
-	}
-	t := tes.NewTaskServiceClient(conn)
-	s := tl.NewTaskLoggerServiceClient(conn)
-	return &taskClient{t, s}, nil
 }

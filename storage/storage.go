@@ -9,7 +9,6 @@ package storage
 import (
 	"context"
 	"fmt"
-	"github.com/ohsu-comp-bio/funnel/config"
 	"github.com/ohsu-comp-bio/funnel/proto/tes"
 	"os"
 	"path/filepath"
@@ -88,7 +87,7 @@ func (storage Storage) WithBackend(b Backend) Storage {
 }
 
 // WithConfig returns a new Storage instance with the given additional configuration.
-func (storage Storage) WithConfig(conf config.StorageConfig) (Storage, error) {
+func (storage Storage) WithConfig(conf Config) (Storage, error) {
 
 	if conf.Local.Valid() {
 		local, err := NewLocalBackend(conf.Local)
@@ -124,7 +123,7 @@ func (storage Storage) WithConfig(conf config.StorageConfig) (Storage, error) {
 	return storage, nil
 }
 
-func WithConfig(conf config.StorageConfig) (Storage, error) {
+func WithConfig(conf Config) (Storage, error) {
   return Storage{}.WithConfig(conf)
 }
 

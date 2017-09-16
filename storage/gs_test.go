@@ -2,7 +2,6 @@ package storage
 
 import (
 	"context"
-	"github.com/ohsu-comp-bio/funnel/config"
 	"github.com/ohsu-comp-bio/funnel/proto/tes"
 	"os"
 	"testing"
@@ -14,7 +13,7 @@ func authed(t *testing.T) *GSBackend {
 	if accountFile == "" {
 		t.Skip("No Google Cloud account file. Set TES_TEST_GS_ACCOUNT_FILE")
 	}
-	conf := config.GSStorage{
+	conf := GSConfig{
 		AccountFile: accountFile,
 	}
 
@@ -29,7 +28,7 @@ func authed(t *testing.T) *GSBackend {
 
 func TestAnonymousGet(t *testing.T) {
 	ctx := context.Background()
-	conf := config.GSStorage{}
+	conf := GSConfig{}
 	gs, err := NewGSBackend(conf)
 	if err != nil {
 		t.Fatal(err)

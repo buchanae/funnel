@@ -3,6 +3,7 @@ package config
 import (
 	"github.com/ghodss/yaml"
 	"github.com/ohsu-comp-bio/funnel/logger"
+	"github.com/ohsu-comp-bio/funnel/storage"
 	os_servers "github.com/rackspace/gophercloud/openstack/compute/v2/servers"
 	"io/ioutil"
 	"os"
@@ -52,11 +53,8 @@ type Config struct {
 // InheritServerProperties sets the ServerAddress and ServerPassword fields
 // in the Worker and Scheduler.Node configs based on the Server config
 func InheritServerProperties(c Config) Config {
-	c.Worker.ServerAddress = c.Server.RPCAddress()
-	c.Worker.ServerPassword = c.Server.Password
-
-	c.Scheduler.Node.ServerAddress = c.Server.RPCAddress()
-	c.Scheduler.Node.ServerPassword = c.Server.Password
+  c.Worker.RPC = c.Server.RPC
+  c.Scheduler.Node.RPC = c.Server.RPC
 	return c
 }
 
@@ -69,7 +67,6 @@ func DefaultConfig() Config {
 		Server: Server{
 			HostName:           "localhost",
 			HTTPPort:           "8000",
-			RPCPort:            "9090",
 			ServiceName:        "Funnel",
 			DBPath:             path.Join(workDir, "funnel.db"),
 			MaxExecutorLogSize: 10000,
@@ -93,9 +90,8 @@ func DefaultConfig() Config {
 			Logger: logger.DefaultConfig(),
 		},
 		Worker: Worker{
-			WorkDir: workDir,
-			Storage: StorageConfig{
-				Local: LocalStorage{
+			Storage: storage.Config{
+				Local: storage.LocalConfig{
 					AllowedDirs: []string{cwd},
 				},
 			},
@@ -130,7 +126,6 @@ type Server struct {
 	ServiceName        string
 	HostName           string
 	HTTPPort           string
-	RPCPort            string
 	Password           string
 	DBPath             string
 	DisableHTTPCache   bool
@@ -142,14 +137,6 @@ type Server struct {
 func (c Server) HTTPAddress() string {
 	if c.HostName != "" && c.HTTPPort != "" {
 		return "http://" + c.HostName + ":" + c.HTTPPort
-	}
-	return ""
-}
-
-// RPCAddress returns the RPC address based on HostName and RPCPort
-func (c *Server) RPCAddress() string {
-	if c.HostName != "" && c.RPCPort != "" {
-		return c.HostName + ":" + c.RPCPort
 	}
 	return ""
 }
@@ -187,72 +174,18 @@ type Node struct {
 	Timeout time.Duration
 	// How often the node sends update requests to the server.
 	UpdateRate time.Duration
-	// Timeout duration for UpdateNode() gRPC calls
-	UpdateTimeout time.Duration
 	Metadata      map[string]string
-	// RPC address of the Funnel server
-	ServerAddress string
-	// Password for basic auth. with the server APIs.
-	ServerPassword string
 	Logger         logger.Config
 }
 
 // Worker contains worker configuration.
 type Worker struct {
-	// RPC address of the Funnel server
-	ServerAddress string
-	// Password for basic auth. with the server APIs.
-	ServerPassword string
-	// Directory to write task files to
-	WorkDir string
 	// How often the worker sends task log updates
 	UpdateRate time.Duration
-	// Timeout duration for gRPC calls
-	UpdateTimeout time.Duration
 	// Max bytes to store in-memory between updates
 	BufferSize int64
-	Storage    StorageConfig
+	Storage    storage.Config
 	Logger     logger.Config
-}
-
-// StorageConfig describes configuration for all storage types
-type StorageConfig struct {
-	Local LocalStorage
-	S3    []S3Storage
-	GS    []GSStorage
-}
-
-// LocalStorage describes the directories Funnel can read from and write to
-type LocalStorage struct {
-	AllowedDirs []string
-}
-
-// Valid validates the LocalStorage configuration
-func (l LocalStorage) Valid() bool {
-	return len(l.AllowedDirs) > 0
-}
-
-// GSStorage describes configuration for the Google Cloud storage backend.
-type GSStorage struct {
-	AccountFile string
-	FromEnv     bool
-}
-
-// Valid validates the GSStorage configuration.
-func (g GSStorage) Valid() bool {
-	return g.FromEnv || g.AccountFile != ""
-}
-
-// S3Storage describes the directories Funnel can read from and write to
-type S3Storage struct {
-	Endpoint string
-	Key      string
-	Secret   string
-}
-
-// Valid validates the LocalStorage configuration
-func (l S3Storage) Valid() bool {
-	return l.Endpoint != "" && l.Key != "" && l.Secret != ""
 }
 
 // ToYaml formats the configuration into YAML and returns the bytes.

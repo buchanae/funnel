@@ -3,7 +3,6 @@ package storage
 import (
 	"context"
 	"fmt"
-	"github.com/ohsu-comp-bio/funnel/config"
 	"github.com/ohsu-comp-bio/funnel/proto/tes"
 	"io"
 	"os"
@@ -20,7 +19,7 @@ type LocalBackend struct {
 
 // NewLocalBackend returns a LocalBackend instance, configured to limit
 // file system access to the given allowed directories.
-func NewLocalBackend(conf config.LocalStorage) (*LocalBackend, error) {
+func NewLocalBackend(conf LocalConfig) (*LocalBackend, error) {
 	allowed := []string{}
 	for _, d := range conf.AllowedDirs {
 		a, err := filepath.Abs(d)
