@@ -19,9 +19,6 @@ func TestMapTask(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	f := FileMapper{
-		dir: tmp,
-	}
 
 	cwd, err := os.Getwd()
 	if err != nil {
@@ -63,7 +60,7 @@ func TestMapTask(t *testing.T) {
 		Volumes: []string{"/volone", "/voltwo"},
 	}
 
-	err = f.MapTask(task)
+	f, err := NewFileMapper(tmp, task)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -130,10 +127,10 @@ func TestMapTask(t *testing.T) {
 	}
 
 	if diff := deep.Equal(f.Inputs, ei); diff != nil {
-		log.Debug("Expected", fmt.Sprintf("%+v", ei))
-		log.Debug("Actual", fmt.Sprintf("%+v", f.Inputs))
+		t.Log("Expected", fmt.Sprintf("%+v", ei))
+		t.Log("Actual", fmt.Sprintf("%+v", f.Inputs))
 		for _, d := range diff {
-			log.Debug("Diff", d)
+			t.Log("Diff", d)
 		}
 		t.Fatal("unexpected mapper inputs")
 	}
@@ -147,19 +144,19 @@ func TestMapTask(t *testing.T) {
 	}
 
 	if diff := deep.Equal(f.Outputs, eo); diff != nil {
-		log.Debug("Expected", fmt.Sprintf("%+v", eo))
-		log.Debug("Actual", fmt.Sprintf("%+v", f.Outputs))
+		t.Log("Expected", fmt.Sprintf("%+v", eo))
+		t.Log("Actual", fmt.Sprintf("%+v", f.Outputs))
 		for _, d := range diff {
-			log.Debug("Diff", d)
+			t.Log("Diff", d)
 		}
 		t.Fatal("unexpected mapper outputs")
 	}
 
 	if diff := deep.Equal(f.Volumes, ev); diff != nil {
-		log.Debug("Expected", fmt.Sprintf("%+v", ev))
-		log.Debug("Actual", fmt.Sprintf("%+v", f.Volumes))
+		t.Log("Expected", fmt.Sprintf("%+v", ev))
+		t.Log("Actual", fmt.Sprintf("%+v", f.Volumes))
 		for _, d := range diff {
-			log.Debug("Diff", d)
+			t.Log("Diff", d)
 		}
 		t.Fatal("unexpected mapper volumes")
 	}
