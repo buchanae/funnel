@@ -106,18 +106,9 @@
 [submodule "vendor/github.com/kballard/go-shellquote"]
 	path = vendor/github.com/kballard/go-shellquote
 	url = https://github.com/kballard/go-shellquote
-[submodule "vendor/github.com/go-test/deep"]
-	path = vendor/github.com/go-test/deep
-	url = https://github.com/go-test/deep
 [submodule "vendor/github.com/logrusorgru/aurora"]
 	path = vendor/github.com/logrusorgru/aurora
 	url = https://github.com/logrusorgru/aurora
-[submodule "vendor/github.com/andreyvit/diff"]
-	path = vendor/github.com/andreyvit/diff
-	url = https://github.com/andreyvit/diff
-[submodule "vendor/github.com/sergi/go-diff"]
-	path = vendor/github.com/sergi/go-diff
-	url = https://github.com/sergi/go-diff
 [submodule "vendor/google.golang.org/genproto"]
 	path = vendor/google.golang.org/genproto
 	url = https://github.com/google/go-genproto
@@ -130,6 +121,3 @@
 [submodule "vendor/github.com/minio/go-homedir"]
 	path = vendor/github.com/minio/go-homedir
 	url = https://github.com/minio/go-homedir
-[submodule "vendor/golang.org/x/sys"]
-	path = vendor/golang.org/x/sys
-	url = https://go.googlesource.com/sys

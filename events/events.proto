@@ -1,0 +1,99 @@
+syntax = "proto3";
+
+package events;
+
+import "tes.proto";
+import "struct.proto";
+import "timestamp.proto";
+import "google/api/annotations.proto";
+
+message TaskState {
+  tes.State state = 1;
+}
+
+message TaskStartTime {
+  google.protobuf.Timestamp start_time = 1;
+}
+
+message TaskEndTime {
+  google.protobuf.Timestamp end_time = 1;
+}
+
+message TaskOutputs {
+  repeated tes.OutputFileLog outputs = 1;
+}
+
+message TaskMetadata {
+  map<string, string> metadata = 1;
+}
+
+message ExecutorStartTime {
+  google.protobuf.Timestamp start_time = 1;
+  uint32 index = 3;
+}
+
+message ExecutorEndTime {
+  google.protobuf.Timestamp end_time = 1;
+  uint32 index = 3;
+}
+
+message ExecutorExitCode {
+  int32  exit_code = 1;
+  uint32 index = 3;
+}
+
+message ExecutorHostIp {
+  string host_ip = 1;
+  uint32 index = 3;
+}
+
+message ExecutorPorts {
+  repeated tes.Ports ports = 1;
+  uint32 index = 3;
+}
+
+message ExecutorStdout {
+  string stdout = 1;
+  uint32 index = 3;
+}
+
+message ExecutorStderr {
+  string stderr = 1;
+  uint32 index = 3;
+}
+
+message SystemLog {
+  string msg = 1;
+  uint32 level = 2;
+  google.protobuf.Struct fields = 3;
+}
+
+message Event {
+  string id = 1;
+  uint32 attempt = 2;
+  google.protobuf.Timestamp timestamp = 3;
+  oneof event {
+    TaskState task_state = 4;
+    TaskStartTime task_start_time = 5;
+    TaskEndTime task_end_time = 6;
+    TaskOutputs task_outputs = 7;
+    TaskMetadata task_metadata = 8;
+    ExecutorStartTime executor_start_time = 9;
+    ExecutorEndTime executor_end_time = 10;
+    ExecutorExitCode executor_exit_code = 11;
+    ExecutorHostIp executor_host_ip = 12;
+    ExecutorPorts executor_ports = 13;
+    ExecutorStdout executor_stdout = 14;
+    ExecutorStderr executor_stderr = 15;
+    SystemLog system_log = 16;
+  }
+}
+
+message CreateEventResponse{}
+
+/**
+ * Event Service
+ */
+service EventService {
+  rpc CreateEvent(Event) returns (CreateEventResponse) {};
+}
