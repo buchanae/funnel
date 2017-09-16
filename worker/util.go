@@ -87,10 +87,10 @@ func PollForCancel(ctx context.Context, get func() tes.State, rate time.Duration
 	return taskctx
 }
 
-func LogHostIP(tl TaskLogger, i int) {
+func LogHostIP(log Logger, i int) {
 	// Grab the IP address of this host. Used to send task metadata updates.
 	ip, err := externalIP()
 	if err == nil {
-		tl.ExecutorHostIP(i, ip)
+		log.ExecutorHostIP(i, ip)
 	}
 }

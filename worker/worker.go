@@ -7,7 +7,6 @@ import (
 	"github.com/ohsu-comp-bio/funnel/proto/tes"
 	"github.com/ohsu-comp-bio/funnel/rpc"
 	"github.com/ohsu-comp-bio/funnel/storage"
-	"io"
 	"path"
 	"strings"
 	"time"
@@ -20,7 +19,7 @@ func NewDockerRPCWorker(taskID string, c DockerConfig, r rpc.Config) (*DockerWor
 	if err != nil {
 		return nil, err
 	}
-	return &DockerWorker{c, taskID, svc}, nil
+	return &DockerWorker{c, taskID, svc.Reader, svc.Logger}, nil
 }
 
 type DockerConfig struct {
@@ -36,28 +35,28 @@ type DockerConfig struct {
 type DockerWorker struct {
 	conf   DockerConfig
 	taskID string
-	svc    TaskService
+	read   TaskReader
+	log    Logger
 }
 
 // Run runs the Worker.
 func (r *DockerWorker) Run(ctx context.Context) {
+	// Poll the task service, looking for a cancel state.
+	// If found, cancel the context.
+	ctx = PollForCancel(ctx, r.read.State, r.conf.UpdateRate)
 
 	log := logger.Sub("worker", "taskID", r.taskID)
 
-	Start(r.svc)
-	defer End(r.svc, log, nil)
+	Start(r.log)
+	defer End(r.log, nil)
 
-	task, err := r.svc.Task()
+	task, err := r.read.Task()
 	Must(err)
-
-	// Poll the task service, looking for a cancel state.
-	// If found, cancel the context.
-	ctx = PollForCancel(ctx, r.svc.State, r.conf.UpdateRate)
 
 	// Prepare file mapper, which maps task file URLs to host filesystem paths.
 	baseDir := path.Join(r.conf.WorkDir, r.taskID)
-	mapper := NewFileMapper(baseDir)
-	Must(mapper.MapTask(task))
+	mapper, err := NewFileMapper(baseDir, task)
+	Must(err)
 
 	// Configure a task-specific storage backend.
 	// This provides download/upload for inputs/outputs.
@@ -65,32 +64,29 @@ func (r *DockerWorker) Run(ctx context.Context) {
 	Must(err)
 
 	// Validate that the storage supports the input/output URLs.
-	Must(ValidateStorageURLs(task.Inputs, task.Outputs, store))
+	Must(ValidateStorageURLs(mapper.Inputs, mapper.Outputs, store))
 
 	// Download the inputs.
-	Must(Download(ctx, task.Inputs, store))
+	Must(Download(ctx, mapper.Inputs, store))
 
 	// Set to running.
-	r.svc.SetState(tes.State_RUNNING)
+	r.log.State(tes.State_RUNNING)
 
-  // TODO validate executors, mapper.CheckPath, ensure all paths in mapper.MapTask
-  // TODO re-implement log tailers
+	// TODO re-implement log tailers
 
 	// Run task executors
 	for i, exec := range task.Executors {
 		// Wrap the executor to handle start/end time, context, etc.
-		Must(RunExec(ctx, r.svc, i, func(ctx context.Context) error {
+		Must(RunExec(ctx, r.log, i, func(ctx context.Context) error {
 
 			// Open stdin/out/err files, mapped to working directory on host
-			stdio, err := mapper.OpenStdio(exec.Stdin, exec.Stdout, exec.Stderr)
+			stdio, err := mapper.NewStdio(exec.Stdin, exec.Stdout, exec.Stderr)
 			Must(err)
-
-			// Write stdout/err to both the files and the task logger.
-			stdio.Out = io.MultiWriter(stdio.Out, r.svc.ExecutorStdout(i))
-			stdio.Err = io.MultiWriter(stdio.Err, r.svc.ExecutorStderr(i))
+			// Write stdout/err to the task logger event stream.
+			stdio = ExecutorStdioEvents(stdio, i, r.log)
 
 			cmd := DockerCmd{
-				TaskLogger:     r.svc,
+				Logger:         r.log,
 				Stdio:          stdio,
 				ExecIndex:      i,
 				Exec:           exec,
@@ -116,5 +112,5 @@ func (r *DockerWorker) Run(ctx context.Context) {
 	Must(err)
 
 	// Log task outputs.
-	r.svc.Outputs(outputs)
+	r.log.Outputs(outputs)
 }

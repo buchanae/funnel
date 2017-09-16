@@ -39,25 +39,25 @@ type Volume struct {
 
 // NewFileMapper returns a new FileMapper, which maps files into the given
 // base directory.
-func NewFileMapper(dir string) *FileMapper {
-	// TODO error handling
-	dir, _ = filepath.Abs(dir)
-	return &FileMapper{
+func NewFileMapper(dir string, task *tes.Task) (*FileMapper, error) {
+
+	dir, err := filepath.Abs(dir)
+	if err != nil {
+		return nil, err
+	}
+
+	mapper := &FileMapper{
 		Volumes: []Volume{},
 		Inputs:  []*tes.TaskParameter{},
 		Outputs: []*tes.TaskParameter{},
 		dir:     dir,
 	}
-}
-
-// MapTask adds all the volumes, inputs, and outputs in the given Task to the FileMapper.
-func (mapper *FileMapper) MapTask(task *tes.Task) error {
 
 	// Add all the volumes to the mapper
 	for _, vol := range task.Volumes {
 		err := mapper.AddTmpVolume(vol)
 		if err != nil {
-			return err
+			return nil, err
 		}
 	}
 
@@ -65,7 +65,7 @@ func (mapper *FileMapper) MapTask(task *tes.Task) error {
 	for _, input := range task.Inputs {
 		err := mapper.AddInput(input)
 		if err != nil {
-			return err
+			return nil, err
 		}
 	}
 
@@ -73,11 +73,53 @@ func (mapper *FileMapper) MapTask(task *tes.Task) error {
 	for _, output := range task.Outputs {
 		err := mapper.AddOutput(output)
 		if err != nil {
-			return err
+			return nil, err
 		}
 	}
 
-	return nil
+	// Check the executor paths.
+	for _, exec := range task.Executors {
+		if exec.Stdin != "" {
+			// Ensure the path is valid
+			hostPath := mapper.HostPath(exec.Stdin)
+			err = mapper.CheckPath(hostPath)
+			if err != nil {
+				return nil, err
+			}
+		}
+
+		if exec.Stdout != "" {
+			// Ensure the path is valid
+			hostPath := mapper.HostPath(exec.Stdout)
+			err = mapper.CheckPath(hostPath)
+			if err != nil {
+				return nil, err
+			}
+
+			// Ensure the directory exists.
+			err = util.EnsureDir(exec.Stdout)
+			if err != nil {
+				return nil, err
+			}
+		}
+
+		if exec.Stderr != "" {
+			// Ensure the path is valid
+			hostPath := mapper.HostPath(exec.Stderr)
+			err := mapper.CheckPath(hostPath)
+			if err != nil {
+				return nil, err
+			}
+
+			// Ensure the directory exists.
+			err = util.EnsureDir(exec.Stdout)
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	return mapper, nil
 }
 
 // AddVolume adds a mapped volume to the mapper. A corresponding Volume record
@@ -102,9 +144,9 @@ func (mapper *FileMapper) AddVolume(hostPath string, mountPoint string, readonly
 		// If an existing RW Volume is a subpath of the proposed RW Volume, replace it with
 		// the proposed RW Volume
 		if !vol.Readonly && !v.Readonly {
-			if mapper.IsSubpath(vol.ContainerPath, v.ContainerPath) {
+			if IsSubpath(vol.ContainerPath, v.ContainerPath) {
 				return nil
-			} else if mapper.IsSubpath(v.ContainerPath, vol.ContainerPath) {
+			} else if IsSubpath(v.ContainerPath, vol.ContainerPath) {
 				mapper.Volumes[i] = vol
 				return nil
 			}
@@ -133,14 +175,14 @@ func (mapper *FileMapper) HostPath(src string) string {
 }
 
 func (mapper *FileMapper) CheckPath(p string) error {
-	if !mapper.IsSubpath(p, mapper.dir) {
+	if !IsSubpath(p, mapper.dir) {
 		return fmt.Errorf("Invalid path: %s is not a valid subpath of %s", p, mapper.dir)
 	}
 	return nil
 }
 
-func (mapper *FileMapper) OpenStdio(in, out, err string) (*Stdio, error) {
-	return OpenStdio(
+func (mapper *FileMapper) NewStdio(in, out, err string) (*Stdio, error) {
+	return NewStdio(
 		mapper.HostPath(in),
 		mapper.HostPath(out),
 		mapper.HostPath(err),
@@ -182,7 +224,12 @@ func (mapper *FileMapper) AddTmpVolume(mountPoint string) error {
 func (mapper *FileMapper) AddInput(input *tes.TaskParameter) error {
 	hostPath := mapper.HostPath(input.Path)
 
-	err := util.EnsurePath(hostPath)
+	err := mapper.CheckPath(hostPath)
+	if err != nil {
+		return err
+	}
+
+	err = util.EnsurePath(hostPath)
 	if err != nil {
 		return err
 	}
@@ -217,6 +264,11 @@ func (mapper *FileMapper) AddInput(input *tes.TaskParameter) error {
 func (mapper *FileMapper) AddOutput(output *tes.TaskParameter) error {
 	hostPath := mapper.HostPath(output.Path)
 
+	err := mapper.CheckPath(hostPath)
+	if err != nil {
+		return err
+	}
+
 	hostDir := hostPath
 	mountDir := output.Path
 	if output.Type == tes.FileType_FILE {
@@ -224,7 +276,7 @@ func (mapper *FileMapper) AddOutput(output *tes.TaskParameter) error {
 		mountDir = path.Dir(output.Path)
 	}
 
-	err := util.EnsureDir(hostDir)
+	err = util.EnsureDir(hostDir)
 	if err != nil {
 		return err
 	}
@@ -243,6 +295,6 @@ func (mapper *FileMapper) AddOutput(output *tes.TaskParameter) error {
 }
 
 // IsSubpath returns true if the given path "p" is a subpath of "base".
-func (mapper *FileMapper) IsSubpath(p string, base string) bool {
+func IsSubpath(p string, base string) bool {
 	return strings.HasPrefix(p, base)
 }

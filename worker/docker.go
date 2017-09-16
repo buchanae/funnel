@@ -14,7 +14,7 @@ import (
 
 // DockerCmd is responsible for configuring and running a docker container.
 type DockerCmd struct {
-	TaskLogger
+	Logger
 	*Stdio
 	ExecIndex      int
 	Exec           *tes.Executor
@@ -40,7 +40,7 @@ func (dcmd *DockerCmd) Run(ctx context.Context) error {
 
 	case result := <-done:
 		code := GetExitCode(result)
-		dcmd.TaskLogger.ExecutorExitCode(dcmd.ExecIndex, code)
+		dcmd.Logger.ExecutorExitCode(dcmd.ExecIndex, code)
 
 		if result != nil {
 			return ErrExecFailed(result)
@@ -81,7 +81,7 @@ func (dcmd *DockerCmd) Inspect(ctx context.Context) {
 			if err != nil && !client.IsErrContainerNotFound(err) {
 				break
 			}
-			dcmd.TaskLogger.ExecutorPorts(dcmd.ExecIndex, ports)
+			dcmd.Logger.ExecutorPorts(dcmd.ExecIndex, ports)
 			return
 		}
 	}
