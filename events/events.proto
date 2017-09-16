@@ -37,27 +37,27 @@ message ExecutorEndTime {
   uint32 index = 3;
 }
 
-message ExecutorExitCode {
+message ExitCode {
   int32  exit_code = 1;
   uint32 index = 3;
 }
 
-message ExecutorHostIp {
+message HostIp {
   string host_ip = 1;
   uint32 index = 3;
 }
 
-message ExecutorPorts {
+message Ports {
   repeated tes.Ports ports = 1;
   uint32 index = 3;
 }
 
-message ExecutorStdout {
+message Stdout {
   string stdout = 1;
   uint32 index = 3;
 }
 
-message ExecutorStderr {
+message Stderr {
   string stderr = 1;
   uint32 index = 3;
 }
@@ -80,11 +80,11 @@ message Event {
     TaskMetadata task_metadata = 8;
     ExecutorStartTime executor_start_time = 9;
     ExecutorEndTime executor_end_time = 10;
-    ExecutorExitCode executor_exit_code = 11;
-    ExecutorHostIp executor_host_ip = 12;
-    ExecutorPorts executor_ports = 13;
-    ExecutorStdout executor_stdout = 14;
-    ExecutorStderr executor_stderr = 15;
+    ExitCode exit_code = 11;
+    HostIp host_ip = 12;
+    Ports ports = 13;
+    Stdout stdout = 14;
+    Stderr stderr = 15;
     SystemLog system_log = 16;
   }
 }
