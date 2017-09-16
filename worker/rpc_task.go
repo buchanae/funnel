@@ -2,11 +2,11 @@ package worker
 
 import (
 	"context"
+	"fmt"
 	tl "github.com/ohsu-comp-bio/funnel/proto/tasklogger"
 	"github.com/ohsu-comp-bio/funnel/proto/tes"
 	"github.com/ohsu-comp-bio/funnel/rpc"
 	"io"
-	"io/ioutil"
 	"time"
 )
 
@@ -168,39 +168,55 @@ func (r *RPCLogger) ExecutorHostIP(i int, ip string) {
 }
 
 func (r *RPCLogger) ExecutorStdout(i int) io.Writer {
-	return ioutil.Discard
+	return &stdoutWriter{r, i}
 }
 func (r *RPCLogger) ExecutorStderr(i int) io.Writer {
-	return ioutil.Discard
+	return &stderrWriter{r, i}
 }
 
-// AppendExecutorStdout appends to an executor's stdout log.
-func (r *RPCLogger) AppendExecutorStdout(i int, s string) {
-	r.updateExecutorLogs(&tl.UpdateExecutorLogsRequest{
-		Id:   r.taskID,
-		Step: int64(i),
-		Log: &tes.ExecutorLog{
-			Stdout: s,
-		},
-	})
+type stdoutWriter struct {
+	r *RPCLogger
+	i int
 }
 
-// AppendExecutorStderr appends to an executor's stderr log.
-func (r *RPCLogger) AppendExecutorStderr(i int, s string) {
-	r.updateExecutorLogs(&tl.UpdateExecutorLogsRequest{
-		Id:   r.taskID,
-		Step: int64(i),
+func (s *stdoutWriter) Write(p []byte) (int, error) {
+	err := s.r.updateExecutorLogs(&tl.UpdateExecutorLogsRequest{
+		Id:   s.r.taskID,
+		Step: int64(s.i),
 		Log: &tes.ExecutorLog{
-			Stderr: s,
+			Stdout: string(p),
 		},
 	})
+	if err != nil {
+		return 0, err
+	}
+	return len(p), nil
+}
+
+type stderrWriter struct {
+	r *RPCLogger
+	i int
+}
+
+func (s *stderrWriter) Write(p []byte) (int, error) {
+	err := s.r.updateExecutorLogs(&tl.UpdateExecutorLogsRequest{
+		Id:   s.r.taskID,
+		Step: int64(s.i),
+		Log: &tes.ExecutorLog{
+			Stderr: string(p),
+		},
+	})
+	if err != nil {
+		return 0, err
+	}
+	return len(p), nil
 }
 
 func (r *RPCLogger) updateExecutorLogs(up *tl.UpdateExecutorLogsRequest) error {
 	ctx, cleanup := context.WithTimeout(context.Background(), r.updateTimeout)
 	_, err := r.client.UpdateExecutorLogs(ctx, up)
 	if err != nil {
-		log.Error("Couldn't update executor logs", err)
+		return fmt.Errorf("Couldn't update executor logs: %s", err)
 	}
 	cleanup()
 	return err
@@ -210,7 +226,7 @@ func (r *RPCLogger) updateTaskLogs(up *tl.UpdateTaskLogsRequest) error {
 	ctx, cleanup := context.WithTimeout(context.Background(), r.updateTimeout)
 	_, err := r.client.UpdateTaskLogs(ctx, up)
 	if err != nil {
-		log.Error("Couldn't update task logs", err)
+		return fmt.Errorf("Couldn't update task logs: %s", err)
 	}
 	cleanup()
 	return err

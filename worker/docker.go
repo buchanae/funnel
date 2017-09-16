@@ -55,7 +55,7 @@ func (dcmd *DockerCmd) runcmd() error {
 	// Don't need the client here, just the logic inside NewDockerClient().
 	_, derr := util.NewDockerClient()
 	if derr != nil {
-		log.Error("Can't connect to Docker", derr)
+		dcmd.Logger.Error("Can't connect to Docker", derr)
 		return derr
 	}
 

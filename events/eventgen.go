@@ -191,6 +191,34 @@ func NewExecutorStderr(id string, attempt uint32, i uint32, s string) *Event {
 	}
 }
 
+type ExecutorStdoutWriter struct {
+  Writer
+  TaskID string
+  Attempt uint32
+  Index uint32
+}
+func (e *ExecutorStdoutWriter) Write(p []byte), (int, error) {
+  err := e.Writer(NewExecutorStdout(e.TaskID, e.Attempt, e.Index, string(p)))
+  if err != nil {
+    return 0, err
+  }
+  return len(p), nil
+}
+
+type ExecutorStderrWriter struct {
+  Writer
+  TaskID string
+  Attempt uint32
+  Index uint32
+}
+func (e *ExecutorStderrWriter) Write(p []byte), (int, error) {
+  err := e.Writer(NewExecutorStderr(e.TaskID, e.Attempt, e.Index, string(p)))
+  if err != nil {
+    return 0, err
+  }
+  return len(p), nil
+}
+
 // AttemptGenerator is a type that emulates the TaskWriter interface
 // and outputs Events.
 type AttemptGenerator struct {

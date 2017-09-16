@@ -3,7 +3,6 @@ package worker
 import (
 	"context"
 	"fmt"
-	"github.com/ohsu-comp-bio/funnel/logger"
 	"github.com/ohsu-comp-bio/funnel/proto/tes"
 	"github.com/ohsu-comp-bio/funnel/rpc"
 	"github.com/ohsu-comp-bio/funnel/storage"
@@ -44,8 +43,6 @@ func (r *DockerWorker) Run(ctx context.Context) {
 	// Poll the task service, looking for a cancel state.
 	// If found, cancel the context.
 	ctx = PollForCancel(ctx, r.read.State, r.conf.UpdateRate)
-
-	log := logger.Sub("worker", "taskID", r.taskID)
 
 	Start(r.log)
 	defer End(r.log, nil)
@@ -96,7 +93,7 @@ func (r *DockerWorker) Run(ctx context.Context) {
 			}
 
 			// docker run --rm --name [name] -i -w [workdir] -v [bindings] [imageName] [cmd]
-			log.Info("Running command", "cmd", "docker "+strings.Join(cmd.Args(), " "))
+			r.log.Info("Running command", "cmd", "docker "+strings.Join(cmd.Args(), " "))
 
 			return cmd.Run(ctx)
 		}))
