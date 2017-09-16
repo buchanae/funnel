@@ -50,15 +50,13 @@ func (r *DockerWorker) Run(ctx context.Context) {
 	task, err := r.svc.Task()
 	Must(err)
 
-	// Map files into this baseDir
-	baseDir := path.Join(r.conf.WorkDir, r.taskID)
-	mapper := NewFileMapper(baseDir)
-
 	// Poll the task service, looking for a cancel state.
 	// If found, cancel the context.
 	ctx = PollForCancel(ctx, r.svc.State, r.conf.UpdateRate)
 
 	// Prepare file mapper, which maps task file URLs to host filesystem paths.
+	baseDir := path.Join(r.conf.WorkDir, r.taskID)
+	mapper := NewFileMapper(baseDir)
 	Must(mapper.MapTask(task))
 
 	// Configure a task-specific storage backend.
@@ -75,13 +73,13 @@ func (r *DockerWorker) Run(ctx context.Context) {
 	// Set to running.
 	r.svc.SetState(tes.State_RUNNING)
 
+  // TODO validate executors, mapper.CheckPath, ensure all paths in mapper.MapTask
+  // TODO re-implement log tailers
+
 	// Run task executors
 	for i, exec := range task.Executors {
 		// Wrap the executor to handle start/end time, context, etc.
 		Must(RunExec(ctx, r.svc, i, func(ctx context.Context) error {
-
-			log := log.WithFields("executor_index", i)
-			log.Debug("Running executor")
 
 			// Open stdin/out/err files, mapped to working directory on host
 			stdio, err := mapper.OpenStdio(exec.Stdin, exec.Stdout, exec.Stderr)
