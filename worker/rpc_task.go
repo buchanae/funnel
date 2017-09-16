@@ -8,6 +8,8 @@ import (
 	"github.com/ohsu-comp-bio/funnel/util"
 	"google.golang.org/grpc"
 	"time"
+  "io"
+  "io/ioutil"
 )
 
 // TODO document behavior of slow consumer of task log updates
@@ -145,6 +147,13 @@ func (r *RPCTask) ExecutorHostIP(i int, ip string) {
 			HostIp: ip,
 		},
 	})
+}
+
+func (r *RPCTask) ExecutorStdout(i int) io.Writer {
+  return ioutil.Discard
+}
+func (r *RPCTask) ExecutorStderr(i int) io.Writer {
+  return ioutil.Discard
 }
 
 // AppendExecutorStdout appends to an executor's stdout log.

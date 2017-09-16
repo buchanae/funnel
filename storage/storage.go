@@ -124,6 +124,10 @@ func (storage Storage) WithConfig(conf config.StorageConfig) (Storage, error) {
 	return storage, nil
 }
 
+func WithConfig(conf config.StorageConfig) (Storage, error) {
+  return Storage{}.WithConfig(conf)
+}
+
 type hostfile struct {
 	// The path relative to the "root" given to walkFiles().
 	rel string

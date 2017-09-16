@@ -4,6 +4,7 @@ import (
 	"context"
 	"github.com/ohsu-comp-bio/funnel/proto/tes"
 	"time"
+  "io"
 )
 
 // Worker is a type which runs a task.
@@ -34,6 +35,6 @@ type TaskLogger interface {
 	ExecutorStartTime(i int, t time.Time)
 	ExecutorEndTime(i int, t time.Time)
 
-	AppendExecutorStdout(i int, s string)
-	AppendExecutorStderr(i int, s string)
+  ExecutorStdout(i int) io.Writer
+  ExecutorStderr(i int) io.Writer
 }

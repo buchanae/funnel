@@ -6,7 +6,6 @@ import (
 	"github.com/docker/docker/client"
 	"github.com/ohsu-comp-bio/funnel/proto/tes"
 	"github.com/ohsu-comp-bio/funnel/util"
-	"io"
 	"os/exec"
 	"strconv"
 	"strings"
@@ -15,21 +14,44 @@ import (
 
 // DockerCmd is responsible for configuring and running a docker container.
 type DockerCmd struct {
-	ImageName       string
-	Cmd             []string
-	Volumes         []Volume
-	Workdir         string
-	Ports           []*tes.Ports
-	ContainerName   string
-	RemoveContainer bool
-	Environ         map[string]string
-	Stdin           io.Reader
-	Stdout          io.Writer
-	Stderr          io.Writer
+  TaskLogger
+  *Stdio
+  ExecIndex int
+  Exec *tes.Executor
+  Volumes []Volume
+  RemoveContainer bool
+  ContainerName string
 }
 
+func (dcmd *DockerCmd) Run(ctx context.Context) error {
+
+	done := make(chan error, 1)
+
+	go func() {
+		done <- dcmd.runcmd()
+	}()
+  go dcmd.Inspect(ctx)
+
+  select {
+  case <-ctx.Done():
+    // Likely the task was canceled.
+    dcmd.Stop()
+    return ctx.Err()
+
+  case result := <-done:
+    code := GetExitCode(result)
+    dcmd.TaskLogger.ExecutorExitCode(dcmd.ExecIndex, code)
+
+    if result != nil {
+      return ErrExecFailed(result)
+    }
+    return nil
+  }
+}
+
+
 // Run runs the Docker command and blocks until done.
-func (dcmd DockerCmd) Run() error {
+func (dcmd *DockerCmd) runcmd() error {
 	// (Hopefully) temporary hack to sync docker API version info.
 	// Don't need the client here, just the logic inside NewDockerClient().
 	_, derr := util.NewDockerClient()
@@ -38,84 +60,56 @@ func (dcmd DockerCmd) Run() error {
 		return derr
 	}
 
-	args := []string{"run", "-i"}
+	cmd := exec.Command("docker", dcmd.Args()...)
+  cmd.Stdin = dcmd.Stdio.In
+  cmd.Stdout = dcmd.Stdio.Out
+  cmd.Stderr = dcmd.Stdio.Err
 
-	if dcmd.RemoveContainer {
-		args = append(args, "--rm")
-	}
-
-	if dcmd.Environ != nil {
-		for k, v := range dcmd.Environ {
-			args = append(args, "-e", fmt.Sprintf("%s=%s", k, v))
-		}
-	}
-
-	if dcmd.Ports != nil {
-		for i := range dcmd.Ports {
-			hostPort := dcmd.Ports[i].Host
-			containerPort := dcmd.Ports[i].Container
-			// TODO move to validation?
-			if hostPort <= 1024 && hostPort != 0 {
-				return fmt.Errorf("Error cannot use restricted ports")
-			}
-			args = append(args, "-p", fmt.Sprintf("%d:%d", hostPort, containerPort))
-		}
-	}
-
-	if dcmd.ContainerName != "" {
-		args = append(args, "--name", dcmd.ContainerName)
-	}
-
-	if dcmd.Workdir != "" {
-		args = append(args, "-w", dcmd.Workdir)
-	}
-
-	for _, vol := range dcmd.Volumes {
-		arg := formatVolumeArg(vol)
-		args = append(args, "-v", arg)
-	}
-
-	args = append(args, dcmd.ImageName)
-	args = append(args, dcmd.Cmd...)
-
-	// Roughly: `docker run --rm -i -w [workdir] -v [bindings] [imageName] [cmd]`
-	log.Info("Running command", "cmd", "docker "+strings.Join(args, " "))
-	cmd := exec.Command("docker", args...)
-
-	if dcmd.Stdin != nil {
-		cmd.Stdin = dcmd.Stdin
-	}
-	if dcmd.Stdout != nil {
-		cmd.Stdout = dcmd.Stdout
-	}
-	if dcmd.Stderr != nil {
-		cmd.Stderr = dcmd.Stderr
-	}
 	return cmd.Run()
 }
 
 // Inspect returns metadata about the container (calls "docker inspect").
-func (dcmd DockerCmd) Inspect(ctx context.Context) ([]*tes.Ports, error) {
-	log.Info("Fetching container metadata")
+func (dcmd *DockerCmd) Inspect(ctx context.Context) {
+	t := time.NewTimer(time.Second)
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+
+			ports, err := dcmd.inspect(ctx)
+			if err != nil && !client.IsErrContainerNotFound(err) {
+				break
+			}
+			dcmd.TaskLogger.ExecutorPorts(dcmd.ExecIndex, ports)
+			return
+		}
+	}
+}
+
+func (dcmd *DockerCmd) inspect(ctx context.Context) ([]*tes.Ports, error) {
 	dclient, derr := util.NewDockerClient()
 	if derr != nil {
 		return nil, derr
 	}
 	// close the docker client connection
 	defer dclient.Close()
+
 	for {
 		select {
 		case <-ctx.Done():
 			return nil, nil
 		default:
+
 			metadata, err := dclient.ContainerInspect(ctx, dcmd.ContainerName)
 			if client.IsErrContainerNotFound(err) {
 				break
 			}
 			if err != nil {
-				log.Error("Error inspecting container", err)
 				break
 			}
+
 			if metadata.State.Running == true {
 				var portMap []*tes.Ports
 				// extract exposed host port from
@@ -136,7 +130,6 @@ func (dcmd DockerCmd) Inspect(ctx context.Context) ([]*tes.Ports, error) {
 							Container: uint32(containerPort),
 							Host:      uint32(hostPort),
 						})
-						log.Debug("Found port mapping:", "host", hostPort, "container", containerPort)
 					}
 				}
 				return portMap, nil
@@ -146,8 +139,7 @@ func (dcmd DockerCmd) Inspect(ctx context.Context) ([]*tes.Ports, error) {
 }
 
 // Stop stops the container.
-func (dcmd DockerCmd) Stop() error {
-	log.Info("Stopping container", "container", dcmd.ContainerName)
+func (dcmd *DockerCmd) Stop() error {
 	dclient, derr := util.NewDockerClient()
 	if derr != nil {
 		return derr
@@ -169,4 +161,38 @@ func formatVolumeArg(v Volume) string {
 		mode = "ro"
 	}
 	return fmt.Sprintf("%s:%s:%s", v.HostPath, v.ContainerPath, mode)
+}
+
+func (dcmd *DockerCmd) Args() []string {
+  e := dcmd.Exec
+	args := []string{"run", "-i"}
+
+	if dcmd.RemoveContainer {
+		args = append(args, "--rm")
+	}
+
+  for k, v := range e.Environ {
+    args = append(args, "-e", fmt.Sprintf("%s=%s", k, v))
+  }
+
+  for _, p := range e.Ports {
+    args = append(args, "-p", fmt.Sprintf("%d:%d", p.Host, p.Container))
+  }
+
+	if dcmd.ContainerName != "" {
+		args = append(args, "--name", dcmd.ContainerName)
+	}
+
+	if e.Workdir != "" {
+		args = append(args, "-w", e.Workdir)
+	}
+
+	for _, vol := range dcmd.Volumes {
+		arg := formatVolumeArg(vol)
+		args = append(args, "-v", arg)
+	}
+
+	args = append(args, e.ImageName)
+	args = append(args, e.Cmd...)
+  return args
 }

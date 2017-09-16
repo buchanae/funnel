@@ -6,7 +6,6 @@ import (
 	"github.com/ohsu-comp-bio/funnel/proto/tes"
 	"github.com/ohsu-comp-bio/funnel/util"
 	"io/ioutil"
-	"os"
 	"path"
 	"path/filepath"
 	"strings"
@@ -124,53 +123,36 @@ func (mapper *FileMapper) AddVolume(hostPath string, mountPoint string, readonly
 //
 // The mapped path is required to be a subpath of the mapper's base directory.
 // e.g. mapper.HostPath("../../foo") should fail with an error.
-func (mapper *FileMapper) HostPath(src string) (string, error) {
+func (mapper *FileMapper) HostPath(src string) string {
+  if src == "" {
+    return src
+  }
 	p := path.Join(mapper.dir, src)
 	p = path.Clean(p)
+	return p
+}
+
+func (mapper *FileMapper) CheckPath(p string) error {
 	if !mapper.IsSubpath(p, mapper.dir) {
-		return "", fmt.Errorf("Invalid path: %s is not a valid subpath of %s", p, mapper.dir)
+		return fmt.Errorf("Invalid path: %s is not a valid subpath of %s", p, mapper.dir)
 	}
-	return p, nil
+  return nil
 }
 
-// OpenHostFile opens a file on the host file system at a mapped path.
-// "src" is an unmapped path. This function will handle mapping the path.
-//
-// This function calls os.Open
-//
-// If the path can't be mapped or the file can't be opened, an error is returned.
-func (mapper *FileMapper) OpenHostFile(src string) (*os.File, error) {
-	p, perr := mapper.HostPath(src)
-	if perr != nil {
-		return nil, perr
-	}
-	f, oerr := os.Open(p)
-	if oerr != nil {
-		return nil, oerr
-	}
-	return f, nil
+func (mapper *FileMapper) OpenStdio(in, out, err string) (*Stdio, error) {
+  return OpenStdio(
+    mapper.HostPath(in),
+    mapper.HostPath(out),
+    mapper.HostPath(err),
+  )
 }
 
-// CreateHostFile creates a file on the host file system at a mapped path.
-// "src" is an unmapped path. This function will handle mapping the path.
-//
-// This function calls os.Create
-//
-// If the path can't be mapped or the file can't be created, an error is returned.
-func (mapper *FileMapper) CreateHostFile(src string) (*os.File, error) {
-	p, perr := mapper.HostPath(src)
-	if perr != nil {
-		return nil, perr
-	}
-	err := util.EnsurePath(p)
-	if err != nil {
-		return nil, err
-	}
-	f, oerr := os.Create(p)
-	if oerr != nil {
-		return nil, oerr
-	}
-	return f, nil
+func CreateWorkDir(dir string) error {
+  dir, err := filepath.Abs(dir)
+  if err != nil {
+    return err
+  }
+  return util.EnsureDir(dir)
 }
 
 // AddTmpVolume creates a directory on the host based on the declared path in
@@ -178,12 +160,9 @@ func (mapper *FileMapper) CreateHostFile(src string) (*os.File, error) {
 //
 // If the path can't be mapped, an error is returned.
 func (mapper *FileMapper) AddTmpVolume(mountPoint string) error {
-	hostPath, err := mapper.HostPath(mountPoint)
-	if err != nil {
-		return err
-	}
+	hostPath := mapper.HostPath(mountPoint)
 
-	err = util.EnsureDir(hostPath)
+	err := util.EnsureDir(hostPath)
 	if err != nil {
 		return err
 	}
@@ -201,12 +180,9 @@ func (mapper *FileMapper) AddTmpVolume(mountPoint string) error {
 //
 // If the path can't be mapped an error is returned.
 func (mapper *FileMapper) AddInput(input *tes.TaskParameter) error {
-	hostPath, err := mapper.HostPath(input.Path)
-	if err != nil {
-		return err
-	}
+	hostPath := mapper.HostPath(input.Path)
 
-	err = util.EnsurePath(hostPath)
+	err := util.EnsurePath(hostPath)
 	if err != nil {
 		return err
 	}
@@ -239,10 +215,7 @@ func (mapper *FileMapper) AddInput(input *tes.TaskParameter) error {
 //
 // If the path can't be mapped, an error is returned.
 func (mapper *FileMapper) AddOutput(output *tes.TaskParameter) error {
-	hostPath, err := mapper.HostPath(output.Path)
-	if err != nil {
-		return err
-	}
+	hostPath := mapper.HostPath(output.Path)
 
 	hostDir := hostPath
 	mountDir := output.Path
@@ -251,7 +224,7 @@ func (mapper *FileMapper) AddOutput(output *tes.TaskParameter) error {
 		mountDir = path.Dir(output.Path)
 	}
 
-	err = util.EnsureDir(hostDir)
+	err := util.EnsureDir(hostDir)
 	if err != nil {
 		return err
 	}

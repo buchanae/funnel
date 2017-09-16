@@ -26,6 +26,8 @@ func (t *tailer) Write(b []byte) (int, error) {
 	if err != nil {
 		return w, err
 	}
+  // This is suspicious. I think this helps flush the first small amount
+  // of content written?
 	if t.buf.TotalWritten() > 100 {
 		t.Flush()
 	}
