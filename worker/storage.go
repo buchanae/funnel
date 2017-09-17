@@ -2,13 +2,13 @@ package worker
 
 import (
 	"context"
+  "fmt"
 	"github.com/ohsu-comp-bio/funnel/proto/tes"
 	"github.com/ohsu-comp-bio/funnel/storage"
 	"os"
+  "io/ioutil"
 	"path/filepath"
 )
-
-type Mapper func(path string) string
 
 func Upload(ctx context.Context, tp []*tes.TaskParameter, s storage.Storage) ([]*tes.OutputFileLog, error) {
 	var outputs []*tes.OutputFileLog
@@ -27,7 +27,10 @@ func Upload(ctx context.Context, tp []*tes.TaskParameter, s storage.Storage) ([]
 
 // FixLinks walks the output paths, fixing cases where a symlink is
 // broken because it's pointing to a path inside a container volume.
-func FixLinks(basepath string, m Mapper) {
+//
+// "mapper" is used to map the broken link (e.g. containerized path)
+// to a correct path (e.g. host path).
+func FixLinks(basepath string, mapper func(string) string) {
 	filepath.Walk(basepath, func(p string, f os.FileInfo, err error) error {
 		if err != nil {
 			// There's an error, so be safe and give up on this file
@@ -48,7 +51,7 @@ func FixLinks(basepath string, m Mapper) {
 					return nil
 				}
 				// Map symlink source (possible container path) to host path
-				mapped := m(src)
+				mapped := mapper(src)
 
 				// Check whether the mapped path exists
 				fh, err := os.Open(mapped)
@@ -79,9 +82,36 @@ func LogUpload(ctx context.Context, out []*tes.TaskParameter, s storage.Storage,
 
 func Download(ctx context.Context, in []*tes.TaskParameter, s storage.Storage) error {
 	for _, input := range in {
-		err := s.Get(ctx, input.Url, input.Path, input.Type)
-		if err != nil {
-			return err
+
+    // If 'contents' field is set create the file
+    if input.Contents != "" {
+      err := ioutil.WriteFile(input.Path, []byte(input.Contents), 0775)
+      if err != nil {
+        return fmt.Errorf("Error writing contents of input to file %v", err)
+      }
+
+    } else {
+      err := s.Get(ctx, input.Url, input.Path, input.Type)
+      if err != nil {
+        return err
+      }
+    }
+	}
+	return nil
+}
+
+func ValidateStorage(s storage.Storage, inputs, outputs []*tes.TaskParameter) error {
+	for _, input := range inputs {
+    if input.Contents != "" {
+      continue
+    }
+		if !s.Supports(input.Url, input.Path, input.Type) {
+			return fmt.Errorf("input not supported by storage: %v", input)
+		}
+	}
+	for _, output := range outputs {
+		if !s.Supports(output.Url, output.Path, output.Type) {
+			return fmt.Errorf("output not supported by storage: %v", output)
 		}
 	}
 	return nil

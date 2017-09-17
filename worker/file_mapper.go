@@ -5,7 +5,6 @@ import (
 	proto "github.com/golang/protobuf/proto"
 	"github.com/ohsu-comp-bio/funnel/proto/tes"
 	"github.com/ohsu-comp-bio/funnel/util"
-	"io/ioutil"
 	"path"
 	"path/filepath"
 	"strings"
@@ -243,15 +242,6 @@ func (mapper *FileMapper) AddInput(input *tes.TaskParameter) error {
 	err = mapper.AddVolume(hostPath, input.Path, true)
 	if err != nil {
 		return err
-	}
-
-	// If 'contents' field is set create the file
-	if input.Contents != "" {
-		err := ioutil.WriteFile(hostPath, []byte(input.Contents), 0775)
-		if err != nil {
-			return fmt.Errorf("Error writing contents of input TaskParameter to file %v", err)
-		}
-		return nil
 	}
 
 	// Create a TaskParameter for the input with a path mapped to the host

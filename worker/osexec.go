@@ -15,7 +15,6 @@ type OSExecConfig struct {
 
 type OSExecWorker struct {
 	conf   OSExecConfig
-	taskID string
 	read   TaskReader
 	log    Logger
 }
@@ -38,8 +37,7 @@ func (o *OSExecWorker) Run(ctx context.Context) {
 	Must(err)
 
 	// Validate that the storage supports the input/output URLs.
-	Must(store.SupportsParams(task.Inputs))
-	Must(store.SupportsParams(task.Outputs))
+  Must(ValidateStorage(store, task.Inputs, task.Outputs))
 
 	// Download the inputs.
 	Must(Download(ctx, task.Inputs, store))

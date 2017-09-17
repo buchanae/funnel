@@ -60,8 +60,7 @@ func (r *DockerWorker) Run(ctx context.Context) {
 	Must(err)
 
 	// Validate that the storage supports the input/output URLs.
-	Must(store.SupportsParams(mapper.Inputs))
-	Must(store.SupportsParams(mapper.Outputs))
+  Must(ValidateStorage(store, task.Inputs, task.Outputs))
 
 	// Download the inputs.
 	Must(Download(ctx, mapper.Inputs, store))

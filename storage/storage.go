@@ -160,12 +160,3 @@ func fileSize(path string) int64 {
 	}
 	return st.Size()
 }
-
-func (s Storage) SupportsParams(params []*tes.TaskParameter) error {
-	for _, param := range params {
-		if !s.Supports(param.Url, param.Path, param.Type) {
-			return fmt.Errorf("param download not supported by storage: %v", param)
-		}
-	}
-	return nil
-}
