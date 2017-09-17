@@ -5,28 +5,22 @@ import (
 	"fmt"
 	"github.com/ohsu-comp-bio/funnel/proto/tes"
 	"time"
+  "runtime/debug"
 )
 
 type ExecError struct {
-  error
-}
-
-type mustError struct {
-  orig error
-}
-func (m mustError) Error() string {
-  return m.orig.Error()
+	error
 }
 
 func Must(err error) {
 	if err != nil {
-		panic(mustError{err})
+		panic(err)
 	}
 }
 
 func StartTask(log Logger) func(error) {
 	log.StartTime(time.Now())
-  log.State(tes.State_INITIALIZING)
+	log.State(tes.State_INITIALIZING)
 
 	return func(err error) {
 		if r := recover(); r != nil {
@@ -37,14 +31,6 @@ func StartTask(log Logger) func(error) {
 			}
 		}
 
-    /*
-    // Unwrap a panic error raised by Must
-    if m, ok := err.(mustError); ok {
-      fmt.Println("MUST UNWRAP", m.orig)
-      err = m.orig
-    }
-    */
-
 		log.EndTime(time.Now())
 		LogFinalState(log, err)
 	}
@@ -53,23 +39,23 @@ func StartTask(log Logger) func(error) {
 func LogFinalState(log Logger, err error) {
 	if x, ok := err.(ExecError); ok {
 		// One of the executors failed
-    fmt.Println("mathc", x)
 		log.Error("Exec error", map[string]string{
-      "error": x.Error(),
-    })
+			"error": x.Error(),
+		})
 		log.State(tes.State_ERROR)
 
-  } else if err == context.Canceled {
-    // context.Canceled is a special case, because it can happen from multiple sources:
-    //   - if the task is canceled by the user
-    //   - if the worker is shutdown by the host (e.g. SIGKILL)
+	} else if err == context.Canceled {
+		// context.Canceled is a special case, because it can happen from multiple sources:
+		//   - if the task is canceled by the user
+		//   - if the worker is shutdown by the host (e.g. SIGKILL)
 		log.State(tes.State_CANCELED)
 
 	} else if err != nil {
 		// If something else failed (system error)
 		log.Error("System error", map[string]string{
-      "error": err.Error(),
-    })
+			"error": err.Error(),
+      "stack": string(debug.Stack()),
+		})
 		log.State(tes.State_SYSTEM_ERROR)
 
 		// Otherwise, success

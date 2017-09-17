@@ -32,9 +32,9 @@ type DockerConfig struct {
 // sequential process of task initialization, execution, finalization,
 // and logging.
 type DockerWorker struct {
-	conf   DockerConfig
-	read   TaskReader
-	log    Logger
+	conf DockerConfig
+	read TaskReader
+	log  Logger
 }
 
 // Run runs the Worker.
@@ -60,8 +60,8 @@ func (r *DockerWorker) Run(ctx context.Context) {
 	Must(err)
 
 	// Validate that the storage supports the input/output URLs.
-  Must(store.SupportsParams(mapper.Inputs))
-  Must(store.SupportsParams(mapper.Outputs))
+	Must(store.SupportsParams(mapper.Inputs))
+	Must(store.SupportsParams(mapper.Outputs))
 
 	// Download the inputs.
 	Must(Download(ctx, mapper.Inputs, store))
@@ -78,7 +78,7 @@ func (r *DockerWorker) Run(ctx context.Context) {
 			stdio, err := OpenStdio(exec.Stdin, exec.Stdout, exec.Stderr)
 			defer stdio.Close()
 			Must(err)
-			stdio = LogStdio(*stdio, i, r.log)
+			stdio = LogStdio(stdio, i, r.log)
 
 			cmd := DockerCmd{
 				Logger:         r.log,
@@ -92,8 +92,8 @@ func (r *DockerWorker) Run(ctx context.Context) {
 
 			// docker run --rm --name [name] -i -w [workdir] -v [bindings] [imageName] [cmd]
 			r.log.Info("Running command", map[string]string{
-        "cmd": "docker "+strings.Join(cmd.Args(), " "),
-      })
+				"cmd": "docker " + strings.Join(cmd.Args(), " "),
+			})
 
 			Must(cmd.Run(ctx))
 		}()

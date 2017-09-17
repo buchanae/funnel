@@ -11,10 +11,10 @@ import (
 
 // LogStdio wraps executor stdout/err writers to write events to the given Logger.
 // "i" is the index of the executor being logged.
-func LogStdio(s Stdio, i int, log Logger) *Stdio {
+func LogStdio(s Stdio, i int, log Logger) Stdio {
 	s.Out = io.MultiWriter(s.Out, log.Stdout(i))
 	s.Err = io.MultiWriter(s.Err, log.Stderr(i))
-	return &s
+	return s
 }
 
 // Stdio makes it easier to reference a group of stdin/out/err handles.
@@ -43,7 +43,7 @@ func (s Stdio) Close() error {
 	return nil
 }
 
-func OpenStdio(stdin, stdout, stderr string) (*Stdio, error) {
+func OpenStdio(stdin, stdout, stderr string) (Stdio, error) {
 	s := Stdio{
 		In:  bytes.NewBuffer(nil),
 		Out: ioutil.Discard,
@@ -53,7 +53,7 @@ func OpenStdio(stdin, stdout, stderr string) (*Stdio, error) {
 	if stdin != "" {
 		f, err := os.Open(stdin)
 		if err != nil {
-			return nil, fmt.Errorf("couldn't open stdin: %s", err)
+			return s, fmt.Errorf("couldn't open stdin: %s", err)
 		}
 		s.files = append(s.files, f)
 		s.In = f
@@ -62,7 +62,7 @@ func OpenStdio(stdin, stdout, stderr string) (*Stdio, error) {
 	if stdout != "" {
 		f, err := os.Create(stdout)
 		if err != nil {
-			return nil, fmt.Errorf("couldn't open stdout: %s", err)
+			return s, fmt.Errorf("couldn't open stdout: %s", err)
 		}
 		s.files = append(s.files, f)
 		s.Out = f
@@ -71,10 +71,10 @@ func OpenStdio(stdin, stdout, stderr string) (*Stdio, error) {
 	if stderr != "" {
 		f, err := os.Create(stderr)
 		if err != nil {
-			return nil, fmt.Errorf("couldn't open stderr: %s", err)
+			return s, fmt.Errorf("couldn't open stderr: %s", err)
 		}
 		s.files = append(s.files, f)
 		s.Err = f
 	}
-	return &s, nil
+	return s, nil
 }

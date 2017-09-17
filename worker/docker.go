@@ -15,7 +15,7 @@ import (
 // DockerCmd is responsible for configuring and running a docker container.
 type DockerCmd struct {
 	Logger
-	*Stdio
+	Stdio
 	ExecIndex      int
 	Exec           *tes.Executor
 	Volumes        []Volume
@@ -56,8 +56,8 @@ func (dcmd *DockerCmd) runcmd() error {
 	_, derr := util.NewDockerClient()
 	if derr != nil {
 		dcmd.Logger.Error("Can't connect to Docker", map[string]string{
-      "error": derr.Error(),
-    })
+			"error": derr.Error(),
+		})
 		return derr
 	}
 

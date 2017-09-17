@@ -10,9 +10,9 @@ import (
 // Logger provides write access to a worker's logs.
 type Logger interface {
 	// System logs
-  Debug(msg string, fields map[string]string) error
-  Info(msg string, fields map[string]string) error
-  Error(msg string, fields map[string]string) error
+	Debug(msg string, fields map[string]string) error
+	Info(msg string, fields map[string]string) error
+	Error(msg string, fields map[string]string) error
 
 	// Task logs
 	State(tes.State) error
@@ -41,13 +41,13 @@ type EventLogger struct {
 }
 
 func (e EventLogger) Debug(msg string, fields map[string]string) error {
-  return e.AttemptWriter.SystemLog(msg, "debug", fields)
+	return e.AttemptWriter.SystemLog(msg, "debug", fields)
 }
 func (e EventLogger) Info(msg string, fields map[string]string) error {
-  return e.AttemptWriter.SystemLog(msg, "info", fields)
+	return e.AttemptWriter.SystemLog(msg, "info", fields)
 }
 func (e EventLogger) Error(msg string, fields map[string]string) error {
-  return e.AttemptWriter.SystemLog(msg, "error", fields)
+	return e.AttemptWriter.SystemLog(msg, "error", fields)
 }
 func (e EventLogger) ExecutorStartTime(i int, t time.Time) error {
 	return e.AttemptWriter.ExecutorStartTime(uint32(i), t)

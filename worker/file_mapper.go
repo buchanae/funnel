@@ -94,6 +94,12 @@ func (mapper *FileMapper) AddExecutor(exec *tes.Executor) error {
 		if err != nil {
 			return err
 		}
+
+		// Ensure the directory exists.
+		err = util.EnsurePath(exec.Stdin)
+		if err != nil {
+			return err
+		}
 	}
 
 	if exec.Stdout != "" {
@@ -105,7 +111,7 @@ func (mapper *FileMapper) AddExecutor(exec *tes.Executor) error {
 		}
 
 		// Ensure the directory exists.
-		err = util.EnsureDir(exec.Stdout)
+		err = util.EnsurePath(exec.Stdout)
 		if err != nil {
 			return err
 		}
@@ -120,7 +126,7 @@ func (mapper *FileMapper) AddExecutor(exec *tes.Executor) error {
 		}
 
 		// Ensure the directory exists.
-		err = util.EnsureDir(exec.Stderr)
+		err = util.EnsurePath(exec.Stderr)
 		if err != nil {
 			return err
 		}

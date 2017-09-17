@@ -38,8 +38,8 @@ func (o *OSExecWorker) Run(ctx context.Context) {
 	Must(err)
 
 	// Validate that the storage supports the input/output URLs.
-  Must(store.SupportsParams(task.Inputs))
-  Must(store.SupportsParams(task.Outputs))
+	Must(store.SupportsParams(task.Inputs))
+	Must(store.SupportsParams(task.Outputs))
 
 	// Download the inputs.
 	Must(Download(ctx, task.Inputs, store))
@@ -64,10 +64,7 @@ func (o *OSExecWorker) runExec(ctx context.Context, i int, exec *tes.Executor) e
 	stdio, err := OpenStdio(exec.Stdin, exec.Stdout, exec.Stderr)
 	defer stdio.Close()
 	Must(err)
-	stdio = LogStdio(*stdio, i, o.log)
-
-	// Write stdout/err to the logger.
-	stdio = LogStdio(*stdio, i, o.log)
+	stdio = LogStdio(stdio, i, o.log)
 
 	// Build os/exec.Cmd
 	cmd := osexec.CommandContext(ctx, exec.Cmd[0], exec.Cmd[1:]...)

@@ -58,13 +58,13 @@ type RPCLogger struct {
 }
 
 func (e RPCLogger) Debug(msg string, fields map[string]string) error {
-  return nil
+	return nil
 }
 func (e RPCLogger) Info(msg string, fields map[string]string) error {
-  return nil
+	return nil
 }
 func (e RPCLogger) Error(msg string, fields map[string]string) error {
-  return nil
+	return nil
 }
 
 // SetState sets the state of the task.

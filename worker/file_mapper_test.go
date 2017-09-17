@@ -57,6 +57,13 @@ func TestMapTask(t *testing.T) {
 				Type: tes.FileType_DIRECTORY,
 			},
 		},
+    Executors: []*tes.Executor{
+      {
+        Stdin: "/opt/funnel/execs/stdindir/stdin.txt",
+        Stdout: "/opt/funnel/execs/stdoutdir/stdout.txt",
+        Stderr: "/opt/funnel/execs/stderrdir/stderr.txt",
+      },
+    },
 		Volumes: []string{"/volone", "/voltwo"},
 	}
 
@@ -160,4 +167,55 @@ func TestMapTask(t *testing.T) {
 		}
 		t.Fatal("unexpected mapper volumes")
 	}
+
+  // executor stdin/out/err directory paths should be created
+  if !isDir(tmp + "/opt/funnel/execs/stdindir") {
+    t.Error("expected stdin directory path to be created")
+  }
+  if !isDir(tmp + "/opt/funnel/execs/stdoutdir") {
+    t.Error("expected stdout directory path to be created")
+  }
+  if !isDir(tmp + "/opt/funnel/execs/stderrdir") {
+    t.Error("expected stderr directory path to be created")
+  }
+  // ... but the files should not be created
+  if exists(tmp + "/opt/funnel/execs/stdindir/stdin.txt") {
+    t.Error("did not expect stdin file to be created")
+  }
+  if exists(tmp + "/opt/funnel/execs/stdoutdir/stdout.txt") {
+    t.Error("did not expect stdout file to be created")
+  }
+  if exists(tmp + "/opt/funnel/execs/stderrdir/stderr.txt") {
+    t.Error("did not expect stderr file to be created")
+  }
+}
+
+func isDir(path string) bool {
+  info, err := os.Stat(path)
+  if os.IsNotExist(err) {
+    return false
+  } else if err != nil {
+    panic(err)
+  }
+  return info.IsDir()
+}
+
+func isFile(path string) bool {
+  info, err := os.Stat(path)
+  if os.IsNotExist(err) {
+    return false
+  } else if err != nil {
+    panic(err)
+  }
+  return info.Mode().IsRegular()
+}
+
+func exists(path string) bool {
+  _, err := os.Stat(path)
+  if os.IsNotExist(err) {
+    return false
+  } else if err != nil {
+    panic(err)
+  }
+  return true
 }
