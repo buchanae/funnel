@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 	"github.com/ohsu-comp-bio/funnel/proto/tes"
+	"runtime/debug"
 	"time"
-  "runtime/debug"
 )
 
 type ExecError struct {
@@ -54,7 +54,7 @@ func LogFinalState(log Logger, err error) {
 		// If something else failed (system error)
 		log.Error("System error", map[string]string{
 			"error": err.Error(),
-      "stack": string(debug.Stack()),
+			"stack": string(debug.Stack()),
 		})
 		log.State(tes.State_SYSTEM_ERROR)
 

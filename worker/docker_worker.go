@@ -95,6 +95,7 @@ func (r *DockerWorker) Run(ctx context.Context) {
 				"cmd": "docker " + strings.Join(cmd.Args(), " "),
 			})
 
+			defer cmd.Stop()
 			Must(cmd.Run(ctx))
 		}()
 	}
