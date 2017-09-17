@@ -57,24 +57,28 @@ type RPCLogger struct {
 	updateTimeout time.Duration
 }
 
-func (r *RPCLogger) Debug(string, ...interface{}) {
+func (e RPCLogger) Debug(msg string, fields map[string]string) error {
+  return nil
 }
-func (r *RPCLogger) Info(string, ...interface{}) {
+func (e RPCLogger) Info(msg string, fields map[string]string) error {
+  return nil
 }
-func (r *RPCLogger) Error(string, ...interface{}) {
+func (e RPCLogger) Error(msg string, fields map[string]string) error {
+  return nil
 }
 
 // SetState sets the state of the task.
-func (r *RPCLogger) State(s tes.State) {
-	r.client.UpdateTaskState(context.Background(), &tl.UpdateTaskStateRequest{
+func (r *RPCLogger) State(s tes.State) error {
+	_, err := r.client.UpdateTaskState(context.Background(), &tl.UpdateTaskStateRequest{
 		Id:    r.taskID,
 		State: s,
 	})
+	return err
 }
 
 // StartTime updates the task's start time log.
-func (r *RPCLogger) StartTime(t time.Time) {
-	r.updateTaskLogs(&tl.UpdateTaskLogsRequest{
+func (r *RPCLogger) StartTime(t time.Time) error {
+	return r.updateTaskLogs(&tl.UpdateTaskLogsRequest{
 		Id: r.taskID,
 		TaskLog: &tes.TaskLog{
 			StartTime: t.Format(time.RFC3339),
@@ -83,8 +87,8 @@ func (r *RPCLogger) StartTime(t time.Time) {
 }
 
 // EndTime updates the task's end time log.
-func (r *RPCLogger) EndTime(t time.Time) {
-	r.updateTaskLogs(&tl.UpdateTaskLogsRequest{
+func (r *RPCLogger) EndTime(t time.Time) error {
+	return r.updateTaskLogs(&tl.UpdateTaskLogsRequest{
 		Id: r.taskID,
 		TaskLog: &tes.TaskLog{
 			EndTime: t.Format(time.RFC3339),
@@ -93,8 +97,8 @@ func (r *RPCLogger) EndTime(t time.Time) {
 }
 
 // Outputs updates the task's output file log.
-func (r *RPCLogger) Outputs(f []*tes.OutputFileLog) {
-	r.updateTaskLogs(&tl.UpdateTaskLogsRequest{
+func (r *RPCLogger) Outputs(f []*tes.OutputFileLog) error {
+	return r.updateTaskLogs(&tl.UpdateTaskLogsRequest{
 		Id: r.taskID,
 		TaskLog: &tes.TaskLog{
 			Outputs: f,
@@ -103,8 +107,8 @@ func (r *RPCLogger) Outputs(f []*tes.OutputFileLog) {
 }
 
 // Metadata updates the task's metadata log.
-func (r *RPCLogger) Metadata(m map[string]string) {
-	r.updateTaskLogs(&tl.UpdateTaskLogsRequest{
+func (r *RPCLogger) Metadata(m map[string]string) error {
+	return r.updateTaskLogs(&tl.UpdateTaskLogsRequest{
 		Id: r.taskID,
 		TaskLog: &tes.TaskLog{
 			Metadata: m,
@@ -113,8 +117,8 @@ func (r *RPCLogger) Metadata(m map[string]string) {
 }
 
 // ExecutorStartTime updates an executor's start time log.
-func (r *RPCLogger) ExecutorStartTime(i int, t time.Time) {
-	r.updateExecutorLogs(&tl.UpdateExecutorLogsRequest{
+func (r *RPCLogger) ExecutorStartTime(i int, t time.Time) error {
+	return r.updateExecutorLogs(&tl.UpdateExecutorLogsRequest{
 		Id:   r.taskID,
 		Step: int64(i),
 		Log: &tes.ExecutorLog{
@@ -124,8 +128,8 @@ func (r *RPCLogger) ExecutorStartTime(i int, t time.Time) {
 }
 
 // ExecutorEndTime updates an executor's end time log.
-func (r *RPCLogger) ExecutorEndTime(i int, t time.Time) {
-	r.updateExecutorLogs(&tl.UpdateExecutorLogsRequest{
+func (r *RPCLogger) ExecutorEndTime(i int, t time.Time) error {
+	return r.updateExecutorLogs(&tl.UpdateExecutorLogsRequest{
 		Id:   r.taskID,
 		Step: int64(i),
 		Log: &tes.ExecutorLog{
@@ -134,9 +138,9 @@ func (r *RPCLogger) ExecutorEndTime(i int, t time.Time) {
 	})
 }
 
-// ExecutorExitCode updates an executor's exit code log.
-func (r *RPCLogger) ExecutorExitCode(i int, x int) {
-	r.updateExecutorLogs(&tl.UpdateExecutorLogsRequest{
+// ExitCode updates an executor's exit code log.
+func (r *RPCLogger) ExitCode(i int, x int) error {
+	return r.updateExecutorLogs(&tl.UpdateExecutorLogsRequest{
 		Id:   r.taskID,
 		Step: int64(i),
 		Log: &tes.ExecutorLog{
@@ -145,9 +149,9 @@ func (r *RPCLogger) ExecutorExitCode(i int, x int) {
 	})
 }
 
-// ExecutorPorts updates an executor's ports log.
-func (r *RPCLogger) ExecutorPorts(i int, ports []*tes.Ports) {
-	r.updateExecutorLogs(&tl.UpdateExecutorLogsRequest{
+// Ports updates an executor's ports log.
+func (r *RPCLogger) Ports(i int, ports []*tes.Ports) error {
+	return r.updateExecutorLogs(&tl.UpdateExecutorLogsRequest{
 		Id:   r.taskID,
 		Step: int64(i),
 		Log: &tes.ExecutorLog{
@@ -156,9 +160,9 @@ func (r *RPCLogger) ExecutorPorts(i int, ports []*tes.Ports) {
 	})
 }
 
-// ExecutorHostIP updates an executor's host IP log.
-func (r *RPCLogger) ExecutorHostIP(i int, ip string) {
-	r.updateExecutorLogs(&tl.UpdateExecutorLogsRequest{
+// HostIP updates an executor's host IP log.
+func (r *RPCLogger) HostIP(i int, ip string) error {
+	return r.updateExecutorLogs(&tl.UpdateExecutorLogsRequest{
 		Id:   r.taskID,
 		Step: int64(i),
 		Log: &tes.ExecutorLog{
@@ -167,10 +171,10 @@ func (r *RPCLogger) ExecutorHostIP(i int, ip string) {
 	})
 }
 
-func (r *RPCLogger) ExecutorStdout(i int) io.Writer {
+func (r *RPCLogger) Stdout(i int) io.Writer {
 	return &stdoutWriter{r, i}
 }
-func (r *RPCLogger) ExecutorStderr(i int) io.Writer {
+func (r *RPCLogger) Stderr(i int) io.Writer {
 	return &stderrWriter{r, i}
 }
 

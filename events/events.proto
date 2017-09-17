@@ -7,12 +7,6 @@ import "struct.proto";
 import "timestamp.proto";
 import "google/api/annotations.proto";
 
-message SystemLog {
-  string msg = 1;
-  uint32 level = 2;
-  google.protobuf.Struct fields = 3;
-}
-
 enum Type {
   UNKNOWN = 0;
   STATE = 1;
@@ -69,11 +63,17 @@ message Event {
   SystemLog system_log = 18;
 }
 
-message CreateEventResponse{}
+message SystemLog {
+  string msg = 1;
+  string level = 2;
+  google.protobuf.Struct fields = 3;
+}
+
+message WriteEventResponse{}
 
 /**
  * Event Service
  */
 service EventService {
-  rpc CreateEvent(Event) returns (CreateEventResponse) {};
+  rpc WriteEvent(Event) returns (WriteEventResponse) {};
 }

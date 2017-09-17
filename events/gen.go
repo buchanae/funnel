@@ -70,3 +70,8 @@ func (g *AttemptGenerator) Stdout(i uint32, s string) *Event {
 func (g *AttemptGenerator) Stderr(i uint32, s string) *Event {
 	return NewStderr(g.TaskID, g.Attempt, i, s)
 }
+
+// SystemLog creates a system log event
+func (g *AttemptGenerator) SystemLog(msg, lvl string, fields map[string]string) *Event {
+	return NewSystemLog(g.TaskID, g.Attempt, msg, lvl, fields)
+}

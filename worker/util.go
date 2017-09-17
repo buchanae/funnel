@@ -49,6 +49,14 @@ func externalIP() (string, error) {
 	return "", nil
 }
 
+func LogHostIP(log Logger, i int) {
+	// Grab the IP address of this host. Used to send task metadata updates.
+	ip, err := externalIP()
+	if err == nil {
+		log.HostIP(i, ip)
+	}
+}
+
 // GetExitCode gets the exit status (i.e. exit code) from the result of an executed command.
 // The exit code is zero if the command completed without error.
 func GetExitCode(err error) int {
@@ -85,12 +93,4 @@ func PollForCancel(ctx context.Context, get func() tes.State, rate time.Duration
 		}
 	}()
 	return taskctx
-}
-
-func LogHostIP(log Logger, i int) {
-	// Grab the IP address of this host. Used to send task metadata updates.
-	ip, err := externalIP()
-	if err == nil {
-		log.ExecutorHostIP(i, ip)
-	}
 }

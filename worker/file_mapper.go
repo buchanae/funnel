@@ -19,10 +19,11 @@ import (
 // outputs, uploads, stdin/out/err, etc. FileMapper helps the worker engine
 // manage all these paths.
 type FileMapper struct {
-	Volumes []Volume
-	Inputs  []*tes.TaskParameter
-	Outputs []*tes.TaskParameter
-	dir     string
+	Volumes   []Volume
+	Inputs    []*tes.TaskParameter
+	Outputs   []*tes.TaskParameter
+	Executors []*tes.Executor
+	dir       string
 }
 
 // Volume represents a volume mounted into a docker container.
@@ -46,12 +47,7 @@ func NewFileMapper(dir string, task *tes.Task) (*FileMapper, error) {
 		return nil, err
 	}
 
-	mapper := &FileMapper{
-		Volumes: []Volume{},
-		Inputs:  []*tes.TaskParameter{},
-		Outputs: []*tes.TaskParameter{},
-		dir:     dir,
-	}
+	mapper := &FileMapper{dir: dir}
 
 	// Add all the volumes to the mapper
 	for _, vol := range task.Volumes {
@@ -79,47 +75,58 @@ func NewFileMapper(dir string, task *tes.Task) (*FileMapper, error) {
 
 	// Check the executor paths.
 	for _, exec := range task.Executors {
-		if exec.Stdin != "" {
-			// Ensure the path is valid
-			hostPath := mapper.HostPath(exec.Stdin)
-			err = mapper.CheckPath(hostPath)
-			if err != nil {
-				return nil, err
-			}
-		}
-
-		if exec.Stdout != "" {
-			// Ensure the path is valid
-			hostPath := mapper.HostPath(exec.Stdout)
-			err = mapper.CheckPath(hostPath)
-			if err != nil {
-				return nil, err
-			}
-
-			// Ensure the directory exists.
-			err = util.EnsureDir(exec.Stdout)
-			if err != nil {
-				return nil, err
-			}
-		}
-
-		if exec.Stderr != "" {
-			// Ensure the path is valid
-			hostPath := mapper.HostPath(exec.Stderr)
-			err := mapper.CheckPath(hostPath)
-			if err != nil {
-				return nil, err
-			}
-
-			// Ensure the directory exists.
-			err = util.EnsureDir(exec.Stdout)
-			if err != nil {
-				return nil, err
-			}
+		err := mapper.AddExecutor(exec)
+		if err != nil {
+			return nil, err
 		}
 	}
 
 	return mapper, nil
+}
+
+func (mapper *FileMapper) AddExecutor(exec *tes.Executor) error {
+	exec = proto.Clone(exec).(*tes.Executor)
+
+	if exec.Stdin != "" {
+		// Ensure the path is valid
+		exec.Stdin = mapper.HostPath(exec.Stdin)
+		err := mapper.CheckPath(exec.Stdin)
+		if err != nil {
+			return err
+		}
+	}
+
+	if exec.Stdout != "" {
+		// Ensure the path is valid
+		exec.Stdout = mapper.HostPath(exec.Stdout)
+		err := mapper.CheckPath(exec.Stdout)
+		if err != nil {
+			return err
+		}
+
+		// Ensure the directory exists.
+		err = util.EnsureDir(exec.Stdout)
+		if err != nil {
+			return err
+		}
+	}
+
+	if exec.Stderr != "" {
+		// Ensure the path is valid
+		exec.Stderr = mapper.HostPath(exec.Stderr)
+		err := mapper.CheckPath(exec.Stderr)
+		if err != nil {
+			return err
+		}
+
+		// Ensure the directory exists.
+		err = util.EnsureDir(exec.Stderr)
+		if err != nil {
+			return err
+		}
+	}
+	mapper.Executors = append(mapper.Executors, exec)
+	return nil
 }
 
 // AddVolume adds a mapped volume to the mapper. A corresponding Volume record
@@ -179,14 +186,6 @@ func (mapper *FileMapper) CheckPath(p string) error {
 		return fmt.Errorf("Invalid path: %s is not a valid subpath of %s", p, mapper.dir)
 	}
 	return nil
-}
-
-func (mapper *FileMapper) NewStdio(in, out, err string) (*Stdio, error) {
-	return NewStdio(
-		mapper.HostPath(in),
-		mapper.HostPath(out),
-		mapper.HostPath(err),
-	)
 }
 
 func CreateWorkDir(dir string) error {

@@ -90,6 +90,9 @@ func (a *AttemptWriter) Stdout(i uint32, s string) error {
 func (a *AttemptWriter) Stderr(i uint32, s string) error {
 	return a.w.Write(a.gen.Stderr(i, s))
 }
+func (a *AttemptWriter) SystemLog(msg, lvl string, fields map[string]string) error {
+	return a.w.Write(a.gen.SystemLog(msg, lvl, fields))
+}
 
 // Collector collects all events into a slice.
 type Collector []*Event

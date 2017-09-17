@@ -3,6 +3,7 @@ package events
 import (
 	"github.com/golang/protobuf/ptypes"
 	tspb "github.com/golang/protobuf/ptypes/timestamp"
+  stpb "github.com/golang/protobuf/ptypes/struct"
 	"github.com/ohsu-comp-bio/funnel/proto/tes"
 	"time"
 )
@@ -151,6 +152,27 @@ func NewStderr(taskID string, attempt uint32, index uint32, s string) *Event {
 		Stderr:    s,
 		Index:     index,
 	}
+}
+
+func NewSystemLog(taskID string, attempt uint32, msg, lvl string, f map[string]string) *Event{
+  fields := &stpb.Struct{
+    Fields: map[string]*stpb.Value{},
+  }
+  for k, v := range f {
+    fields.Fields[k] = &stpb.Value{Kind: &stpb.Value_StringValue{v}}
+  }
+
+  return &Event{
+    Type: Type_SYSLOG,
+    Id: taskID,
+		Attempt:   attempt,
+		Timestamp: ptypes.TimestampNow(),
+    SystemLog: &SystemLog{
+      Msg: msg,
+      Level: lvl,
+      Fields: fields,
+    },
+  }
 }
 
 func convertTime(t time.Time) *tspb.Timestamp {

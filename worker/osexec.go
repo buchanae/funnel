@@ -25,8 +25,9 @@ func (o *OSExecWorker) Run(ctx context.Context) {
 	// If found, cancel the context.
 	ctx = PollForCancel(ctx, o.read.State, o.conf.UpdateRate)
 
-	Start(o.log)
-	defer End(o.log, nil)
+	// Handle start/end time, final state, panics, etc.
+	finish := StartTask(o.log)
+	defer finish(nil)
 
 	task, err := o.read.Task()
 	Must(err)
@@ -37,7 +38,8 @@ func (o *OSExecWorker) Run(ctx context.Context) {
 	Must(err)
 
 	// Validate that the storage supports the input/output URLs.
-	Must(ValidateStorageURLs(task.Inputs, task.Outputs, store))
+  Must(store.SupportsParams(task.Inputs))
+  Must(store.SupportsParams(task.Outputs))
 
 	// Download the inputs.
 	Must(Download(ctx, task.Inputs, store))
@@ -47,41 +49,45 @@ func (o *OSExecWorker) Run(ctx context.Context) {
 
 	// Run task executors
 	for i, exec := range task.Executors {
-		// Wrap the executor to handle start/end time, context, etc.
-		Must(RunExec(ctx, o.log, i, func(ctx context.Context) error {
-
-			// Open stdin/out/err files
-			stdio, err := NewStdio(exec.Stdin, exec.Stdout, exec.Stderr)
-			Must(err)
-			// Write stdout/err to the task logger event stream.
-			stdio = ExecutorStdioEvents(stdio, i, o.log)
-
-			cmd := osexec.CommandContext(ctx, exec.Cmd[0], exec.Cmd[1:]...)
-			cmd.Env = formatEnv(exec.Environ)
-			cmd.Dir = exec.Workdir
-			cmd.Stdin = stdio.In
-			cmd.Stdout = stdio.Out
-			cmd.Stderr = stdio.Err
-
-			result := cmd.Run()
-			code := GetExitCode(result)
-			o.log.ExecutorExitCode(i, code)
-
-			// TODO does not yet log ports or IP
-
-			if result != nil {
-				return ErrExecFailed(result)
-			}
-			return nil
-		}))
+		Must(o.runExec(ctx, i, exec))
 	}
 
-	// Upload outputs
-	outputs, err := Upload(ctx, task.Outputs, store)
-	Must(err)
+	// Upload outputs and log the outputs.
+	Must(LogUpload(ctx, task.Outputs, store, o.log))
+}
 
-	// Log task outputs.
-	o.log.Outputs(outputs)
+func (o *OSExecWorker) runExec(ctx context.Context, i int, exec *tes.Executor) error {
+	ctx, finish := StartExec(ctx, o.log, i)
+	defer finish()
+
+	// Open stdin/out/err files
+	stdio, err := OpenStdio(exec.Stdin, exec.Stdout, exec.Stderr)
+	defer stdio.Close()
+	Must(err)
+	stdio = LogStdio(*stdio, i, o.log)
+
+	// Write stdout/err to the logger.
+	stdio = LogStdio(*stdio, i, o.log)
+
+	// Build os/exec.Cmd
+	cmd := osexec.CommandContext(ctx, exec.Cmd[0], exec.Cmd[1:]...)
+	cmd.Env = formatEnv(exec.Environ)
+	cmd.Dir = exec.Workdir
+	cmd.Stdin = stdio.In
+	cmd.Stdout = stdio.Out
+	cmd.Stderr = stdio.Err
+
+	// Run and log exit code
+	result := cmd.Run()
+	code := GetExitCode(result)
+	o.log.ExitCode(i, code)
+
+	// TODO does not yet log ports or IP
+
+	if result != nil {
+		return ExecError{result}
+	}
+	return nil
 }
 
 func formatEnv(in map[string]string) []string {

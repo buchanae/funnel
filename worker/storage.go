@@ -2,7 +2,6 @@ package worker
 
 import (
 	"context"
-	"fmt"
 	"github.com/ohsu-comp-bio/funnel/proto/tes"
 	"github.com/ohsu-comp-bio/funnel/storage"
 	"os"
@@ -69,26 +68,20 @@ func FixLinks(basepath string, m Mapper) {
 	})
 }
 
+func LogUpload(ctx context.Context, out []*tes.TaskParameter, s storage.Storage, l Logger) error {
+	outputs, err := Upload(ctx, out, s)
+	if err != nil {
+		return err
+	}
+	l.Outputs(outputs)
+	return nil
+}
+
 func Download(ctx context.Context, in []*tes.TaskParameter, s storage.Storage) error {
 	for _, input := range in {
 		err := s.Get(ctx, input.Url, input.Path, input.Type)
 		if err != nil {
 			return err
-		}
-	}
-	return nil
-}
-
-func ValidateStorageURLs(in, out []*tes.TaskParameter, s storage.Storage) error {
-	for _, input := range in {
-		if !s.Supports(input.Url, input.Path, input.Type) {
-			return fmt.Errorf("Input download not supported by storage: %v", input)
-		}
-	}
-
-	for _, output := range out {
-		if !s.Supports(output.Url, output.Path, output.Type) {
-			return fmt.Errorf("Output upload not supported by storage: %v", output)
 		}
 	}
 	return nil

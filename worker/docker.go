@@ -40,10 +40,10 @@ func (dcmd *DockerCmd) Run(ctx context.Context) error {
 
 	case result := <-done:
 		code := GetExitCode(result)
-		dcmd.Logger.ExecutorExitCode(dcmd.ExecIndex, code)
+		dcmd.Logger.ExitCode(dcmd.ExecIndex, code)
 
 		if result != nil {
-			return ErrExecFailed(result)
+			return ExecError{result}
 		}
 		return nil
 	}
@@ -55,7 +55,9 @@ func (dcmd *DockerCmd) runcmd() error {
 	// Don't need the client here, just the logic inside NewDockerClient().
 	_, derr := util.NewDockerClient()
 	if derr != nil {
-		dcmd.Logger.Error("Can't connect to Docker", derr)
+		dcmd.Logger.Error("Can't connect to Docker", map[string]string{
+      "error": derr.Error(),
+    })
 		return derr
 	}
 
@@ -81,7 +83,7 @@ func (dcmd *DockerCmd) Inspect(ctx context.Context) {
 			if err != nil && !client.IsErrContainerNotFound(err) {
 				break
 			}
-			dcmd.Logger.ExecutorPorts(dcmd.ExecIndex, ports)
+			dcmd.Logger.Ports(dcmd.ExecIndex, ports)
 			return
 		}
 	}

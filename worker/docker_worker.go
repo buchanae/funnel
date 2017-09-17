@@ -6,7 +6,6 @@ import (
 	"github.com/ohsu-comp-bio/funnel/proto/tes"
 	"github.com/ohsu-comp-bio/funnel/rpc"
 	"github.com/ohsu-comp-bio/funnel/storage"
-	"path"
 	"strings"
 	"time"
 )
@@ -18,7 +17,8 @@ func NewDockerRPCWorker(taskID string, c DockerConfig, r rpc.Config) (*DockerWor
 	if err != nil {
 		return nil, err
 	}
-	return &DockerWorker{c, taskID, svc.Reader, svc.Logger}, nil
+	// TODO baseDir := path.Join(r.conf.WorkDir, r.taskID)
+	return &DockerWorker{c, svc.Reader, svc.Logger}, nil
 }
 
 type DockerConfig struct {
@@ -33,7 +33,6 @@ type DockerConfig struct {
 // and logging.
 type DockerWorker struct {
 	conf   DockerConfig
-	taskID string
 	read   TaskReader
 	log    Logger
 }
@@ -44,15 +43,15 @@ func (r *DockerWorker) Run(ctx context.Context) {
 	// If found, cancel the context.
 	ctx = PollForCancel(ctx, r.read.State, r.conf.UpdateRate)
 
-	Start(r.log)
-	defer End(r.log, nil)
+	// Handle start/end time, final state, panics, etc.
+	finish := StartTask(r.log)
+	defer finish(nil)
 
 	task, err := r.read.Task()
 	Must(err)
 
 	// Prepare file mapper, which maps task file URLs to host filesystem paths.
-	baseDir := path.Join(r.conf.WorkDir, r.taskID)
-	mapper, err := NewFileMapper(baseDir, task)
+	mapper, err := NewFileMapper(r.conf.WorkDir, task)
 	Must(err)
 
 	// Configure a task-specific storage backend.
@@ -61,7 +60,8 @@ func (r *DockerWorker) Run(ctx context.Context) {
 	Must(err)
 
 	// Validate that the storage supports the input/output URLs.
-	Must(ValidateStorageURLs(mapper.Inputs, mapper.Outputs, store))
+  Must(store.SupportsParams(mapper.Inputs))
+  Must(store.SupportsParams(mapper.Outputs))
 
 	// Download the inputs.
 	Must(Download(ctx, mapper.Inputs, store))
@@ -69,18 +69,16 @@ func (r *DockerWorker) Run(ctx context.Context) {
 	// Set to running.
 	r.log.State(tes.State_RUNNING)
 
-	// TODO re-implement log tailers
+	for i, exec := range mapper.Executors {
+		func() {
+			ctx, finish := StartExec(ctx, r.log, i)
+			defer finish()
 
-	// Run task executors
-	for i, exec := range task.Executors {
-		// Wrap the executor to handle start/end time, context, etc.
-		Must(RunExec(ctx, r.log, i, func(ctx context.Context) error {
-
-			// Open stdin/out/err files, mapped to working directory on host
-			stdio, err := mapper.NewStdio(exec.Stdin, exec.Stdout, exec.Stderr)
+			// Open stdin/out/err files with log events.
+			stdio, err := OpenStdio(exec.Stdin, exec.Stdout, exec.Stderr)
+			defer stdio.Close()
 			Must(err)
-			// Write stdout/err to the task logger event stream.
-			stdio = ExecutorStdioEvents(stdio, i, r.log)
+			stdio = LogStdio(*stdio, i, r.log)
 
 			cmd := DockerCmd{
 				Logger:         r.log,
@@ -93,10 +91,12 @@ func (r *DockerWorker) Run(ctx context.Context) {
 			}
 
 			// docker run --rm --name [name] -i -w [workdir] -v [bindings] [imageName] [cmd]
-			r.log.Info("Running command", "cmd", "docker "+strings.Join(cmd.Args(), " "))
+			r.log.Info("Running command", map[string]string{
+        "cmd": "docker "+strings.Join(cmd.Args(), " "),
+      })
 
-			return cmd.Run(ctx)
-		}))
+			Must(cmd.Run(ctx))
+		}()
 	}
 
 	// Fix symlinks broken by container filesystem
@@ -104,10 +104,6 @@ func (r *DockerWorker) Run(ctx context.Context) {
 		FixLinks(o.Path, mapper.HostPath)
 	}
 
-	// Upload outputs
-	outputs, err := Upload(ctx, mapper.Outputs, store)
-	Must(err)
-
-	// Log task outputs.
-	r.log.Outputs(outputs)
+	// Upload outputs and log the outputs.
+	Must(LogUpload(ctx, mapper.Outputs, store, r.log))
 }

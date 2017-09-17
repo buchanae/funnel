@@ -7,27 +7,69 @@ import (
 	"time"
 )
 
-type ErrExecFailed error
+type ExecError struct {
+  error
+}
+
+type mustError struct {
+  orig error
+}
+func (m mustError) Error() string {
+  return m.orig.Error()
+}
 
 func Must(err error) {
 	if err != nil {
-		panic(err)
+		panic(mustError{err})
 	}
 }
 
-func Start(log Logger) {
+func StartTask(log Logger) func(error) {
 	log.StartTime(time.Now())
+  log.State(tes.State_INITIALIZING)
+
+	return func(err error) {
+		if r := recover(); r != nil {
+			if e, ok := r.(error); ok {
+				err = e
+			} else {
+				err = fmt.Errorf("Unknown worker panic: %+v", r)
+			}
+		}
+
+    /*
+    // Unwrap a panic error raised by Must
+    if m, ok := err.(mustError); ok {
+      fmt.Println("MUST UNWRAP", m.orig)
+      err = m.orig
+    }
+    */
+
+		log.EndTime(time.Now())
+		LogFinalState(log, err)
+	}
 }
 
 func LogFinalState(log Logger, err error) {
-	if x, ok := err.(ErrExecFailed); ok {
+	if x, ok := err.(ExecError); ok {
 		// One of the executors failed
-		log.Error("Exec error", x)
+    fmt.Println("mathc", x)
+		log.Error("Exec error", map[string]string{
+      "error": x.Error(),
+    })
 		log.State(tes.State_ERROR)
 
-		// If something else failed (system error)
+  } else if err == context.Canceled {
+    // context.Canceled is a special case, because it can happen from multiple sources:
+    //   - if the task is canceled by the user
+    //   - if the worker is shutdown by the host (e.g. SIGKILL)
+		log.State(tes.State_CANCELED)
+
 	} else if err != nil {
-		log.Error("System error", err)
+		// If something else failed (system error)
+		log.Error("System error", map[string]string{
+      "error": err.Error(),
+    })
 		log.State(tes.State_SYSTEM_ERROR)
 
 		// Otherwise, success
@@ -36,27 +78,15 @@ func LogFinalState(log Logger, err error) {
 	}
 }
 
-func End(log Logger, err error) {
-	if r := recover(); r != nil {
-		if e, ok := r.(error); ok {
-			err = e
-		} else {
-			err = fmt.Errorf("Unknown worker panic: %+v", r)
-		}
-	}
-
-	log.EndTime(time.Now())
-	LogFinalState(log, err)
-}
-
-func RunExec(ctx context.Context, log Logger, i int, f func(context.Context) error) error {
-	log.ExecutorStartTime(i, time.Now())
-	defer log.ExecutorEndTime(i, time.Now())
-
+func StartExec(ctx context.Context, log Logger, index int) (context.Context, func()) {
 	// subctx helps ensure that goroutines started while running the executor
 	// are cleaned up when the executor function exits.
 	subctx, cleanup := context.WithCancel(ctx)
-	defer cleanup()
 
-	return f(subctx)
+	log.ExecutorStartTime(index, time.Now())
+
+	return subctx, func() {
+		log.ExecutorEndTime(index, time.Now())
+		cleanup()
+	}
 }
