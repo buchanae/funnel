@@ -3,7 +3,6 @@ syntax = "proto3";
 package events;
 
 import "tes.proto";
-import "struct.proto";
 import "timestamp.proto";
 import "google/api/annotations.proto";
 
@@ -66,7 +65,7 @@ message Event {
 message SystemLog {
   string msg = 1;
   string level = 2;
-  google.protobuf.Struct fields = 3;
+  map<string, string> fields = 3;
 }
 
 message WriteEventResponse{}
