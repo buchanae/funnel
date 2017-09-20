@@ -1,0 +1,4 @@
+Server:
+  HostName: funnel-server
+Node:
+  ServerAddress: funnel-server:9090

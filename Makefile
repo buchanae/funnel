@@ -2,6 +2,7 @@ ifndef GOPATH
 $(error GOPATH is not set)
 endif
 
+DOCKER_TAG = docker.io/ohsucompbio/funnel
 VERSION = 0.2.0
 TESTS=$(shell go list ./... | grep -v /vendor/)
 
@@ -201,7 +202,10 @@ docker: cross-compile
 	mkdir -p build/docker
 	cp build/bin/funnel-linux-amd64 build/docker/funnel
 	cp docker/* build/docker/
-	cd build/docker/ && docker build -t funnel .
+	cd build/docker/ && docker build -t $(DOCKER_TAG) .
+
+docker-push: docker
+	docker push $(DOCKER_TAG)
 
 # Remove build/development files.
 clean:

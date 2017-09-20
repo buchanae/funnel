@@ -216,6 +216,7 @@ type Worker struct {
 	BufferSize int64
 	Storage    StorageConfig
 	Logger     logger.Config
+  MountSocket bool
 }
 
 // StorageConfig describes configuration for all storage types

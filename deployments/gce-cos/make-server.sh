@@ -10,7 +10,7 @@ gcloud compute firewall-rules create default-http --allow='tcp:80' --source-tags
 # Start the VM
 gcloud compute instances create $NAME    \
   --scopes       'compute-rw,storage-rw' \
-  --zone         'us-west1-a'            \
+  --zone         'us-central1-a'         \
   --tags         'funnel,http-server'    \
   --machine-type n1-standard-2           \
   --image-family cos-stable              \

@@ -182,6 +182,7 @@ func (r *DefaultWorker) Run(pctx context.Context) {
 				ContainerName: fmt.Sprintf("%s-%d", task.Id, i),
 				// TODO make RemoveContainer configurable
 				RemoveContainer: true,
+        MountSocket:   r.Conf.MountSocket,
 				Event:           r.Event.NewExecutorWriter(uint32(i)),
 			},
 		}

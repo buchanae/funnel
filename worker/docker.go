@@ -23,6 +23,7 @@ type DockerCmd struct {
 	Ports           []*tes.Ports
 	ContainerName   string
 	RemoveContainer bool
+  MountSocket     bool
 	Environ         map[string]string
 	Stdin           io.Reader
 	Stdout          io.Writer
@@ -45,6 +46,10 @@ func (dcmd DockerCmd) Run() error {
 	if dcmd.RemoveContainer {
 		args = append(args, "--rm")
 	}
+
+  if dcmd.MountSocket {
+    args = append(args, "-v", "/var/run/docker.sock:/var/run/docker.sock")
+  }
 
 	if dcmd.Environ != nil {
 		for k, v := range dcmd.Environ {
