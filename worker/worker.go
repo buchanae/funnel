@@ -10,7 +10,6 @@ import (
 	"github.com/ohsu-comp-bio/funnel/storage"
 	"github.com/ohsu-comp-bio/funnel/util"
 	"os"
-	"path"
 	"path/filepath"
 	"time"
 )
@@ -18,14 +17,6 @@ import (
 // NewDefaultWorker returns the default task runner used by Funnel,
 // which uses gRPC to read/write task details.
 func NewDefaultWorker(conf config.Worker, taskID string) (Worker, error) {
-	// Map files into this baseDir
-	baseDir := path.Join(conf.WorkDir, taskID)
-
-	// TODO handle error
-	err := util.EnsureDir(baseDir)
-	if err != nil {
-		return nil, fmt.Errorf("Failed to create worker baseDir: %v", err)
-	}
 
 	rsvc, err := newRPCTaskReader(conf, taskID)
 	if err != nil {
@@ -41,10 +32,10 @@ func NewDefaultWorker(conf config.Worker, taskID string) (Worker, error) {
 
 	return &DefaultWorker{
 		Conf:       conf,
-		Mapper:     NewFileMapper(baseDir),
+		Mapper:     NewFileMapper("/"),
 		Store:      storage.Storage{},
 		TaskReader: rsvc,
-		Event:      events.NewTaskWriter(taskID, 0, conf.Logger.Level, events.MultiWriter(rpcWriter, logWriter)),
+    Event:      events.MultiWriter(rpcWriter, logWriter),
 	}, nil
 }
 
@@ -56,7 +47,7 @@ type DefaultWorker struct {
 	Mapper     *FileMapper
 	Store      storage.Storage
 	TaskReader TaskReader
-	Event      *events.TaskWriter
+	Event      events.Writer
 }
 
 // Run runs the Worker.
@@ -76,38 +67,45 @@ func (r *DefaultWorker) Run(pctx context.Context) {
 	// - upload the outputs
 
 	var run helper
+
 	var task *tes.Task
+  var terr error
+	task, terr = r.TaskReader.Task()
 
-	r.Event.Info("Version", version.LogFields()...)
+  if terr != nil || task == nil {
+    // TODO log error
+    return
+  }
+  event := events.NewTaskWriter(task.Id, uint32(len(task.Logs)), r.Conf.Logger.Level, r.Event)
 
-	task, run.syserr = r.TaskReader.Task()
+	event.Info("Version", version.LogFields()...)
 
 	if run.ok() {
-		r.Event.State(tes.State_INITIALIZING)
+		event.State(tes.State_INITIALIZING)
 	}
 
-	r.Event.StartTime(time.Now())
+	event.StartTime(time.Now())
 	// Run the final logging/state steps in a deferred function
 	// to ensure they always run, even if there's a missed error.
 	defer func() {
-		r.Event.EndTime(time.Now())
+		event.EndTime(time.Now())
 
 		switch {
 		case run.taskCanceled:
 			// The task was canceled.
-			r.Event.Info("Canceled")
-			r.Event.State(tes.State_CANCELED)
+			event.Info("Canceled")
+			event.State(tes.State_CANCELED)
 		case run.execerr != nil:
 			// One of the executors failed
-			r.Event.Error("Exec error", run.execerr)
-			r.Event.State(tes.State_ERROR)
+			event.Error("Exec error", run.execerr)
+			event.State(tes.State_ERROR)
 		case run.syserr != nil:
 			// Something else failed
 			// TODO should we do something special for run.err == context.Canceled?
-			r.Event.Error("System error", run.syserr)
-			r.Event.State(tes.State_SYSTEM_ERROR)
+			event.Error("System error", run.syserr)
+			event.State(tes.State_SYSTEM_ERROR)
 		default:
-			r.Event.State(tes.State_COMPLETE)
+			event.State(tes.State_COMPLETE)
 		}
 	}()
 
@@ -163,14 +161,14 @@ func (r *DefaultWorker) Run(pctx context.Context) {
 	}
 
 	if run.ok() {
-		r.Event.State(tes.State_RUNNING)
+		event.State(tes.State_RUNNING)
 	}
 
 	// Run steps
 	for i, d := range task.Executors {
 		s := &stepWorker{
 			Conf:  r.Conf,
-			Event: r.Event.NewExecutorWriter(uint32(i)),
+			Event: event.NewExecutorWriter(uint32(i)),
 			IP:    ip,
 			Cmd: &DockerCmd{
 				ImageName:     d.ImageName,
@@ -182,8 +180,7 @@ func (r *DefaultWorker) Run(pctx context.Context) {
 				ContainerName: fmt.Sprintf("%s-%d", task.Id, i),
 				// TODO make RemoveContainer configurable
 				RemoveContainer: true,
-        MountSocket:   r.Conf.MountSocket,
-				Event:           r.Event.NewExecutorWriter(uint32(i)),
+				Event:           event.NewExecutorWriter(uint32(i)),
 			},
 		}
 
@@ -209,7 +206,7 @@ func (r *DefaultWorker) Run(pctx context.Context) {
 	}
 
 	if run.ok() {
-		r.Event.Outputs(outputs)
+		event.Outputs(outputs)
 	}
 }
 

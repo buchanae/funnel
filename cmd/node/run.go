@@ -24,10 +24,6 @@ var runCmd = &cobra.Command{
 		conf := config.DefaultConfig()
 		config.ParseFile(configFile, &conf)
 
-		// make sure server address and password is inherited by scheduler nodes and workers
-		conf = config.InheritServerProperties(conf)
-		flagConf = config.InheritServerProperties(flagConf)
-
 		// file vals <- cli val
 		err := mergo.MergeWithOverwrite(&conf, flagConf)
 		if err != nil {
@@ -51,6 +47,7 @@ func init() {
 
 // Run runs a node with the given config, blocking until the node exits.
 func Run(conf config.Config) error {
+	conf = config.InheritServerProperties(conf)
 	logger.Configure(conf.Scheduler.Node.Logger)
 
 	if conf.Scheduler.Node.ID == "" {

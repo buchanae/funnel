@@ -6,3 +6,5 @@ Scheduler:
     ServerAddress: funnel-server:9090
 Worker:
   ServerAddress: funnel-server:9090
+  DockerExtraFlags: ["-v", "/var/run/docker.sock:/var/run/docker.sock", "-u", "4949", "--group-add", "412"]
+  WorkDir: /var/db/funnel

@@ -37,7 +37,7 @@ func (s *stepWorker) Run(ctx context.Context) error {
 	defer ticker.Stop()
 
 	go func() {
-		done <- s.Cmd.Run()
+		done <- s.Cmd.Run(subctx)
 	}()
 	go s.inspectContainer(subctx)
 

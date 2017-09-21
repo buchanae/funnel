@@ -16,7 +16,6 @@ import (
 func WithMetadataConfig(conf config.Config, meta *Metadata) (config.Config, error) {
 	log.Info("Discovering GCE environment")
 
-	conf.Backend = "gce"
 	defaultHostName := conf.Server.HostName
 
 	// Load full config doc from metadata
@@ -32,15 +31,6 @@ func WithMetadataConfig(conf config.Config, meta *Metadata) (config.Config, erro
 		if err != nil {
 			return conf, err
 		}
-	}
-
-	// Is this a worker node? If so, inherit the node ID from the GCE instance name.
-	if meta.Instance.Attributes.FunnelNodeServerAddress != "" {
-		if conf.Scheduler.Node.ID == "" {
-			conf.Scheduler.Node.ID = meta.Instance.Name
-		}
-		conf.Scheduler.Node.ServerAddress = meta.Instance.Attributes.FunnelNodeServerAddress
-		conf.Worker.ServerAddress = meta.Instance.Attributes.FunnelNodeServerAddress
 	}
 
 	if meta.Project.ProjectID != "" {
@@ -59,18 +49,9 @@ func WithMetadataConfig(conf config.Config, meta *Metadata) (config.Config, erro
 		conf.Backends.GCE.Zone = zone
 	}
 
-	conf.Scheduler.Node.Metadata["gce"] = "yes"
-
-	// If the configuration contains a node ID, assume that a node
-	// process should be started (instead of a server).
-	if conf.Scheduler.Node.ID != "" {
-		if conf.Scheduler.Node.ServerAddress == "" {
-			log.Error("Empty server address while starting node")
-			return conf, fmt.Errorf("Empty server address while starting node")
-		}
-		conf.Worker.Storage.GS = append(conf.Worker.Storage.GS,
-			config.GSStorage{FromEnv: true})
-	}
+  conf.Scheduler.Node.ID = meta.Instance.Name
+  conf.Worker.Storage.GS = append(conf.Worker.Storage.GS,
+    config.GSStorage{FromEnv: true})
 
 	// Auto detect the server's host name when it's not already set.
 	// This makes server deployment and configuration a bit easier.
@@ -90,7 +71,6 @@ type Metadata struct {
 		Zone       string
 		Attributes struct {
 			FunnelConfig            string `json:"funnel-config"`
-			FunnelNodeServerAddress string `json:"funnel-node-serveraddress"`
 		}
 	}
 	Project struct {

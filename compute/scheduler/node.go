@@ -100,6 +100,7 @@ func (n *Node) Run(ctx context.Context) {
 
 			// The workers get 10 seconds to finish up.
 			n.workers.Wait(time.Second * 10)
+      time.Sleep(time.Second * 10)
 			return
 		case <-ticker.C:
 			n.sync(ctx)
@@ -147,8 +148,11 @@ func (n *Node) sync(ctx context.Context) {
 	for _, id := range r.TaskIds {
 		if n.workers.Add(id) {
 			go func(id string) {
-				// TODO handle error
-				r, _ := n.newWorker(n.workerConf, id)
+				r, err := n.newWorker(n.workerConf, id)
+        if err != nil {
+          log.Error("can't create new worker", err)
+          panic(err)
+        }
 				r.Run(ctx)
 				n.workers.Remove(id)
 			}(id)

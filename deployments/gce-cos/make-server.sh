@@ -15,7 +15,7 @@ gcloud compute instances create $NAME    \
   --machine-type n1-standard-2           \
   --image-family cos-stable              \
   --image-project cos-cloud              \
-  --metadata-from-file user-data=./cloud-init.yaml
+  --metadata-from-file user-data=./server-cloud-init.yaml,funnel-config=./funnel.config.yaml
 
 # Useful for debugging
 #gcloud compute instances add-metadata $NAME --metadata=serial-port-enable=1 --zone us-west1-a

@@ -12,43 +12,27 @@ write_files:
   owner: root
   content: |
     [Unit]
-    Description=Start a Funnel server
+    Description=Start a Funnel node
 
     [Service]
     Environment=DOCKER_GROUP_ID=412
     ExecStart=/usr/bin/docker run \
-      --rm -u 4949 \
+      -u 4949 \
       --group-add ${DOCKER_GROUP_ID} \
       --name funnel \
       -v /var/run/docker.sock:/var/run/docker.sock \
       -v /usr/bin/docker:/usr/bin/docker \
-      -v /var/db/funnel:/opt/funnel/funnel-work-dir \
-      -w /opt/funnel \
-      -p 80:8000 \
-      -p 9090:9090 \
+      -v /mnt/stateful_partition/funnel:/mnt/stateful_partition/funnel \
+      -w /mnt/stateful_partition/funnel \
       docker.io/buchanaeohsu/funnel:smcrna \
-      gce run
+      gce node
     ExecStop=/usr/bin/docker stop funnel
     ExecStopPost=/usr/bin/docker rm funnel
 
-- path: /etc/systemd/system/iptables-funnel.service
-  permissions: 0644
-  owner: root
-  content: |
-    [Unit]
-    Description=Set up iptables rules for Funnel (port 80 and 9090)
-
-    [Service]
-    Type=oneshot
-    ExecStart=/sbin/iptables -A INPUT -p tcp --dport 80 -j ACCEPT
-    ExecStart=/sbin/iptables -A INPUT -p tcp --dport 9090 -j ACCEPT
-
-
 runcmd:
-- mkdir /var/db/funnel
-- chown funnel:funnel /var/db/funnel
+- mkdir /mnt/stateful_partition/funnel
+- chown funnel:funnel /mnt/stateful_partition/funnel
 - usermod -aG docker funnel
 - docker pull docker.io/buchanaeohsu/funnel:smcrna
 - systemctl daemon-reload
 - systemctl start funnel.service
-- systemctl start iptables-funnel.service

@@ -1,0 +1,33 @@
+#cloud-config
+
+users:
+- name: funnel
+  uid: 4949
+  groups: docker
+  system: true
+
+write_files:
+- path: /etc/systemd/system/funnel.service
+  permissions: 0644
+  owner: root
+  content: |
+    [Unit]
+    Description=Start a Funnel node
+
+    [Service]
+    ExecStart=/usr/bin/docker run \
+      --name funnel \
+      -v /var/lib/docker:/var/lib/docker \
+      --privileged \
+      -v /mnt/stateful_partition/funnel:/opt/funnel \
+      docker.io/buchanaeohsu/funnel:smcrna \
+      gce node
+    ExecStop=/usr/bin/docker stop funnel
+    ExecStopPost=/usr/bin/docker rm funnel
+
+runcmd:
+- mkdir /mnt/stateful_partition/funnel
+- chown funnel:funnel /mnt/stateful_partition/funnel
+- docker pull docker.io/buchanaeohsu/funnel:smcrna
+- systemctl daemon-reload
+- systemctl start funnel.service

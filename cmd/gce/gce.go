@@ -19,11 +19,37 @@ var Cmd = &cobra.Command{
 }
 
 func init() {
-	Cmd.AddCommand(runCmd)
+	Cmd.AddCommand(nodeCmd)
+	Cmd.AddCommand(serverCmd)
+  Cmd.AddCommand(configCmd)
 }
 
-var runCmd = &cobra.Command{
-	Use: "run",
+var configCmd = &cobra.Command{
+	Use: "config",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		conf := config.DefaultConfig()
+
+		// Check that this is a GCE VM environment.
+		// If not, fail.
+		meta, merr := gce.LoadMetadata()
+		if merr != nil {
+			log.Error("Error getting GCE metadata", merr)
+			return fmt.Errorf("can't find GCE metadata. This command requires a GCE environment")
+		}
+
+		var err error
+		conf, err = gce.WithMetadataConfig(conf, meta)
+		if err != nil {
+			return err
+		}
+    fmt.Println(string(conf.ToYaml()))
+
+    return nil
+	},
+}
+
+var nodeCmd = &cobra.Command{
+	Use: "node",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		conf := config.DefaultConfig()
 
@@ -44,9 +70,31 @@ var runCmd = &cobra.Command{
 			return err
 		}
 
-		if conf.Scheduler.Node.ID != "" {
-			logger.Configure(conf.Scheduler.Node.Logger)
-			return node.Run(conf)
+    logger.Configure(conf.Scheduler.Node.Logger)
+    return node.Run(conf)
+	},
+}
+
+var serverCmd = &cobra.Command{
+	Use: "server",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		conf := config.DefaultConfig()
+
+		// Check that this is a GCE VM environment.
+		// If not, fail.
+		meta, merr := gce.LoadMetadata()
+		if merr != nil {
+			log.Error("Error getting GCE metadata", merr)
+			return fmt.Errorf("can't find GCE metadata. This command requires a GCE environment")
+		}
+
+		log.Info("Loaded GCE metadata")
+		log.Debug("GCE metadata", meta)
+
+		var err error
+		conf, err = gce.WithMetadataConfig(conf, meta)
+		if err != nil {
+			return err
 		}
 
 		logger.Configure(conf.Server.Logger)

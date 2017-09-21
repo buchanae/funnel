@@ -217,6 +217,7 @@ type Worker struct {
 	Storage    StorageConfig
 	Logger     logger.Config
   MountSocket bool
+  DockerExtraFlags []string
 }
 
 // StorageConfig describes configuration for all storage types
