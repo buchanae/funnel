@@ -91,10 +91,6 @@ func (r *DefaultWorker) Run(pctx context.Context) {
 		event.EndTime(time.Now())
 
 		switch {
-		case run.taskCanceled:
-			// The task was canceled.
-			event.Info("Canceled")
-			event.State(tes.State_CANCELED)
 		case run.execerr != nil:
 			// One of the executors failed
 			event.Error("Exec error", run.execerr)
