@@ -21,7 +21,7 @@ var Cmd = &cobra.Command{
 func init() {
 	Cmd.AddCommand(nodeCmd)
 	Cmd.AddCommand(serverCmd)
-  Cmd.AddCommand(configCmd)
+	Cmd.AddCommand(configCmd)
 }
 
 var configCmd = &cobra.Command{
@@ -42,9 +42,9 @@ var configCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-    fmt.Println(string(conf.ToYaml()))
+		fmt.Println(string(conf.ToYaml()))
 
-    return nil
+		return nil
 	},
 }
 
@@ -70,8 +70,8 @@ var nodeCmd = &cobra.Command{
 			return err
 		}
 
-    logger.Configure(conf.Scheduler.Node.Logger)
-    return node.Run(conf)
+		logger.Configure(conf.Scheduler.Node.Logger)
+		return node.Run(conf)
 	},
 }
 

@@ -35,7 +35,7 @@ func valsToTask(vals flagVals) (task *tes.Task, err error) {
 	}()
 
 	environ := map[string]string{}
-  base := "/opt/funnel/" + util.GenTaskID()
+	base := "/opt/funnel/" + util.GenTaskID()
 
 	// Build the task message
 	task = &tes.Task{
@@ -63,9 +63,9 @@ func valsToTask(vals flagVals) (task *tes.Task, err error) {
 	for i, exec := range vals.execs {
 		// Split command string based on shell syntax.
 		cmd, _ := shellquote.Split(exec.cmd)
-		stdinPath := fmt.Sprintf(base + "/inputs/stdin-%d", i)
-		stdoutPath := fmt.Sprintf(base + "/outputs/stdout-%d", i)
-		stderrPath := fmt.Sprintf(base + "/outputs/stderr-%d", i)
+		stdinPath := fmt.Sprintf(base+"/inputs/stdin-%d", i)
+		stdoutPath := fmt.Sprintf(base+"/outputs/stdout-%d", i)
+		stderrPath := fmt.Sprintf(base+"/outputs/stderr-%d", i)
 
 		// Only set the stdin path if the --stdin flag was used.
 		var stdin string

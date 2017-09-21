@@ -35,7 +35,7 @@ func NewDefaultWorker(conf config.Worker, taskID string) (Worker, error) {
 		Mapper:     NewFileMapper("/"),
 		Store:      storage.Storage{},
 		TaskReader: rsvc,
-    Event:      events.MultiWriter(rpcWriter, logWriter),
+		Event:      events.MultiWriter(rpcWriter, logWriter),
 	}, nil
 }
 
@@ -69,14 +69,14 @@ func (r *DefaultWorker) Run(pctx context.Context) {
 	var run helper
 
 	var task *tes.Task
-  var terr error
+	var terr error
 	task, terr = r.TaskReader.Task()
 
-  if terr != nil || task == nil {
-    // TODO log error
-    return
-  }
-  event := events.NewTaskWriter(task.Id, uint32(len(task.Logs)), r.Conf.Logger.Level, r.Event)
+	if terr != nil || task == nil {
+		// TODO log error
+		return
+	}
+	event := events.NewTaskWriter(task.Id, uint32(len(task.Logs)), r.Conf.Logger.Level, r.Event)
 
 	event.Info("Version", version.LogFields()...)
 
@@ -92,6 +92,9 @@ func (r *DefaultWorker) Run(pctx context.Context) {
 
 		switch {
 		case run.execerr != nil:
+			if run.execerr == context.Canceled {
+				break
+			}
 			// One of the executors failed
 			event.Error("Exec error", run.execerr)
 			event.State(tes.State_ERROR)
@@ -109,6 +112,10 @@ func (r *DefaultWorker) Run(pctx context.Context) {
 	defer handlePanic(func(e error) {
 		run.syserr = e
 	})
+
+	if len(task.Logs) > 3 {
+		run.execerr = fmt.Errorf("max retries reached")
+	}
 
 	ctx := r.pollForCancel(pctx, func() {
 		run.taskCanceled = true

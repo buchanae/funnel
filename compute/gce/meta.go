@@ -49,9 +49,9 @@ func WithMetadataConfig(conf config.Config, meta *Metadata) (config.Config, erro
 		conf.Backends.GCE.Zone = zone
 	}
 
-  conf.Scheduler.Node.ID = meta.Instance.Name
-  conf.Worker.Storage.GS = append(conf.Worker.Storage.GS,
-    config.GSStorage{FromEnv: true})
+	conf.Scheduler.Node.ID = meta.Instance.Name
+	conf.Worker.Storage.GS = append(conf.Worker.Storage.GS,
+		config.GSStorage{FromEnv: true})
 
 	// Auto detect the server's host name when it's not already set.
 	// This makes server deployment and configuration a bit easier.
@@ -70,7 +70,7 @@ type Metadata struct {
 		Hostname   string
 		Zone       string
 		Attributes struct {
-			FunnelConfig            string `json:"funnel-config"`
+			FunnelConfig string `json:"funnel-config"`
 		}
 	}
 	Project struct {

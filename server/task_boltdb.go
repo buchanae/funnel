@@ -1,12 +1,14 @@
 package server
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"github.com/boltdb/bolt"
 	proto "github.com/golang/protobuf/proto"
 	"github.com/ohsu-comp-bio/funnel/compute"
 	"github.com/ohsu-comp-bio/funnel/config"
+	"github.com/ohsu-comp-bio/funnel/events"
 	"github.com/ohsu-comp-bio/funnel/proto/tes"
 	"github.com/ohsu-comp-bio/funnel/util"
 	"golang.org/x/net/context"
@@ -46,6 +48,8 @@ var TaskNode = []byte("task-node")
 // Implemented as composite_key(node ID + task ID) => task ID
 // And searched with prefix scan using node ID
 var NodeTasks = []byte("node-tasks")
+
+var TaskEvents = []byte("task-events")
 
 // TaskBolt provides handlers for gRPC endpoints.
 // Data is stored/retrieved from the BoltDB key-value database.
@@ -91,6 +95,9 @@ func NewTaskBolt(conf config.Config) (*TaskBolt, error) {
 		}
 		if tx.Bucket(NodeTasks) == nil {
 			tx.CreateBucket(NodeTasks)
+		}
+		if tx.Bucket(TaskEvents) == nil {
+			tx.CreateBucket(TaskEvents)
 		}
 		return nil
 	})
@@ -220,21 +227,18 @@ func loadFullTaskView(tx *bolt.Tx, id string, task *tes.Task) error {
 }
 
 func loadTaskLogs(tx *bolt.Tx, task *tes.Task) {
-	tasklog := &tes.TaskLog{}
-	task.Logs = []*tes.TaskLog{tasklog}
+	tb := events.NewTaskBuilder(task)
 
-	b := tx.Bucket(TasksLog).Get([]byte(task.Id))
-	if b != nil {
-		proto.Unmarshal(b, tasklog)
-	}
+	prefix := []byte(task.Id)
+	c := tx.Bucket(TaskEvents).Cursor()
+	for k, v := c.Seek(prefix); k != nil && bytes.HasPrefix(k, prefix); k, v = c.Next() {
 
-	for i := range task.Executors {
-		o := tx.Bucket(ExecutorLogs).Get([]byte(fmt.Sprint(task.Id, i)))
-		if o != nil {
-			var execlog tes.ExecutorLog
-			proto.Unmarshal(o, &execlog)
-			tasklog.Logs = append(tasklog.Logs, &execlog)
+		ev := &events.Event{}
+		err := proto.Unmarshal(v, ev)
+		if err != nil {
+			continue
 		}
+		tb.Write(ev)
 	}
 }
 

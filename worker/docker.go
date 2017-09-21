@@ -6,7 +6,7 @@ import (
 	"github.com/ohsu-comp-bio/funnel/events"
 	"github.com/ohsu-comp-bio/funnel/proto/tes"
 	"io"
-  "os"
+	"os"
 	"os/exec"
 	"strings"
 )
@@ -20,7 +20,7 @@ type DockerCmd struct {
 	Ports           []*tes.Ports
 	ContainerName   string
 	RemoveContainer bool
-  ExtraFlags      []string
+	ExtraFlags      []string
 	Environ         map[string]string
 	Stdin           io.Reader
 	Stdout          io.Writer
@@ -34,13 +34,13 @@ func (dcmd DockerCmd) Run(ctx context.Context) error {
 	dcmd.Event.Info("Running command", "cmd", strings.Join(dcmd.Cmd, " "))
 	cmd := exec.Command(dcmd.Cmd[0], dcmd.Cmd[1:]...)
 
-  cmd.Env = append(cmd.Env, os.Environ()...)
-  for k, v := range dcmd.Environ {
-    cmd.Env = append(cmd.Env, fmt.Sprintf("%s=%s", k, v))
-  }
+	cmd.Env = append(cmd.Env, os.Environ()...)
+	for k, v := range dcmd.Environ {
+		cmd.Env = append(cmd.Env, fmt.Sprintf("%s=%s", k, v))
+	}
 
 	if dcmd.Workdir != "" {
-    cmd.Dir = dcmd.Workdir
+		cmd.Dir = dcmd.Workdir
 	}
 
 	if dcmd.Stdin != nil {
@@ -57,12 +57,12 @@ func (dcmd DockerCmd) Run(ctx context.Context) error {
 
 // Inspect returns metadata about the container (calls "docker inspect").
 func (dcmd DockerCmd) Inspect(ctx context.Context) ([]*tes.Ports, error) {
-  return nil, nil
+	return nil, nil
 }
 
 // Stop stops the container.
 func (dcmd DockerCmd) Stop() error {
-  return nil
+	return nil
 }
 
 func formatVolumeArg(v Volume) string {
