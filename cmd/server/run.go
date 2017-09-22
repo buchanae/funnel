@@ -91,6 +91,12 @@ func Run(ctx context.Context, conf config.Config) error {
 		}
 
 		sched = scheduler.NewScheduler(sdb, sbackend, conf.Scheduler)
+
+  case "gcepubsub":
+    backend, err = gce.NewPubSubBackend()
+    if err != nil {
+      return err
+    }
 	case "gridengine":
 		backend = gridengine.NewBackend(conf)
 	case "htcondor":

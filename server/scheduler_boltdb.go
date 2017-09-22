@@ -37,7 +37,7 @@ func (taskBolt *TaskBolt) ReadQueue(n int) []*tes.Task {
 		c := tx.Bucket(TasksQueued).Cursor()
 		for k, _ := c.First(); k != nil && len(tasks) < n; k, _ = c.Next() {
 			id := string(k)
-			task, _ := getTaskView(tx, id, tes.TaskView_FULL)
+			task, _ := getTaskView(tx, id, tes.TaskView_BASIC)
 			tasks = append(tasks, task)
 		}
 		return nil
@@ -85,6 +85,7 @@ func (taskBolt *TaskBolt) UpdateNode(ctx context.Context, req *pbs.Node) (*pbs.U
 }
 
 func updateNode(tx *bolt.Tx, req *pbs.Node) error {
+  log.Info("update node", req.Id)
 	// Get node
 	node := getNode(tx, req.Id)
 
@@ -155,7 +156,7 @@ func updateAvailableResources(tx *bolt.Tx, node *pbs.Node) {
 		DiskGb: node.GetResources().GetDiskGb(),
 	}
 	for _, taskID := range node.TaskIds {
-		t, _ := getTaskView(tx, taskID, tes.TaskView_FULL)
+		t, _ := getTaskView(tx, taskID, tes.TaskView_BASIC)
 		res := t.GetResources()
 
 		// Cpus are represented by an unsigned int, and if we blindly
@@ -280,7 +281,7 @@ func (taskBolt *TaskBolt) ListNodes(ctx context.Context, req *pbs.ListNodesReque
 	resp := &pbs.ListNodesResponse{}
 	resp.Nodes = []*pbs.Node{}
 
-	err := taskBolt.db.Update(func(tx *bolt.Tx) error {
+	err := taskBolt.db.View(func(tx *bolt.Tx) error {
 
 		bucket := tx.Bucket(Nodes)
 		c := bucket.Cursor()

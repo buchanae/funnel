@@ -28,7 +28,7 @@ func NewClient(address string) *Client {
 	return &Client{
 		address: address,
 		client: &http.Client{
-			Timeout: 10 * time.Second,
+			//Timeout: 10 * time.Second,
 		},
 		Marshaler: &jsonpb.Marshaler{
 			EnumsAsInts:  false,

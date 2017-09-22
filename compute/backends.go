@@ -9,4 +9,5 @@ import (
 // Openstack this may include provisioning a VM and then running the task.
 type Backend interface {
 	Submit(*tes.Task) error
+  Cancel(id string) error
 }

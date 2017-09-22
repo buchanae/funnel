@@ -63,10 +63,21 @@ message Event {
 }
 
 message CreateEventResponse{}
+message GetEventsRequest {
+  string id = 1;
+}
+message GetEventsResponse {
+  repeated Event events = 1;
+}
 
 /**
  * Event Service
  */
 service EventService {
   rpc CreateEvent(Event) returns (CreateEventResponse) {};
+  rpc GetEvents(GetEventsRequest) returns (GetEventsResponse) {
+    option (google.api.http) = {
+      get: "/v1/events/{id}"
+    };
+  };
 }

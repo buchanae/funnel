@@ -21,7 +21,7 @@ VERSION_LDFLAGS=\
  -X "$(V).Version=$(shell git describe --tags --long --dirty)"
 
 # Build the code
-install: depends
+install: 
 	@touch version/version.go
 	@go install -ldflags '$(VERSION_LDFLAGS)' github.com/ohsu-comp-bio/funnel
 

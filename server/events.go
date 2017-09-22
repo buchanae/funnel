@@ -1,6 +1,7 @@
 package server
 
 import (
+  "bytes"
 	"fmt"
 	"github.com/boltdb/bolt"
 	proto "github.com/golang/protobuf/proto"
@@ -10,6 +11,7 @@ import (
 
 // CreateEvent creates an event for the server to handle.
 func (taskBolt *TaskBolt) CreateEvent(ctx context.Context, req *events.Event) (*events.CreateEventResponse, error) {
+  log.Info("Create event", req)
 
 	err := taskBolt.db.Update(func(tx *bolt.Tx) error {
 		if req.Type == events.Type_TASK_STATE {
@@ -28,4 +30,26 @@ func (taskBolt *TaskBolt) CreateEvent(ctx context.Context, req *events.Event) (*
 		return tx.Bucket(TaskEvents).Put([]byte(id), reqbytes)
 	})
 	return &events.CreateEventResponse{}, err
+}
+
+func (taskBolt *TaskBolt) GetEvents(ctx context.Context, req *events.GetEventsRequest) (*events.GetEventsResponse, error) {
+
+  resp := events.GetEventsResponse{}
+  taskBolt.db.View(func(tx *bolt.Tx) error {
+
+    prefix := []byte(req.Id)
+    c := tx.Bucket(TaskEvents).Cursor()
+
+    for k, v := c.Seek(prefix); k != nil && bytes.HasPrefix(k, prefix); k, v = c.Next() {
+
+      ev := &events.Event{}
+      err := proto.Unmarshal(v, ev)
+      if err != nil {
+        continue
+      }
+      resp.Events = append(resp.Events, ev)
+    }
+    return nil
+  })
+  return &resp, nil
 }

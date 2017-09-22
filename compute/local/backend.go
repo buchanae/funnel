@@ -31,3 +31,8 @@ func (b *Backend) Submit(task *tes.Task) error {
 	go w.Run(context.Background())
 	return nil
 }
+
+
+func (b *Backend) Cancel(id string) error {
+  return nil
+}

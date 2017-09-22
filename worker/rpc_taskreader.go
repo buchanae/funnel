@@ -15,7 +15,7 @@ type RPCTaskReader struct {
 	taskID string
 }
 
-func newRPCTaskReader(conf config.Worker, taskID string) (*RPCTaskReader, error) {
+func NewRPCTaskReader(conf config.Worker, taskID string) (*RPCTaskReader, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
 	defer cancel()
 

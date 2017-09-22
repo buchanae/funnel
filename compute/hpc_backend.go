@@ -45,6 +45,10 @@ func (b *HPCBackend) Submit(task *tes.Task) error {
 	return nil
 }
 
+func (b *HPCBackend) Cancel(id string) error {
+  return nil
+}
+
 // setupTemplatedHPCSubmit sets up a task submission in a HPC environment with
 // a shared file system. It generates a submission file based on a template for
 // schedulers such as SLURM, HTCondor, SGE, PBS/Torque, etc.

@@ -24,3 +24,6 @@ func (b *Backend) Submit(task *tes.Task) error {
 	log.Debug("Submitting to noop", "taskID", task.Id)
 	return nil
 }
+func (b *Backend) Cancel(id string) error {
+  return nil
+}

@@ -105,6 +105,12 @@ func (s *Server) Serve(pctx context.Context) error {
 	// Register Events service
 	if s.EventServiceServer != nil {
 		events.RegisterEventServiceServer(grpcServer, s.EventServiceServer)
+    err := events.RegisterEventServiceHandlerFromEndpoint(
+			ctx, grpcMux, s.RPCAddress, s.DialOptions,
+    )
+		if err != nil {
+			return err
+		}
 	}
 
 	// Register Scheduler RPC service

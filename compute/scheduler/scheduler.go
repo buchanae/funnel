@@ -63,12 +63,15 @@ func (s *Scheduler) Run(ctx context.Context) error {
 // and calls the given scheduler backend. If the backend returns a valid offer, the
 // task is assigned to the offered node.
 func (s *Scheduler) Schedule(ctx context.Context) error {
+	log.Info("Check start")
 	err := s.db.CheckNodes()
 	if err != nil {
 		return err
 	}
+	log.Info("Check end")
 
 	for _, task := range s.db.ReadQueue(s.conf.ScheduleChunk) {
+	  log.Info("Scheduling", "taskID", task.Id, "chunk", s.conf.ScheduleChunk)
 		offer := s.backend.GetOffer(task)
 		if offer != nil {
 			log.Info("Assigning task to node",
@@ -80,8 +83,9 @@ func (s *Scheduler) Schedule(ctx context.Context) error {
 			if err != nil {
 				log.Error("Error in AssignTask", err)
 			}
+      log.Info("Assign end")
 		} else {
-			log.Debug("Scheduling failed for task", "taskID", task.Id)
+			log.Info("Scheduling failed for task", "taskID", task.Id)
 		}
 	}
 	return nil

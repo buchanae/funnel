@@ -200,18 +200,16 @@ func loadBasicTaskView(tx *bolt.Tx, id string, task *tes.Task) error {
 	task.Inputs = inputs
 
 	// remove stdout and stderr from Task.Logs.Logs
-	tlogs := []*tes.TaskLog{}
 	for _, tl := range task.Logs {
-		elogs := []*tes.ExecutorLog{}
-		for _, el := range tl.Logs {
-			el.Stdout = ""
-			el.Stderr = ""
-			elogs = append(elogs, el)
-		}
-		tl.Logs = elogs
-		tlogs = append(tlogs, tl)
+    if tl != nil {
+      for _, el := range tl.Logs {
+        if el != nil {
+          el.Stdout = ""
+          el.Stderr = ""
+        }
+      }
+    }
 	}
-	task.Logs = tlogs
 
 	return loadMinimalTaskView(tx, id, task)
 }
@@ -240,6 +238,10 @@ func loadTaskLogs(tx *bolt.Tx, task *tes.Task) {
 		}
 		tb.Write(ev)
 	}
+
+  if task.Logs == nil {
+    task.Logs = []*tes.TaskLog{}
+  }
 }
 
 // GetTask gets a task, which describes a running task
@@ -345,6 +347,8 @@ func (taskBolt *TaskBolt) CancelTask(ctx context.Context, req *tes.CancelTaskReq
 			return nil, grpc.Errorf(codes.NotFound, fmt.Sprintf("%v: taskID: %s", err.Error(), req.Id))
 		}
 	}
+
+  taskBolt.backend.Cancel(req.Id)
 
 	err = taskBolt.db.Update(func(tx *bolt.Tx) error {
 		// TODO need a test that ensures a canceled task is deleted from the worker

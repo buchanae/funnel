@@ -27,3 +27,7 @@ func (b *ComputeBackend) Submit(task *tes.Task) error {
 	}
 	return nil
 }
+
+func (b *ComputeBackend) Cancel(id string) error {
+  return nil
+}

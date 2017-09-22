@@ -6,3 +6,9 @@ Scheduler:
     ServerAddress: funnel-server:9090
 Worker:
   ServerAddress: funnel-server:9090
+  Storage:
+    Local:
+      AllowedDirs:
+        - /opt/cwl
+    GS:
+      - FromEnv: true

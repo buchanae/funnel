@@ -22,6 +22,8 @@ func init() {
 	Cmd.AddCommand(nodeCmd)
 	Cmd.AddCommand(serverCmd)
 	Cmd.AddCommand(configCmd)
+  Cmd.AddCommand(subnodeCmd)
+  Cmd.AddCommand(drainCmd)
 }
 
 var configCmd = &cobra.Command{

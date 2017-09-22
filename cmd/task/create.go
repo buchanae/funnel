@@ -17,13 +17,9 @@ var createCmd = &cobra.Command{
 			return cmd.Help()
 		}
 
-		res, err := doCreate(tesServer, args)
+		_, err := doCreate(tesServer, args)
 		if err != nil {
 			return err
-		}
-
-		for _, x := range res {
-			fmt.Println(x)
 		}
 
 		return nil
@@ -56,6 +52,8 @@ func doCreate(server string, messages []string) ([]string, error) {
 		if err != nil {
 			return nil, err
 		}
+
+		fmt.Println(task, r.Id)
 		res = append(res, r.Id)
 	}
 	return res, nil

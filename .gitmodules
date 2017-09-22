@@ -133,3 +133,6 @@
 [submodule "vendor/golang.org/x/sys"]
 	path = vendor/golang.org/x/sys
 	url = https://go.googlesource.com/sys
+[submodule "vendor/github.com/googleapis/gax-go"]
+	path = vendor/github.com/googleapis/gax-go
+	url = https://github.com/googleapis/gax-go

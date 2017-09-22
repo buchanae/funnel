@@ -18,7 +18,7 @@ import (
 // which uses gRPC to read/write task details.
 func NewDefaultWorker(conf config.Worker, taskID string) (Worker, error) {
 
-	rsvc, err := newRPCTaskReader(conf, taskID)
+	rsvc, err := NewRPCTaskReader(conf, taskID)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to instantiate TaskReader: %v", err)
 	}
@@ -93,6 +93,10 @@ func (r *DefaultWorker) Run(pctx context.Context) {
 		switch {
 		case run.execerr != nil:
 			if run.execerr == context.Canceled {
+        // Something else failed
+        // TODO should we do something special for run.err == context.Canceled?
+        event.Error("System canceled")
+        event.State(tes.State_SYSTEM_ERROR)
 				break
 			}
 			// One of the executors failed
@@ -106,6 +110,10 @@ func (r *DefaultWorker) Run(pctx context.Context) {
 		default:
 			event.State(tes.State_COMPLETE)
 		}
+
+    for _, in := range task.Inputs {
+      os.RemoveAll(in.Path)
+    }
 	}()
 
 	// Recover from panics
