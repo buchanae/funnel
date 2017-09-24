@@ -1,0 +1,14 @@
+<div ng-controller="TaskSummaryController" class="task-summary-page">
+  <div class="board">
+
+    <h4>Tasks</h4>
+
+    <table ng-table="tableParams" class="task-summary-table">
+      <tr ng-repeat="(state, count) in counts"> 
+        <td>{{state}}</td>
+        <td>{{count}}</td>
+      </tr>
+    </table> 
+
+  </div>
+</div>

@@ -24,6 +24,7 @@ func init() {
 	Cmd.AddCommand(configCmd)
   Cmd.AddCommand(subnodeCmd)
   Cmd.AddCommand(drainCmd)
+  Cmd.AddCommand(listCmd)
 }
 
 var configCmd = &cobra.Command{

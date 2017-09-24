@@ -2,23 +2,13 @@ package server
 
 import (
 	"context"
-	"fmt"
 	"github.com/imdario/mergo"
-	"github.com/ohsu-comp-bio/funnel/compute"
-	"github.com/ohsu-comp-bio/funnel/compute/gce"
-	"github.com/ohsu-comp-bio/funnel/compute/gridengine"
-	"github.com/ohsu-comp-bio/funnel/compute/htcondor"
-	"github.com/ohsu-comp-bio/funnel/compute/local"
-	"github.com/ohsu-comp-bio/funnel/compute/manual"
-	"github.com/ohsu-comp-bio/funnel/compute/openstack"
-	"github.com/ohsu-comp-bio/funnel/compute/pbs"
-	"github.com/ohsu-comp-bio/funnel/compute/scheduler"
-	"github.com/ohsu-comp-bio/funnel/compute/slurm"
 	"github.com/ohsu-comp-bio/funnel/config"
 	"github.com/ohsu-comp-bio/funnel/logger"
 	"github.com/ohsu-comp-bio/funnel/server"
+	"github.com/ohsu-comp-bio/funnel/gcp"
+	"github.com/ohsu-comp-bio/funnel/compute/gce"
 	"github.com/spf13/cobra"
-	"strings"
 )
 
 var log = logger.New("server run cmd")
@@ -55,63 +45,32 @@ var runCmd = &cobra.Command{
 func Run(ctx context.Context, conf config.Config) error {
 	logger.Configure(conf.Server.Logger)
 
-	var backend compute.Backend
-	var db server.Database
-	var sched *scheduler.Scheduler
-	var err error
-
+  /*
 	db, err = server.NewTaskBolt(conf)
 	if err != nil {
 		log.Error("Couldn't open database", err)
 		return err
 	}
+  */
+  pubsub, err := gce.NewPubSubBackend()
+  if err != nil {
+    return err
+  }
 
-	srv := server.DefaultServer(db, conf.Server)
+  db, err := gcp.NewDatastoreTES("isb-cgc-04-0029", pubsub)
+  if err != nil {
+    return err
+  }
 
-	switch strings.ToLower(conf.Backend) {
-	case "gce", "manual", "openstack":
-		sdb, ok := db.(scheduler.Database)
-		if !ok {
-			return fmt.Errorf("Database doesn't satisfy the scheduler interface")
-		}
+	srv := server.DefaultServer(conf.Server)
+  srv.TaskServiceServer = db
 
-		backend = scheduler.NewComputeBackend(sdb)
-
-		var sbackend scheduler.Backend
-		switch strings.ToLower(conf.Backend) {
-		case "gce":
-			sbackend, err = gce.NewBackend(conf)
-		case "manual":
-			sbackend, err = manual.NewBackend(conf)
-		case "openstack":
-			sbackend, err = openstack.NewBackend(conf)
-		}
-		if err != nil {
-			return err
-		}
-
-		sched = scheduler.NewScheduler(sdb, sbackend, conf.Scheduler)
-
-  case "gcepubsub":
-    backend, err = gce.NewPubSubBackend()
-    if err != nil {
-      return err
-    }
-	case "gridengine":
-		backend = gridengine.NewBackend(conf)
-	case "htcondor":
-		backend = htcondor.NewBackend(conf)
-	case "local":
-		backend = local.NewBackend(conf)
-	case "pbs":
-		backend = pbs.NewBackend(conf)
-	case "slurm":
-		backend = slurm.NewBackend(conf)
-	default:
-		return fmt.Errorf("unknown backend")
-	}
-
-	db.WithComputeBackend(backend)
+  /*
+  backend, err = gce.NewPubSubBackend()
+  if err != nil {
+    return err
+  }
+  */
 
 	// Block
 
@@ -120,13 +79,6 @@ func Run(ctx context.Context, conf config.Config) error {
 	go func() {
 		errch <- srv.Serve(ctx)
 	}()
-
-	// Start Scheduler
-	if sched != nil {
-		go func() {
-			errch <- sched.Run(ctx)
-		}()
-	}
 
 	// Block until done.
 	// Server and scheduler must be stopped via the context.

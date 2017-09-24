@@ -91,20 +91,19 @@ func (r *DefaultWorker) Run(pctx context.Context) {
 		event.EndTime(time.Now())
 
 		switch {
+    case run.taskCanceled:
+			event.State(tes.State_CANCELED)
+    case run.syserr == context.Canceled:
+      fallthrough
+    case run.execerr == context.Canceled:
+      event.Error("System canceled")
+      event.State(tes.State_SYSTEM_ERROR)
 		case run.execerr != nil:
-			if run.execerr == context.Canceled {
-        // Something else failed
-        // TODO should we do something special for run.err == context.Canceled?
-        event.Error("System canceled")
-        event.State(tes.State_SYSTEM_ERROR)
-				break
-			}
 			// One of the executors failed
 			event.Error("Exec error", run.execerr)
 			event.State(tes.State_ERROR)
 		case run.syserr != nil:
 			// Something else failed
-			// TODO should we do something special for run.err == context.Canceled?
 			event.Error("System error", run.syserr)
 			event.State(tes.State_SYSTEM_ERROR)
 		default:
@@ -120,10 +119,6 @@ func (r *DefaultWorker) Run(pctx context.Context) {
 	defer handlePanic(func(e error) {
 		run.syserr = e
 	})
-
-	if len(task.Logs) > 3 {
-		run.execerr = fmt.Errorf("max retries reached")
-	}
 
 	ctx := r.pollForCancel(pctx, func() {
 		run.taskCanceled = true

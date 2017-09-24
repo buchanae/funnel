@@ -6,6 +6,7 @@ Scheduler:
     ServerAddress: funnel-server:9090
 Worker:
   ServerAddress: funnel-server:9090
+  UpdateRate: 50000000000
   Storage:
     Local:
       AllowedDirs:

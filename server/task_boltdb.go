@@ -62,6 +62,8 @@ type TaskBolt struct {
 // NewTaskBolt returns a new instance of TaskBolt, accessing the database at
 // the given path, and including the given ServerConfig.
 func NewTaskBolt(conf config.Config) (*TaskBolt, error) {
+  // TODO definitely shouldn't be here. I want to be able to open a database
+  //      without creating it.
 	util.EnsurePath(conf.Server.DBPath)
 	db, err := bolt.Open(conf.Server.DBPath, 0600, &bolt.Options{
 		Timeout: time.Second * 5,
@@ -242,6 +244,25 @@ func loadTaskLogs(tx *bolt.Tx, task *tes.Task) {
   if task.Logs == nil {
     task.Logs = []*tes.TaskLog{}
   }
+
+  var tl []*tes.TaskLog
+  for _, l := range task.Logs {
+    if l == nil {
+      l = &tes.TaskLog{}
+    }
+
+    tl = append(tl, l)
+
+    var el []*tes.ExecutorLog
+    for _, e := range l.Logs {
+      if e == nil {
+        e = &tes.ExecutorLog{}
+      }
+      el = append(el, e)
+    }
+    l.Logs = el
+  }
+  task.Logs = tl
 }
 
 // GetTask gets a task, which describes a running task
@@ -278,6 +299,89 @@ func getTaskView(tx *bolt.Tx, id string, view tes.TaskView) (*tes.Task, error) {
 		err = fmt.Errorf("Unknown view: %s", view.String())
 	}
 	return task, err
+}
+
+func (taskBolt *TaskBolt) CheckTasks(ctx context.Context) {
+  timer := time.NewTimer(time.Second * 10)
+  for {
+    select {
+    case <-ctx.Done():
+      return
+    case <-timer.C:
+      var restart []*tes.Task
+      taskBolt.db.View(func(tx *bolt.Tx) error {
+        c := tx.Bucket(TaskState).Cursor()
+        prefix := []byte{}
+        for k, v := c.Seek(prefix); k != nil && bytes.HasPrefix(k, prefix); k, v = c.Next() {
+
+          if v == nil {
+            continue
+          }
+          // map the string into the protobuf enum
+          state := tes.State(tes.State_value[string(v)])
+          if state == tes.SystemError {
+            task := &tes.Task{}
+            err := loadBasicTaskView(tx, string(k), task)
+            if err != nil {
+              log.Error("Can't restart", err)
+              continue
+            }
+            if len(task.Logs) < 30 {
+              log.Info("RESTART")
+              restart = append(restart, task)
+            }
+          }
+        }
+        return nil
+      })
+
+      taskBolt.db.Update(func(tx *bolt.Tx) error {
+        for _, task := range restart {
+          err := taskBolt.transitionTaskState(tx, task.Id, tes.State_QUEUED)
+          if err != nil {
+            log.Error("Can't restart", err)
+            continue
+          }
+          taskBolt.backend.Submit(task)
+        }
+        return nil
+      })
+    }
+  }
+}
+
+func (taskBolt *TaskBolt) RestartTask(ctx context.Context, req *tes.RestartTaskRequest) (*tes.RestartTaskResponse, error) {
+
+  task := &tes.Task{}
+
+  err := taskBolt.db.Update(func(tx *bolt.Tx) error {
+    var err error
+
+    err = loadBasicTaskView(tx, req.Id, task)
+    if err != nil {
+      return err
+    }
+
+    if len(task.Logs) > 30 {
+      return fmt.Errorf("can't restart, max attempts reached")
+    }
+
+    err = taskBolt.transitionTaskState(tx, task.Id, tes.State_QUEUED)
+    if err != nil {
+      return err
+    }
+    err = taskBolt.backend.Submit(task)
+    if err != nil {
+      return err
+    }
+    return nil
+  })
+
+  if err != nil {
+     log.Error("Can't restart", err)
+    return nil, err
+  }
+  return &tes.RestartTaskResponse{}, nil
 }
 
 // ListTasks returns a list of taskIDs
@@ -352,7 +456,7 @@ func (taskBolt *TaskBolt) CancelTask(ctx context.Context, req *tes.CancelTaskReq
 
 	err = taskBolt.db.Update(func(tx *bolt.Tx) error {
 		// TODO need a test that ensures a canceled task is deleted from the worker
-		return transitionTaskState(tx, req.Id, tes.State_CANCELED)
+		return taskBolt.transitionTaskState(tx, req.Id, tes.State_CANCELED)
 	})
 	if err != nil {
 		return nil, err

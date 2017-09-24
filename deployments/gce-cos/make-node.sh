@@ -5,10 +5,10 @@ TEMPLATE="yes"
 MACHINE_TYPE="n1-highmem-16"
 
 
-gcloud compute instance-templates create "funnel-smc-node-$MACHINE_TYPE" \
-  --tags funnel                                              \
-  --scopes compute-rw,storage-rw                             \
-  --image-family funnel-smc-node                                 \
+gcloud compute instance-templates create "funnel-pubsub-$MACHINE_TYPE" \
+  --tags funnel,funnel-pubsub                    \
+  --scopes storage-rw,https://www.googleapis.com/auth/pubsub,useraccounts-ro,logging-write  \
+  --image-family funnel-pubsub                                 \
   --machine-type $MACHINE_TYPE                               \
   --boot-disk-type pd-standard                               \
   --boot-disk-size 400GB                                      \

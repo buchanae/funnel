@@ -1,0 +1,12 @@
+[Unit]
+Description=Start a Funnel node
+
+[Service]
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/opt/funnel
+ExecStartPre=/bin/sh -c '/opt/funnel/funnel gce config > config.yml'
+ExecStart=/opt/funnel/funnel node run --config config.yml
+
+[Install]
+WantedBy=multi-user.target

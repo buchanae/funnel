@@ -5,6 +5,7 @@ import (
 	"github.com/ohsu-comp-bio/funnel/compute/gce"
 	"github.com/ohsu-comp-bio/funnel/config"
 	"github.com/ohsu-comp-bio/funnel/util"
+	"github.com/ohsu-comp-bio/funnel/gcp"
 	"github.com/ohsu-comp-bio/funnel/events"
 	"github.com/ohsu-comp-bio/funnel/logger"
 	"github.com/ohsu-comp-bio/funnel/worker"
@@ -13,6 +14,8 @@ import (
 	"github.com/spf13/cobra"
   "cloud.google.com/go/pubsub"
   "golang.org/x/net/context"
+  "time"
+  "net/http"
   "sync"
   "syscall"
 )
@@ -49,6 +52,9 @@ var subnodeCmd = &cobra.Command{
 }
 
 func run(ctx context.Context, conf config.Config) error {
+  http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+    fmt.Fprintf(w, "ok")
+  })
 
   client, err := pubsub.NewClient(ctx, projectID)
   if err != nil {
@@ -59,11 +65,7 @@ func run(ctx context.Context, conf config.Config) error {
   sub := client.Subscription("workers")
   sub.ReceiveSettings.MaxOutstandingMessages = 1
 
-	//logWriter := events.NewLogger("worker")
-  logWriter, err := events.NewRPCWriter(conf.Worker)
-  if err != nil {
-    return err
-  }
+  go http.ListenAndServe(":7890", nil)
 
   return sub.Receive(ctx, func(ctx context.Context, m *pubsub.Message) {
     ctx, cancel := context.WithCancel(ctx)
@@ -84,17 +86,44 @@ func run(ctx context.Context, conf config.Config) error {
       m.Nack()
       return
     }
+
     if rtask.State == tes.Canceled {
       fmt.Println("SKIPPING CANCELED")
       m.Ack()
       return
     }
 
+    var writer events.Writer
+
+    dswriter, err := gcp.NewDatastoreTaskEventWriter("isb-cgc-04-0029", rtask)
+    if err != nil {
+      return
+    }
+    defer dswriter.Flush()
+    writer = dswriter
+
+    sdwriter, err := gcp.NewStackdriverEventWriter(ctx, "funnel_tasks", "isb-cgc-04-0029")
+    if err == nil {
+      writer = events.MultiWriter(dswriter, sdwriter)
+    }
+
+    timer := time.NewTimer(time.Second * 5)
+    go func() {
+      for {
+        select {
+        case <-timer.C:
+          dswriter.Flush()
+        case <-ctx.Done():
+          return
+        }
+      }
+    }()
+
     w := worker.DefaultWorker{
       Conf: conf.Worker,
       Mapper: worker.NewFileMapper("/"),
       TaskReader: r,
-      Event: logWriter,
+      Event: writer,
     }
     w.Run(ctx)
     fmt.Println("DONE")
@@ -166,5 +195,39 @@ func drain() error {
   return sub.Receive(ctx, func(ctx context.Context, m *pubsub.Message) {
      fmt.Println("drained")
      m.Ack()
+   })
+}
+
+var listCmd = &cobra.Command{
+	Use: "list",
+	RunE: func(cmd *cobra.Command, args []string) error {
+    return list()
+	},
+}
+
+func list() error {
+  ctx := context.Background()
+
+  client, err := pubsub.NewClient(ctx, projectID)
+  if err != nil {
+    return err
+  }
+
+  //topic := client.Topic(topicName)
+  sub := client.Subscription("workers")
+  if err != nil {
+    return err
+  }
+
+  return sub.Receive(ctx, func(ctx context.Context, m *pubsub.Message) {
+     defer m.Nack()
+
+    task := tes.Task{}
+    err := proto.Unmarshal(m.Data, &task)
+    if err != nil {
+      m.Nack()
+      return
+    }
+     log.Info("list", task)
    })
 }

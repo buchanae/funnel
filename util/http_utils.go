@@ -19,6 +19,7 @@ func CheckHTTPResponse(resp *http.Response, err error) ([]byte, error) {
 		return nil, err
 	}
 	if (resp.StatusCode / 100) != 2 {
+    // TODO this is preventing access to the property formatted body
 		return nil, fmt.Errorf("[STATUS CODE - %d]\t%s", resp.StatusCode, body)
 	}
 	return body, nil

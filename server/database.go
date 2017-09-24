@@ -1,6 +1,7 @@
 package server
 
 import (
+	"golang.org/x/net/context"
 	"github.com/ohsu-comp-bio/funnel/compute"
 	"github.com/ohsu-comp-bio/funnel/events"
 	pbs "github.com/ohsu-comp-bio/funnel/proto/scheduler"
@@ -14,4 +15,5 @@ type Database interface {
 	events.EventServiceServer
 	pbs.SchedulerServiceServer
 	WithComputeBackend(compute.Backend)
+  CheckTasks(context.Context)
 }

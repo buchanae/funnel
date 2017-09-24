@@ -26,13 +26,10 @@ type grpclogger struct {
 }
 
 func (g *grpclogger) Info(args ...interface{}) {
-	log.Info(fmt.Sprint(args))
 }
 func (g *grpclogger) Infoln(args ...interface{}) {
-	log.Info(fmt.Sprint(args))
 }
 func (g *grpclogger) Infof(format string, args ...interface{}) {
-	log.Info(fmt.Sprintf(format, args))
 }
 func (g *grpclogger) Warning(args ...interface{}) {
 	log.Error(fmt.Sprint(args))

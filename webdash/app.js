@@ -28,6 +28,43 @@ function listAllTasks($http, tasks, page) {
   });
 }
 
+function listAllTasksMin($http, tasks, page) {
+  if (!tasks) {
+    tasks = []
+  }
+
+  var url = "/v1/tasks?view=MINIMAL";
+  if (page) {
+    url += "&page_token=" + page;
+  }
+
+  return $http.get(url).then(function(response) {
+    Array.prototype.push.apply(tasks, response.data.tasks);
+    if (response.data.next_page_token) {
+      return listAllTasksMin($http, tasks, response.data.next_page_token);
+    } else {
+      return tasks
+    }
+  });
+}
+
+app.controller('TaskSummaryController', function($scope, NgTableParams, $http, $interval) {
+  $scope.counts = {};
+
+  listAllTasks($http).then(function(ts) {
+    for (var i = 0; i < ts.length; i++) {
+      var r = ts[i];
+      s = r["state"];
+      c = $scope.counts[s];
+      if (!(s in $scope.counts)) {
+        $scope.counts[s] = 0;
+      }
+      $scope.counts[s] += 1;
+    }
+  });
+
+});
+
 app.controller('TaskListController', function($scope, NgTableParams, $http, $interval) {
   $scope.shortID = shortID;
   var tasks = [];
@@ -50,20 +87,13 @@ app.controller('TaskListController', function($scope, NgTableParams, $http, $int
     $http.post(url);
   }
 
-  function refresh() {
-    listAllTasks($http).then(function(ts) {
-      tasks.length = 0;
-      Array.prototype.push.apply(tasks, ts);
-      $scope.tableParams.total(tasks.length);
-      $scope.tableParams.reload();
-    });
-  }
-  refresh();
-  stop = $interval(refresh, 2000);
-
-  $scope.$on('$destroy', function() {
-    $interval.cancel(stop);
+  listAllTasks($http).then(function(ts) {
+    tasks.length = 0;
+    Array.prototype.push.apply(tasks, ts);
+    $scope.tableParams.total(tasks.length);
+    $scope.tableParams.reload();
   });
+
 });
 
 app.controller('NodeListController', function($scope, NgTableParams, $http, $interval) {
@@ -183,6 +213,9 @@ app.config(
        }).
        when('/tasks', {
          templateUrl: 'static/list.html',
+       }).
+       when('/summary', {
+         templateUrl: 'static/summary.html',
        }).
        when('/v1/tasks/:task_id', {
          redirectTo: '/tasks/:task_id',

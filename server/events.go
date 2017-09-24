@@ -15,7 +15,7 @@ func (taskBolt *TaskBolt) CreateEvent(ctx context.Context, req *events.Event) (*
 
 	err := taskBolt.db.Update(func(tx *bolt.Tx) error {
 		if req.Type == events.Type_TASK_STATE {
-			err := transitionTaskState(tx, req.Id, req.GetState())
+			err := taskBolt.transitionTaskState(tx, req.Id, req.GetState())
 			if err != nil {
 				return err
 			}

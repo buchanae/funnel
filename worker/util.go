@@ -95,3 +95,5 @@ func (h *helper) ok() bool {
 	}
 	return h.syserr == nil && h.execerr == nil
 }
+
+var errTaskCanceled = fmt.Errorf("task canceled")

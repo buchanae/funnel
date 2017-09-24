@@ -52,7 +52,7 @@ func (taskBolt *TaskBolt) AssignTask(t *tes.Task, w *pbs.Node) error {
 		// TODO this is important! write a test for this line.
 		//      when a task is assigned, its state is immediately Initializing
 		//      even before the node has received it.
-		err := transitionTaskState(tx, t.Id, tes.State_INITIALIZING)
+		err := taskBolt.transitionTaskState(tx, t.Id, tes.State_INITIALIZING)
 		if err != nil {
 			return err
 		}
@@ -258,7 +258,7 @@ func (taskBolt *TaskBolt) CheckNodes() error {
 				for k, v := c.Seek(prefix); k != nil && bytes.HasPrefix(k, prefix); k, v = c.Next() {
 
 					taskID := string(v)
-					err := transitionTaskState(tx, taskID, tes.Queued)
+					err := taskBolt.transitionTaskState(tx, taskID, tes.Queued)
 					if err != nil {
 						log.Error("can't restart task", err)
 					}

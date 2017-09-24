@@ -143,6 +143,25 @@ func (c *Client) CancelTask(id string) (*tes.CancelTaskResponse, error) {
 	}
 	return resp, nil
 }
+// RestartTask POSTs to /v1/tasks/{id}:restart
+func (c *Client) RestartTask(id string) (*tes.RestartTaskResponse, error) {
+	u := c.address + "/v1/tasks/" + id + ":restart"
+	req, _ := http.NewRequest("POST", u, nil)
+	req.Header.Add("Content-Type", "application/json")
+	req.SetBasicAuth("funnel", c.Password)
+	body, err := util.CheckHTTPResponse(c.client.Do(req))
+	if err != nil {
+		return nil, err
+	}
+
+	// Parse response
+	resp := &tes.RestartTaskResponse{}
+	err = jsonpb.UnmarshalString(string(body), resp)
+	if err != nil {
+		return nil, err
+	}
+	return resp, nil
+}
 
 // GetServiceInfo returns result of GET /v1/tasks/service-info
 func (c *Client) GetServiceInfo() (*tes.ServiceInfo, error) {

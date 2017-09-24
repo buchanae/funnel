@@ -67,10 +67,9 @@ func Transition(from, to State, t Transitioner) error {
 		}
 
 	case Error, Canceled:
-		// This requires a new concept: manual restart by user
-	//if to == Queued {
-	//return t.Queue()
-	//}
+    if to == Queued {
+      return t.Queue()
+    }
 
 	case SystemError:
 		if to == Queued {
