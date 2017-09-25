@@ -231,3 +231,17 @@ func list() error {
      log.Info("list", task)
    })
 }
+
+var readSDCmd = &cobra.Command{
+  Use: "read-sd",
+  RunE: func(cmd *cobra.Command, args []string) error {
+    ctx := context.Background()
+    r, err := gcp.NewStackdriverEventReader(ctx, projectID)
+    if err != nil {
+      return err
+    }
+    l := events.NewLogger("foo")
+    r.WriteTo(l)
+    return nil
+  },
+}

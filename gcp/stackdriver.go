@@ -2,10 +2,12 @@ package gcp
 
 import (
 	"cloud.google.com/go/logging"
+	"cloud.google.com/go/logging/logadmin"
 	"fmt"
 	"github.com/ohsu-comp-bio/funnel/events"
 	"golang.org/x/net/context"
 	logpb "google.golang.org/genproto/googleapis/logging/v2"
+  "google.golang.org/api/iterator"
 )
 
 type StackdriverEventWriter struct {
@@ -39,5 +41,40 @@ func (s *StackdriverEventWriter) Write(e *events.Event) error {
       Producer: "worker.funnel.ohsu.edu",
     },
 	})
+	return nil
+}
+
+
+
+type StackdriverEventReader struct {
+	client *logadmin.Client
+  it     *logadmin.EntryIterator
+}
+
+func NewStackdriverEventReader(ctx context.Context, project string) (*StackdriverEventReader, error) {
+
+	client, err := logadmin.NewClient(ctx, project)
+	if err != nil {
+		return nil, err
+	}
+  it := client.Entries(ctx, logadmin.Filter("label:funnel_task:yes"))
+	return &StackdriverEventReader{client, it}, nil
+}
+
+func (s *StackdriverEventReader) Close() error {
+	return s.client.Close()
+}
+
+func (s *StackdriverEventReader) WriteTo(w events.Writer) error {
+  for {
+    entry, err := s.it.Next()
+    if err == iterator.Done {
+      return nil
+    }
+    if err != nil {
+      return err
+    }
+    fmt.Println(entry.Payload)
+  }
 	return nil
 }
