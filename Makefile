@@ -1,7 +1,3 @@
-ifndef GOPATH
-$(error GOPATH is not set)
-endif
-
 DOCKER_TAG = docker.io/ohsucompbio/funnel
 VERSION = 0.2.0
 TESTS=$(shell go list ./... | grep -v /vendor/)

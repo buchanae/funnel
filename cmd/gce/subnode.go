@@ -1,6 +1,7 @@
 package gce
 
 import (
+  "encoding/json"
   "fmt"
 	"github.com/ohsu-comp-bio/funnel/compute/gce"
 	"github.com/ohsu-comp-bio/funnel/config"
@@ -14,6 +15,7 @@ import (
 	"github.com/spf13/cobra"
   "cloud.google.com/go/pubsub"
   "golang.org/x/net/context"
+  "os"
   "time"
   "net/http"
   "sync"
@@ -21,7 +23,7 @@ import (
 )
 
 var projectID = "isb-cgc-04-0029"
-var topicName = "funnel"
+var subscriptionName = "funnel-workers"
 
 var subnodeCmd = &cobra.Command{
 	Use: "subnode",
@@ -61,8 +63,7 @@ func run(ctx context.Context, conf config.Config) error {
     return err
   }
 
-  //topic := client.Topic(topicName)
-  sub := client.Subscription("workers")
+  sub := client.Subscription(subscriptionName)
   sub.ReceiveSettings.MaxOutstandingMessages = 1
 
   go http.ListenAndServe(":7890", nil)
@@ -186,8 +187,7 @@ func drain() error {
     return err
   }
 
-  //topic := client.Topic(topicName)
-  sub := client.Subscription("workers")
+  sub := client.Subscription(subscriptionName)
   if err != nil {
     return err
   }
@@ -213,8 +213,7 @@ func list() error {
     return err
   }
 
-  //topic := client.Topic(topicName)
-  sub := client.Subscription("workers")
+  sub := client.Subscription(subscriptionName)
   if err != nil {
     return err
   }
@@ -232,16 +231,21 @@ func list() error {
    })
 }
 
-var readSDCmd = &cobra.Command{
-  Use: "read-sd",
+var readEventsCmd = &cobra.Command{
+  Use: "read-events",
   RunE: func(cmd *cobra.Command, args []string) error {
-    ctx := context.Background()
-    r, err := gcp.NewStackdriverEventReader(ctx, projectID)
-    if err != nil {
-      return err
-    }
+
+    dec := json.NewDecoder(os.Stdin)
     l := events.NewLogger("foo")
-    r.WriteTo(l)
+
+    for {
+      ev := events.Event{}
+      if err := dec.Decode(&ev); err != nil {
+        return err
+      }
+      l.Write(&ev)
+    }
+
     return nil
   },
 }

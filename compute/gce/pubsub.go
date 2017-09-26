@@ -9,14 +9,13 @@ import (
 )
 
 var projectID = "isb-cgc-04-0029"
-var topicName = "funnel"
 
 type PubSubBackend struct {
   client *pubsub.Client
   topic *pubsub.Topic
 }
 
-func NewPubSubBackend() (*PubSubBackend, error) {
+func NewPubSubBackend(topicName string) (*PubSubBackend, error) {
   ctx := context.Background()
 
   client, err := pubsub.NewClient(ctx, projectID)

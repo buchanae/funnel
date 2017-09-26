@@ -11,6 +11,10 @@ import (
 	"time"
 )
 
+type GCP struct {
+  TopicName string
+}
+
 // Config describes configuration for Funnel.
 type Config struct {
 	Server Server
@@ -47,6 +51,7 @@ type Config struct {
 	}
 	Scheduler Scheduler
 	Worker    Worker
+  GCP GCP
 }
 
 // InheritServerProperties sets the ServerAddress and ServerPassword fields

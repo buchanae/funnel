@@ -52,7 +52,7 @@ func Run(ctx context.Context, conf config.Config) error {
 		return err
 	}
   */
-  pubsub, err := gce.NewPubSubBackend()
+  pubsub, err := gce.NewPubSubBackend(conf.GCP.TopicName)
   if err != nil {
     return err
   }

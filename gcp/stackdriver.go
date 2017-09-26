@@ -6,8 +6,10 @@ import (
 	"fmt"
 	"github.com/ohsu-comp-bio/funnel/events"
 	"golang.org/x/net/context"
+  "github.com/jkawamoto/structpbconv"
 	logpb "google.golang.org/genproto/googleapis/logging/v2"
   "google.golang.org/api/iterator"
+  structpb "github.com/golang/protobuf/ptypes/struct"
 )
 
 type StackdriverEventWriter struct {
@@ -57,7 +59,7 @@ func NewStackdriverEventReader(ctx context.Context, project string) (*Stackdrive
 	if err != nil {
 		return nil, err
 	}
-  it := client.Entries(ctx, logadmin.Filter("label:funnel_task:yes"))
+  it := client.Entries(ctx, logadmin.Filter(`resource.type="global" labels."funnel_task"="yes"`))
 	return &StackdriverEventReader{client, it}, nil
 }
 
@@ -74,7 +76,13 @@ func (s *StackdriverEventReader) WriteTo(w events.Writer) error {
     if err != nil {
       return err
     }
-    fmt.Println(entry.Payload)
+    ev := &events.Event{}
+    if x, ok := entry.Payload.(*structpb.Struct); ok {
+      if err := structpbconv.Convert(x, ev); err == nil {
+        fmt.Println(ev)
+      }
+    }
+
   }
 	return nil
 }
