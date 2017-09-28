@@ -3,6 +3,7 @@ package worker
 import (
 	"context"
 	"fmt"
+	"github.com/golang/protobuf/jsonpb"
 	"github.com/ohsu-comp-bio/funnel/cmd/version"
 	"github.com/ohsu-comp-bio/funnel/config"
 	"github.com/ohsu-comp-bio/funnel/events"
@@ -45,6 +46,65 @@ func NewDefaultWorker(conf config.Worker, taskID string) (Worker, error) {
 		Store:      storage.Storage{},
 		TaskReader: rsvc,
 		Event:      events.NewTaskWriter(taskID, 0, conf.Logger.Level, events.MultiWriter(rpcWriter, logWriter)),
+	}, nil
+}
+
+type FileTaskReader struct {
+	Path string
+	task *tes.Task
+}
+
+func (f *FileTaskReader) Task() (*tes.Task, error) {
+	if f.task != nil {
+		return f.task, nil
+	}
+
+	fh, err := os.Open(f.Path)
+	if err != nil {
+		return nil, err
+	}
+
+	f.task = &tes.Task{}
+	err = jsonpb.Unmarshal(fh, f.task)
+	return f.task, err
+}
+
+func (f *FileTaskReader) State() (tes.State, error) {
+	return tes.State_UNKNOWN, nil
+}
+
+func NewDirectWorker(conf config.Worker, taskPath string) (Worker, error) {
+	r := FileTaskReader{Path: taskPath}
+	task, err := r.Task()
+	if err != nil {
+		return nil, err
+	}
+
+	if task.Id == "" {
+		task.Id = util.GenTaskID()
+	}
+
+	// Map files into this baseDir
+	baseDir := path.Join(conf.WorkDir, task.Id)
+
+	// TODO handle error
+	err = util.EnsureDir(baseDir)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to create worker baseDir: %v", err)
+	}
+
+	logWriter := events.NewLogger("worker")
+	lwconf := conf.Logger
+	lwconf.OutputFile = path.Join(baseDir, "log.json")
+	lwconf.Formatter = "json"
+	logWriter.Log.Configure(lwconf)
+
+	return &DefaultWorker{
+		Conf:       conf,
+		Mapper:     NewFileMapper(baseDir),
+		Store:      storage.Storage{},
+		TaskReader: &r,
+		Event:      events.NewTaskWriter(task.Id, 0, conf.Logger.Level, logWriter),
 	}, nil
 }
 

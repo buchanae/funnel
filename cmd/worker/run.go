@@ -2,7 +2,6 @@ package worker
 
 import (
 	"context"
-	"fmt"
 	"github.com/imdario/mergo"
 	"github.com/ohsu-comp-bio/funnel/config"
 	"github.com/ohsu-comp-bio/funnel/logger"
@@ -11,10 +10,12 @@ import (
 )
 
 var taskID string
+var taskPath string
 
 func init() {
 	f := runCmd.Flags()
 	f.StringVar(&taskID, "task-id", "", "Task ID")
+	f.StringVar(&taskPath, "task-path", "", "Task file path.")
 }
 
 var runCmd = &cobra.Command{
@@ -22,8 +23,7 @@ var runCmd = &cobra.Command{
 	Short: "Run a task directly, bypassing the server.",
 	RunE: func(cmd *cobra.Command, args []string) error {
 
-		if taskID == "" {
-			fmt.Printf("No taskID was provided.\n\n")
+		if taskID == "" && taskPath == "" {
 			return cmd.Help()
 		}
 
@@ -41,17 +41,27 @@ var runCmd = &cobra.Command{
 			return err
 		}
 
-		return Run(conf.Worker, taskID)
+		return Run(conf.Worker, taskID, taskPath)
 	},
 }
 
 // Run configures and runs a Worker
-func Run(conf config.Worker, taskID string) error {
+func Run(conf config.Worker, taskID, taskPath string) error {
 	logger.Configure(conf.Logger)
-	w, err := worker.NewDefaultWorker(conf, taskID)
+
+	var w worker.Worker
+	var err error
+
+	if taskID != "" {
+		w, err = worker.NewDefaultWorker(conf, taskID)
+	} else {
+		w, err = worker.NewDirectWorker(conf, taskPath)
+	}
+
 	if err != nil {
 		return err
 	}
+
 	w.Run(context.Background())
 	return nil
 }

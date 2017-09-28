@@ -11,7 +11,7 @@ type Logger struct {
 
 // NewLogger creates an event logger and a funnel logger with the given name.
 func NewLogger(name string) *Logger {
-	return &Logger{logger.Sub(name)}
+	return &Logger{logger.New(name)}
 }
 
 // Write writes an event to the logger.
