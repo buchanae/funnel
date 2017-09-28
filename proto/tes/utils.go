@@ -14,9 +14,9 @@ func TerminalState(s State) bool {
 func (t *Task) GetTaskLog(i int) *TaskLog {
 
 	// Grow slice length if necessary
-  for j := len(t.Logs); j <= i; j++ {
-    t.Logs = append(t.Logs, &TaskLog{})
-  }
+	for j := len(t.Logs); j <= i; j++ {
+		t.Logs = append(t.Logs, &TaskLog{})
+	}
 
 	return t.Logs[i]
 }
@@ -25,9 +25,9 @@ func (t *Task) GetExecLog(attempt int, i int) *ExecutorLog {
 	tl := t.GetTaskLog(attempt)
 
 	// Grow slice length if necessary
-  for j := len(tl.Logs); j <= i; j++ {
-    tl.Logs = append(tl.Logs, &ExecutorLog{})
-  }
+	for j := len(tl.Logs); j <= i; j++ {
+		tl.Logs = append(tl.Logs, &ExecutorLog{})
+	}
 
 	return tl.Logs[i]
 }
