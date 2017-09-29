@@ -145,14 +145,14 @@ func transitionTaskState(tx *bolt.Tx, id string, target tes.State) error {
 
 	case Canceled, Complete, Error, SystemError:
 		// Remove from queue
-		tx.Bucket(TasksQueued).Delete(idBytes)
+		// TODO tx.Bucket(TasksQueued).Delete(idBytes)
 
 	case Running, Initializing:
 		if current != Unknown && current != Queued && current != Initializing {
 			log.Error("Unexpected transition", "current", current, "target", target)
 			return errors.New("Unexpected transition to Initializing")
 		}
-		tx.Bucket(TasksQueued).Delete(idBytes)
+		// TODO tx.Bucket(TasksQueued).Delete(idBytes)
 
 	default:
 		log.Error("Unknown target state", "target", target)

@@ -88,6 +88,7 @@ func (n *Node) Run(ctx context.Context) {
 		select {
 		case <-n.timeout.Done():
 			cancel()
+
 		case <-ctx.Done():
 			n.timeout.Stop()
 
@@ -101,7 +102,10 @@ func (n *Node) Run(ctx context.Context) {
 			// The workers get 10 seconds to finish up.
 			n.workers.Wait(time.Second * 10)
 			return
+
 		case <-ticker.C:
+      fallthrough
+    case <-n.sync:
 			n.sync(ctx)
 			n.checkIdleTimer()
 		}
@@ -188,4 +192,45 @@ func (n *Node) checkIdleTimer() {
 	} else {
 		n.timeout.Stop()
 	}
+}
+// TODO include active ports. maybe move Available out of the protobuf message
+//      and expect this helper to be used?
+func updateAvailableResources(node *pbs.Node) {
+  // Calculate available resources
+  a := pbs.Resources{
+    Cpus:   node.GetResources().GetCpus(),
+    RamGb:  node.GetResources().GetRamGb(),
+    DiskGb: node.GetResources().GetDiskGb(),
+  }
+  for _, taskID := range node.TaskIds {
+    ctx := context.Background()
+    t, _ := sd.tasks.GetTask(ctx, &tes.GetTaskRequest{
+      Id: taskID,
+      View: tes.TaskView_BASIC,
+    })
+    res := t.GetResources()
+
+    // Cpus are represented by an unsigned int, and if we blindly
+    // subtract it will rollover to a very large number. So check first.
+    rcpus := res.GetCpuCores()
+    if rcpus >= a.Cpus {
+      a.Cpus = 0
+    } else {
+      a.Cpus -= rcpus
+    }
+
+    a.RamGb -= res.GetRamGb()
+    a.DiskGb -= res.GetSizeGb()
+
+    if a.Cpus < 0 {
+      a.Cpus = 0
+    }
+    if a.RamGb < 0.0 {
+      a.RamGb = 0.0
+    }
+    if a.DiskGb < 0.0 {
+      a.DiskGb = 0.0
+    }
+  }
+  node.Available = &a
 }

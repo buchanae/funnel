@@ -37,7 +37,7 @@ type Scheduler struct {
 // request the the configured backend schedule them, and
 // act on offers made by the backend.
 func (s *Scheduler) Run(ctx context.Context) error {
-	ticker := time.NewTicker(s.conf.ScheduleRate)
+	ticker := time.NewTicker(time.Second * 10)
 	for {
 		select {
 		case <-ctx.Done():
@@ -68,7 +68,7 @@ func (s *Scheduler) Schedule(ctx context.Context) error {
 		return err
 	}
 
-	for _, task := range s.db.ReadQueue(s.conf.ScheduleChunk) {
+	for _, task := range s.db.ReadQueue(1) {
 		offer := s.backend.GetOffer(task)
 		if offer != nil {
 			log.Info("Assigning task to node",
@@ -76,6 +76,7 @@ func (s *Scheduler) Schedule(ctx context.Context) error {
 				"nodeID", offer.Node.Id,
 				"node", offer.Node,
 			)
+      offer.Node.TaskIds = append(offer.Node.TaskIds, task.Id)
 			err = s.db.AssignTask(task, offer.Node)
 			if err != nil {
 				log.Error("Error in AssignTask", err)

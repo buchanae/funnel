@@ -7,7 +7,6 @@ import (
 	"github.com/golang/protobuf/jsonpb"
 	"github.com/ohsu-comp-bio/funnel/elastic"
 	"github.com/ohsu-comp-bio/funnel/events"
-	"github.com/ohsu-comp-bio/funnel/proto/tes"
 	"github.com/spf13/cobra"
 	"os"
 )
@@ -59,6 +58,7 @@ var importCmd = &cobra.Command{
 	},
 }
 
+/*
 func prototype() {
 
 	ctx := context.Background()
@@ -81,7 +81,6 @@ func prototype() {
 	}
 	fmt.Println("task", task)
 
-	/*
 	  id := util.GenTaskID()
 	  err = es.CreateTask(ctx, &tes.Task{
 	    Id: id,
@@ -94,7 +93,6 @@ func prototype() {
 	  if err != nil {
 	    panic(err)
 	  }
-	*/
 
 	ev := events.NewState(id, 0, tes.State_QUEUED)
 	err = es.Write(ev)
@@ -111,3 +109,4 @@ func prototype() {
 		fmt.Println("tasks", task)
 	}
 }
+*/

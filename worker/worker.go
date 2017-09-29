@@ -7,6 +7,7 @@ import (
 	"github.com/ohsu-comp-bio/funnel/cmd/version"
 	"github.com/ohsu-comp-bio/funnel/config"
 	"github.com/ohsu-comp-bio/funnel/events"
+	"github.com/ohsu-comp-bio/funnel/elastic"
 	"github.com/ohsu-comp-bio/funnel/proto/tes"
 	"github.com/ohsu-comp-bio/funnel/storage"
 	"github.com/ohsu-comp-bio/funnel/util"
@@ -15,6 +16,18 @@ import (
 	"path/filepath"
 	"time"
 )
+
+type ElasticReader struct {
+  es *elastic.Elastic
+  id string
+}
+func (er *ElasticReader) Task() (*tes.Task, error) {
+  return er.es.GetTask(context.Background(), er.id)
+}
+func (er *ElasticReader) State() (tes.State, error) {
+  t, err := er.es.GetTask(context.Background(), er.id)
+  return t.GetState(), err
+}
 
 // NewDefaultWorker returns the default task runner used by Funnel,
 // which uses gRPC to read/write task details.
@@ -28,14 +41,9 @@ func NewDefaultWorker(conf config.Worker, taskID string) (Worker, error) {
 		return nil, fmt.Errorf("Failed to create worker baseDir: %v", err)
 	}
 
-	rsvc, err := newRPCTaskReader(conf, taskID)
+  es, err := elastic.NewElastic(elastic.DefaultConfig())
 	if err != nil {
-		return nil, fmt.Errorf("Failed to instantiate TaskReader: %v", err)
-	}
-
-	rpcWriter, err := events.NewRPCWriter(conf)
-	if err != nil {
-		return nil, fmt.Errorf("error creating EventService RPC client: %v", err)
+		return nil, fmt.Errorf("Failed to instantiate Elastic: %v", err)
 	}
 
 	logWriter := events.NewLogger("worker")
@@ -44,8 +52,8 @@ func NewDefaultWorker(conf config.Worker, taskID string) (Worker, error) {
 		Conf:       conf,
 		Mapper:     NewFileMapper(baseDir),
 		Store:      storage.Storage{},
-		TaskReader: rsvc,
-		Event:      events.NewTaskWriter(taskID, 0, conf.Logger.Level, events.MultiWriter(rpcWriter, logWriter)),
+		TaskReader: &ElasticReader{es, taskID},
+		Event:      events.NewTaskWriter(taskID, 0, conf.Logger.Level, events.MultiWriter(es, logWriter)),
 	}, nil
 }
 
@@ -143,7 +151,10 @@ func (r *DefaultWorker) Run(pctx context.Context) {
 	task, run.syserr = r.TaskReader.Task()
 
 	if run.ok() {
-		r.Event.State(tes.State_INITIALIZING)
+    // TODO this extra check could help prevent a task from
+    // being accidentally run twice.
+    // TODO also allows easy checking of cancel?
+		r.syserr = r.Event.State(tes.State_INITIALIZING)
 	}
 
 	r.Event.StartTime(time.Now())

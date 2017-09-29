@@ -22,10 +22,6 @@ import (
 // task ID -> tes.Task struct
 var TaskBucket = []byte("tasks")
 
-// TasksQueued defines the name of a bucket which maps
-// task ID -> nil
-var TasksQueued = []byte("tasks-queued")
-
 // TaskState maps: task ID -> state string
 var TaskState = []byte("tasks-state")
 
@@ -35,18 +31,6 @@ var TasksLog = []byte("tasks-log")
 
 // ExecutorLogs maps (task ID + executor index) -> tes.ExecutorLog struct
 var ExecutorLogs = []byte("executor-logs")
-
-// Nodes maps:
-// node ID -> pbs.Node struct
-var Nodes = []byte("nodes")
-
-// TaskNode Map task ID -> node ID
-var TaskNode = []byte("task-node")
-
-// NodeTasks indexes node -> tasks
-// Implemented as composite_key(node ID + task ID) => task ID
-// And searched with prefix scan using node ID
-var NodeTasks = []byte("node-tasks")
 
 // TaskBolt provides handlers for gRPC endpoints.
 // Data is stored/retrieved from the BoltDB key-value database.
@@ -72,9 +56,6 @@ func NewTaskBolt(conf config.Config) (*TaskBolt, error) {
 		if tx.Bucket(TaskBucket) == nil {
 			tx.CreateBucket(TaskBucket)
 		}
-		if tx.Bucket(TasksQueued) == nil {
-			tx.CreateBucket(TasksQueued)
-		}
 		if tx.Bucket(TaskState) == nil {
 			tx.CreateBucket(TaskState)
 		}
@@ -83,15 +64,6 @@ func NewTaskBolt(conf config.Config) (*TaskBolt, error) {
 		}
 		if tx.Bucket(ExecutorLogs) == nil {
 			tx.CreateBucket(ExecutorLogs)
-		}
-		if tx.Bucket(Nodes) == nil {
-			tx.CreateBucket(Nodes)
-		}
-		if tx.Bucket(TaskNode) == nil {
-			tx.CreateBucket(TaskNode)
-		}
-		if tx.Bucket(NodeTasks) == nil {
-			tx.CreateBucket(NodeTasks)
 		}
 		return nil
 	})

@@ -18,7 +18,7 @@ type Config struct {
 func DefaultConfig() Config {
 	return Config{
 		Index: "funnel",
-		URL:   "http://127.0.0.1:9200",
+		URL:   "http://10.50.50.233:9200",
 	}
 }
 
@@ -28,11 +28,9 @@ type Elastic struct {
 }
 
 func NewElastic(conf Config) (*Elastic, error) {
-	client, err := elastic.NewSimpleClient()
-	/*
-			elastic.SetURL(conf.URL),
-		)
-	*/
+	client, err := elastic.NewSimpleClient(
+    elastic.SetURL(conf.URL),
+  )
 	if err != nil {
 		return nil, err
 	}
@@ -61,10 +59,12 @@ func (es *Elastic) CreateTask(ctx context.Context, task *tes.Task) error {
 	return err
 }
 
-func (es *Elastic) ListTasks(ctx context.Context) ([]*tes.Task, error) {
+func (es *Elastic) ListTasks(ctx context.Context, req *tes.ListTasksRequest) ([]*tes.Task, error) {
+  pageSize := getPageSize(req)
 	res, err := es.client.Search().
 		Index(es.conf.Index).
 		Type("task").
+    Size(pageSize).
 		Do(ctx)
 
 	if err != nil {
