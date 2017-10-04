@@ -182,6 +182,7 @@ func (f *Funnel) StartServer() {
 	f.StartServerContext(context.Background())
 }
 
+// StartServerContext starts the server with the given context.
 func (f *Funnel) StartServerContext(ctx context.Context) {
 	go f.Server.Serve(ctx)
 
