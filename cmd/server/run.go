@@ -76,29 +76,8 @@ func NewServer(conf config.Config, log *logger.Logger) (*Server, error) {
 		if !ok {
 			return nil, fmt.Errorf("database doesn't satisfy the scheduler interface")
 		}
-
 		backend = scheduler.NewComputeBackend(sdb)
 
-		switch strings.ToLower(conf.Backend) {
-		case "gce":
-			sbackend, err = gce.NewBackend(conf, log.Sub("gce"))
-		case "gce-mock":
-			sbackend, err = gce.NewMockBackend(conf)
-		case "manual":
-			sbackend, err = manual.NewBackend(conf)
-		case "openstack":
-			sbackend, err = openstack.NewBackend(conf)
-		}
-		if err != nil {
-			return nil, fmt.Errorf("error occurred while setting up backend: %v", err)
-		}
-
-		sched = &scheduler.Scheduler{
-			Log:     log.Sub("scheduler"),
-			DB:      sdb,
-			Conf:    conf.Scheduler,
-			Backend: sbackend,
-		}
 	case "gridengine":
 		backend = gridengine.NewBackend(conf)
 	case "htcondor":
@@ -112,8 +91,31 @@ func NewServer(conf config.Config, log *logger.Logger) (*Server, error) {
 	case "slurm":
 		backend = slurm.NewBackend(conf)
 	default:
-		return nil, fmt.Errorf("unknown backend: '%s'", conf.Backend)
+		return nil, fmt.Errorf("unknown compute backend: '%s'", conf.Backend)
 	}
+
+  if !conf.Scheduler.Disabled {
+		switch strings.ToLower(conf.Backend) {
+		case "gce":
+			sbackend, err = gce.NewBackend(conf, log.Sub("gce"))
+		case "gce-mock":
+			sbackend, err = gce.NewMockBackend(conf)
+		case "manual":
+			sbackend, err = manual.NewBackend(conf)
+		case "openstack":
+			sbackend, err = openstack.NewBackend(conf)
+		}
+		if err != nil {
+			return nil, fmt.Errorf("can't set up scheduler backend: %v", err)
+		}
+
+		sched = &scheduler.Scheduler{
+			Log:     log.Sub("scheduler"),
+			DB:      sdb,
+			Conf:    conf.Scheduler,
+			Backend: sbackend,
+		}
+  }
 
 	db.WithComputeBackend(backend)
 	srv := server.DefaultServer(db, conf.Server)
