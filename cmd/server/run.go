@@ -70,23 +70,7 @@ func Run(ctx context.Context, conf config.Config) error {
 	var err error
 	switch strings.ToLower(conf.Backend) {
 	case "gce", "manual", "openstack":
-
 		backend = scheduler.NewComputeBackend(db)
-
-		var sbackend scheduler.Backend
-		switch strings.ToLower(conf.Backend) {
-		case "gce":
-			sbackend, err = gce.NewBackend(conf)
-		case "manual":
-			sbackend, err = manual.NewBackend(conf)
-		case "openstack":
-			sbackend, err = openstack.NewBackend(conf)
-		}
-		if err != nil {
-			return fmt.Errorf("error occurred while setting up backend: %v", err)
-		}
-
-		sched = scheduler.NewScheduler(db, sbackend, conf.Scheduler)
 	case "gridengine":
 		backend = gridengine.NewBackend(conf)
 	case "htcondor":
@@ -98,10 +82,30 @@ func Run(ctx context.Context, conf config.Config) error {
 	case "slurm":
 		backend = slurm.NewBackend(conf)
 	default:
-		return fmt.Errorf("unknown backend")
+		return fmt.Errorf("unknown backend: %s", conf.Backend)
+	}
+	if err != nil {
+		return fmt.Errorf("error occurred while setting up compute backend: %v", err)
 	}
 
 	db.WithComputeBackend(backend)
+
+	// Load the scheduler, if enabled.
+	var sbackend scheduler.Backend
+	if !conf.Scheduler.Disabled {
+		var err error
+		switch strings.ToLower(conf.Backend) {
+		case "gce":
+			sbackend, err = gce.NewBackend(conf)
+		case "manual":
+			sbackend, err = manual.NewBackend(conf)
+		case "openstack":
+			sbackend, err = openstack.NewBackend(conf)
+		}
+		if err != nil {
+			return fmt.Errorf("error occurred while setting up scheduler backend: %v", err)
+		}
+	}
 
 	// Block
 
@@ -112,7 +116,8 @@ func Run(ctx context.Context, conf config.Config) error {
 	}()
 
 	// Start Scheduler
-	if sched != nil {
+	if sbackend != nil {
+		sched = scheduler.NewScheduler(db, sbackend, conf.Scheduler)
 		go func() {
 			errch <- sched.Run(ctx)
 		}()
