@@ -1,6 +1,0 @@
-Backend: manual
-Server:
-  RPCPort: 5687
-  HTTPPort: 3402
-  Logger:
-    Level: debug
