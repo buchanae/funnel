@@ -28,25 +28,35 @@ func Run(ctx context.Context, conf config.Config) error {
 	logger.Configure(conf.Server.Logger)
 
 	var backend compute.Backend
-	var db server.Database
 	var sched *scheduler.Scheduler
-	var err error
+	srv := server.DefaultServer(conf.Server)
 
 	switch strings.ToLower(conf.Server.Database) {
-	case "boltdb":
-		db, err = boltdb.NewBoltDB(conf)
-	case "dynamodb":
-		db, err = dynamodb.NewDynamoDB(conf.Server.Databases.DynamoDB)
-	}
-	if err != nil {
-		return fmt.Errorf("error occurred while connecting to or creating the database: %v", err)
-	}
 
-	srv := server.DefaultServer(db, conf.Server)
+	case "boltdb":
+		db, err := boltdb.NewBoltDB(conf)
+    srv.TaskServiceServer = db
+    srv.SchedulerServiceServer = db
+    srv.EventServiceServer = db
+
+	case "dynamodb":
+		db, err := dynamodb.NewDynamoDB(conf.Server.Databases.DynamoDB)
+    srv.TaskServiceServer = db
+
+  case "elastic":
+		db, err := dynamodb.NewDynamoDB(conf.Server.Databases.DynamoDB)
+    srv.TaskServiceServer = db
+    srv.SchedulerServiceServer = db
+    srv.EventServiceServer = db
+
+  default:
+    err = fmt.Errorf("unknown database: %s", conf.Server.Database)
+	}
 
 	switch strings.ToLower(conf.Backend) {
 	case "gce", "manual", "openstack":
-		sdb, ok := db.(scheduler.Database)
+    var ok bool
+		sdb, ok = db.(scheduler.Database)
 		if !ok {
 			return fmt.Errorf("database doesn't satisfy the scheduler interface")
 		}

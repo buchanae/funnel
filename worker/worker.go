@@ -18,7 +18,7 @@ import (
 // NewDefaultWorker returns a new configured DefaultWorker instance.
 func NewDefaultWorker(conf config.Worker) (Worker, error) {
 
-	ev, err := events.FromConfig(conf.EventWriters)
+	ev, err := configureWriters(conf)
 	if err != nil {
 		return nil, err
 	}

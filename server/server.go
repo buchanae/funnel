@@ -33,7 +33,7 @@ type Server struct {
 }
 
 // DefaultServer returns a new server instance.
-func DefaultServer(db Database, conf config.Server) *Server {
+func DefaultServer(conf config.Server) *Server {
 	log.Debug("Server Config", "config.Server", conf)
 
 	mux := http.NewServeMux()
@@ -43,9 +43,6 @@ func DefaultServer(db Database, conf config.Server) *Server {
 		RPCAddress:             ":" + conf.RPCPort,
 		HTTPPort:               conf.HTTPPort,
 		Password:               conf.Password,
-		TaskServiceServer:      db,
-		EventServiceServer:     db,
-		SchedulerServiceServer: db,
 		Handler:                mux,
 		DisableHTTPCache:       conf.DisableHTTPCache,
 		DialOptions: []grpc.DialOption{

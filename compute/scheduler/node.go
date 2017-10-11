@@ -19,7 +19,7 @@ import (
 )
 
 // NewNode returns a new Node instance
-func NewNode(conf config.Config, w worker.Worker) (*Node, error) {
+func NewNode(conf config.Config, w worker.Worker, tesc tes.TaskGetter) (*Node, error) {
 	log := logger.Sub("node", "nodeID", conf.Scheduler.Node.ID)
 
 	// Detect available resources at startup
@@ -34,6 +34,7 @@ func NewNode(conf config.Config, w worker.Worker) (*Node, error) {
 		conf:      conf.Scheduler.Node,
 		log:       log,
 		resources: res,
+    tesc:       tesc,
 		worker:    w,
 		timeout:   timeout,
 		state:     state,
@@ -47,7 +48,7 @@ type Node struct {
 	client    Client
 	log       logger.Logger
 	resources pbs.Resources
-	tesc      *rpc.TESClient
+	tesc      tes.TaskGetter
 	worker    worker.Worker
 	tasks     syncmap.Map
 	timeout   util.IdleTimeout
@@ -63,13 +64,13 @@ func (n *Node) Run(ctx context.Context) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	cli, err := NewClient(n.conf.RPC)
+	cli, err := NewClient(n.conf.ServerAddress, n.conf.ServerPassword)
 	if err != nil {
 		return fmt.Errorf("node can't connect sched client %s", err)
 	}
 	n.client = cli
 
-	tesc, err := rpc.NewTESClient(n.conf.RPC)
+	tesc, err := rpc.NewTESClient(n.conf.ServerAddress, n.conf.ServerPassword)
 	if err != nil {
 		return fmt.Errorf("node can't connect TES client %s", err)
 	}
@@ -133,13 +134,21 @@ func (n *Node) checkConnection(ctx context.Context) {
 	}
 }
 
-func (n *Node) runTask(ctx context.Context, task *tes.Task) {
+func (n *Node) runTask(ctx context.Context, id string) {
 	n.log.Debug("Starting worker for task", task.Id)
-
-	tctx := pollForCancel(ctx, task.Id, n.tesc)
-	n.worker.Run(tctx, task)
 	// Make sure the task is cleaned up from the node's task map.
 	defer n.tasks.Delete(task.Id)
+
+  // Get the full task
+  task, err := tes.GetFullTask(ctx, id, n.tesc)
+  if err != nil {
+    log.Error("error retrieving task. skipping", id)
+    return
+  }
+  // Poll for task cancel.
+  tctx := tes.PollTaskContext(ctx, id, n.tesc)
+  // Run task worker.
+	n.worker.Run(tctx, task)
 
 	// task cannot fully complete until it has successfully
 	// removed the assigned task ID from the database.
@@ -201,12 +210,6 @@ func (n *Node) sync(ctx context.Context) {
 	for _, id := range r.GetTaskIds() {
 		// Check if the task is already running. If not, start a worker.
 		if _, ok := n.tasks.Load(id); !ok {
-			// Get the full task and store it
-			task, err := n.tesc.FullTask(id)
-			if err != nil {
-				log.Error("error retrieving task. skipping", id)
-				continue
-			}
 			n.tasks.Store(id, task)
 			go n.runTask(ctx, task)
 		}
@@ -270,28 +273,4 @@ func (n *Node) checkIdleTimer() {
 	} else {
 		n.timeout.Stop()
 	}
-}
-
-func pollForCancel(ctx context.Context, id string, c *rpc.TESClient) context.Context {
-	taskctx, cancel := context.WithCancel(ctx)
-
-	// Start a goroutine that polls the server to watch for a canceled state.
-	// If a cancel state is found, "taskctx" is canceled.
-	go func() {
-		ticker := time.NewTicker(time.Second)
-		defer ticker.Stop()
-
-		for {
-			select {
-			case <-taskctx.Done():
-				return
-			case <-ticker.C:
-				state, _ := c.State(id)
-				if tes.TerminalState(state) {
-					cancel()
-				}
-			}
-		}
-	}()
-	return taskctx
 }

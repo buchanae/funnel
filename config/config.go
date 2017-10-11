@@ -115,6 +115,9 @@ func DefaultConfig() Config {
 	c.Server.Databases.BoltDB.Path = path.Join(workDir, "funnel.db")
 	c.Server.Databases.DynamoDB.TableBasename = "funnel"
 
+  c.Server.Databases.Elastic.IndexPrefix = "funnel"
+  c.Server.Databases.Elastic.URL = "http://localhost:9200"
+
 	c.Worker.TaskReader = "rpc"
 	c.Worker.TaskReaders.RPC.ServerAddress = server.RPCAddress()
 	c.Worker.TaskReaders.RPC.ServerPassword = server.Password
@@ -125,6 +128,7 @@ func DefaultConfig() Config {
 	c.Worker.EventWriters.RPC.ServerPassword = server.Password
 	c.Worker.EventWriters.RPC.UpdateTimeout = time.Second
 	c.Worker.EventWriters.DynamoDB.TableBasename = "funnel"
+  c.Worker.EventWriters.Elastic = c.Server.Databases.Elastic
 
 	htcondorTemplate, _ := Asset("config/htcondor-template.txt")
 	slurmTemplate, _ := Asset("config/slurm-template.txt")
@@ -155,6 +159,7 @@ type Server struct {
 			Path string
 		}
 		DynamoDB DynamoDB
+    Elastic Elastic
 	}
 	DisableHTTPCache   bool
 	MaxExecutorLogSize int
@@ -253,7 +258,13 @@ type Worker struct {
 			UpdateTimeout time.Duration
 		}
 		DynamoDB DynamoDB
+    Elastic Elastic
 	}
+}
+
+type Elastic struct {
+  IndexPrefix string
+  URL string
 }
 
 // DynamoDB describes the configuration for Amazon DynamoDB backed processes
