@@ -110,12 +110,12 @@ test-openstack:
 # Build the web dashboard
 webdash:
 	@mkdir -p build/webdash
-	@npm install --prefix ./webdash
-	@./webdash/node_modules/.bin/browserify webdash/app.js -o build/webdash/bundle.js
-	@./webdash/node_modules/.bin/node-sass webdash/style.scss build/webdash/style.css
-	@cp webdash/*.html build/webdash/
-	@go get -u github.com/jteeuwen/go-bindata/...
-	@go-bindata -pkg webdash -prefix "build/" -o webdash/web.go build/webdash
+	#@npm install --prefix ./webdash
+	#@./webdash/node_modules/.bin/browserify webdash/app.js -o build/webdash/bundle.js
+	#@./webdash/node_modules/.bin/node-sass webdash/style.scss build/webdash/style.css
+	@cp -r react-dash/funnel/build/* build/webdash/
+	#@go get -u github.com/jteeuwen/go-bindata/...
+	@go-bindata -pkg webdash -prefix "build/webdash" -o webdash/web.go build/webdash/...
 
 # Build binaries for all OS/Architectures
 cross-compile: depends
