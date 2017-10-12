@@ -159,6 +159,7 @@ func (sw *SwiftBackend) Put(ctx context.Context, rawurl string, hostPath string,
 }
 
 func (sw *SwiftBackend) put(rawurl, hostPath string) error {
+  log.Info("PUT", "raw", rawurl, "host", hostPath)
 
 	url, perr := sw.parse(rawurl)
 	if perr != nil {

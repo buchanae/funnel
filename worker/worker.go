@@ -174,25 +174,34 @@ func (r *DefaultWorker) Run(ctx context.Context, task *tes.Task) {
 		}
 	}
 
-	// Upload outputs
 	var outputs []*tes.OutputFileLog
-	for _, output := range mapper.Outputs {
-		if run.ok() {
-			r.fixLinks(mapper, output.Path)
-			var out []*tes.OutputFileLog
-			out, run.syserr = store.Put(ctx, output.Url, output.Path, output.Type)
-			outputs = append(outputs, out...)
-		}
-	}
+  if run.ok() {
+    outputs, run.syserr = Upload(context.Background(), mapper, store)
+  }
 
 	if run.ok() {
 		ev.Outputs(outputs)
 	}
 }
 
+func Upload(ctx context.Context, m *FileMapper, s storage.Storage) ([]*tes.OutputFileLog, error) {
+	// Upload outputs
+	var outputs []*tes.OutputFileLog
+
+	for _, o := range m.Outputs {
+    FixLinks(m, o.Path)
+    out, err := s.Put(ctx, o.Url, o.Path, o.Type)
+    if err != nil {
+      return outputs, err
+    }
+    outputs = append(outputs, out...)
+	}
+  return outputs, nil
+}
+
 // fixLinks walks the output paths, fixing cases where a symlink is
 // broken because it's pointing to a path inside a container volume.
-func (r *DefaultWorker) fixLinks(mapper *FileMapper, basepath string) {
+func FixLinks(mapper *FileMapper, basepath string) {
 	filepath.Walk(basepath, func(p string, f os.FileInfo, err error) error {
 		if err != nil {
 			// There's an error, so be safe and give up on this file

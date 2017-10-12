@@ -8,6 +8,7 @@ import (
 	"github.com/ohsu-comp-bio/funnel/cmd/node"
 	"github.com/ohsu-comp-bio/funnel/cmd/run"
 	"github.com/ohsu-comp-bio/funnel/cmd/server"
+	"github.com/ohsu-comp-bio/funnel/cmd/store"
 	"github.com/ohsu-comp-bio/funnel/cmd/task"
 	"github.com/ohsu-comp-bio/funnel/cmd/termdash"
 	"github.com/ohsu-comp-bio/funnel/cmd/version"
@@ -32,6 +33,7 @@ func init() {
 	RootCmd.AddCommand(node.Cmd)
 	RootCmd.AddCommand(run.Cmd)
 	RootCmd.AddCommand(server.Cmd)
+  RootCmd.AddCommand(store.Cmd)
 	RootCmd.AddCommand(task.Cmd)
 	RootCmd.AddCommand(termdash.Cmd)
 	RootCmd.AddCommand(version.Cmd)
