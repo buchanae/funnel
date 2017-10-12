@@ -165,13 +165,25 @@ func (r *DefaultWorker) Run(ctx context.Context, task *tes.Task) {
 		}
 
 		// Opens stdin/out/err files and updates those fields on "cmd".
+		var stdio *stdio
 		if run.ok() {
-			run.syserr = r.openStepLogs(mapper, s, d)
+			stdio, run.syserr = r.openStepLogs(mapper, d)
+			if stdio.in != nil {
+				s.Cmd.Stdin = stdio.in
+			}
+			if stdio.out != nil {
+				s.Cmd.Stdout = stdio.out
+			}
+			if stdio.err != nil {
+				s.Cmd.Stderr = stdio.err
+			}
 		}
 
 		if run.ok() {
 			run.execerr = s.Run(ctx)
 		}
+
+		stdio.Close()
 	}
 
 	// Upload outputs
@@ -179,15 +191,15 @@ func (r *DefaultWorker) Run(ctx context.Context, task *tes.Task) {
 	for _, output := range mapper.Outputs {
 		if run.ok() {
 			r.fixLinks(mapper, output.Path)
-			var out []*tes.OutputFileLog
-			out, run.syserr = store.Put(ctx, output.Url, output.Path, output.Type)
+			out, err := store.Put(ctx, output.Url, output.Path, output.Type)
+			if err != nil {
+				run.syserr = fmt.Errorf("error uploading %s: %s", output.Url, err)
+			}
 			outputs = append(outputs, out...)
 		}
 	}
 
-	if run.ok() {
-		ev.Outputs(outputs)
-	}
+	ev.Outputs(outputs)
 }
 
 // fixLinks walks the output paths, fixing cases where a symlink is
@@ -236,37 +248,55 @@ func (r *DefaultWorker) fixLinks(mapper *FileMapper, basepath string) {
 	})
 }
 
+type stdio struct {
+	in  *os.File
+	out *os.File
+	err *os.File
+}
+
+func (s *stdio) Close() error {
+	// TODO handle errors from Close
+	if s.in != nil {
+		s.in.Close()
+	}
+	if s.out != nil {
+		s.out.Close()
+	}
+	if s.err != nil {
+		s.err.Close()
+	}
+	return nil
+}
+
 // openLogs opens/creates the logs files for a step and updates those fields.
-func (r *DefaultWorker) openStepLogs(m *FileMapper, s *stepWorker, d *tes.Executor) error {
+func (r *DefaultWorker) openStepLogs(m *FileMapper, d *tes.Executor) (*stdio, error) {
+	s := &stdio{}
 
 	// Find the path for task stdin
 	var err error
 	if d.Stdin != "" {
-		s.Cmd.Stdin, err = m.OpenHostFile(d.Stdin)
+		s.in, err = m.OpenHostFile(d.Stdin)
 		if err != nil {
-			s.Event.Error("Couldn't prepare log files", err)
-			return err
+			return nil, err
 		}
 	}
 
 	// Create file for task stdout
 	if d.Stdout != "" {
-		s.Cmd.Stdout, err = m.CreateHostFile(d.Stdout)
+		s.out, err = m.CreateHostFile(d.Stdout)
 		if err != nil {
-			s.Event.Error("Couldn't prepare log files", err)
-			return err
+			return nil, err
 		}
 	}
 
 	// Create file for task stderr
 	if d.Stderr != "" {
-		s.Cmd.Stderr, err = m.CreateHostFile(d.Stderr)
+		s.err, err = m.CreateHostFile(d.Stderr)
 		if err != nil {
-			s.Event.Error("Couldn't prepare log files", err)
-			return err
+			return nil, err
 		}
 	}
-	return nil
+	return s, nil
 }
 
 // Validate the input downloads
