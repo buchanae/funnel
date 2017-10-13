@@ -197,7 +197,12 @@ func updateExecutorLogs(tx *bolt.Tx, id string, el *tes.ExecutorLog) error {
 */
 
 // Write writes a task update event.
-func (es *Elastic) Write(ctx context.Context, ev *events.Event) error {
+func (es *Elastic) Write(ev *events.Event) error {
+	return es.WriteContext(context.Background(), ev)
+}
+
+// WriteContext writes a task update event with context.
+func (es *Elastic) WriteContext(ctx context.Context, ev *events.Event) error {
 	log.Info("ES Write", ev)
 
 	mar := jsonpb.Marshaler{}

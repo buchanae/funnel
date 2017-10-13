@@ -127,6 +127,7 @@ func DefaultConfig() Config {
 	c.Worker.EventWriters.RPC.ServerPassword = server.Password
 	c.Worker.EventWriters.RPC.UpdateTimeout = time.Second
 	c.Worker.EventWriters.DynamoDB.TableBasename = "funnel"
+	c.Worker.EventWriters.Elastic = c.Server.Databases.Elastic
 
 	htcondorTemplate, _ := Asset("config/htcondor-template.txt")
 	slurmTemplate, _ := Asset("config/slurm-template.txt")
@@ -256,6 +257,7 @@ type Worker struct {
 			UpdateTimeout time.Duration
 		}
 		DynamoDB DynamoDB
+		Elastic  Elastic
 	}
 }
 

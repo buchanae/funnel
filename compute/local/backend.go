@@ -2,10 +2,10 @@ package local
 
 import (
 	"context"
+	"github.com/ohsu-comp-bio/funnel/cmd/worker"
 	"github.com/ohsu-comp-bio/funnel/config"
 	"github.com/ohsu-comp-bio/funnel/logger"
 	"github.com/ohsu-comp-bio/funnel/proto/tes"
-	"github.com/ohsu-comp-bio/funnel/worker"
 )
 
 var log = logger.Sub("local")

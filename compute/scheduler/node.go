@@ -6,14 +6,13 @@ import (
 	"github.com/ohsu-comp-bio/funnel/logger"
 	pbs "github.com/ohsu-comp-bio/funnel/proto/scheduler"
 	"github.com/ohsu-comp-bio/funnel/util"
-	"github.com/ohsu-comp-bio/funnel/worker"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"time"
 )
 
 // NewNode returns a new Node instance
-func NewNode(conf config.Config) (*Node, error) {
+func NewNode(conf config.Config, fac WorkerFactory) (*Node, error) {
 	log := logger.Sub("node", "nodeID", conf.Scheduler.Node.ID)
 
 	cli, err := NewClient(conf.Scheduler)
@@ -42,7 +41,7 @@ func NewNode(conf config.Config) (*Node, error) {
 		client:     cli,
 		log:        log,
 		resources:  res,
-		newWorker:  worker.NewDefaultWorker,
+		newWorker:  fac,
 		workers:    newRunSet(),
 		timeout:    timeout,
 		state:      state,
@@ -52,8 +51,7 @@ func NewNode(conf config.Config) (*Node, error) {
 // NewNoopNode returns a new node that doesn't have any side effects
 // (e.g. storage access, docker calls, etc.) which is useful for testing.
 func NewNoopNode(conf config.Config) (*Node, error) {
-	n, err := NewNode(conf)
-	n.newWorker = NoopWorkerFactory
+	n, err := NewNode(conf, NoopWorkerFactory)
 	return n, err
 }
 

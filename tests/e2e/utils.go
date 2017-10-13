@@ -11,6 +11,7 @@ import (
 	"github.com/ohsu-comp-bio/funnel/cmd/client"
 	runlib "github.com/ohsu-comp-bio/funnel/cmd/run"
 	servercmd "github.com/ohsu-comp-bio/funnel/cmd/server"
+	"github.com/ohsu-comp-bio/funnel/cmd/worker"
 	"github.com/ohsu-comp-bio/funnel/compute/scheduler"
 	"github.com/ohsu-comp-bio/funnel/config"
 	"github.com/ohsu-comp-bio/funnel/logger"
@@ -492,7 +493,7 @@ func (f *Funnel) ListNodes() []*pbs.Node {
 
 // AddNode starts an in-memory node routine.
 func (f *Funnel) AddNode(conf config.Config) {
-	n, err := scheduler.NewNode(conf)
+	n, err := scheduler.NewNode(conf, worker.NewDefaultWorker)
 	if err != nil {
 		panic(err)
 	}

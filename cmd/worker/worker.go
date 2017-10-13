@@ -2,9 +2,15 @@ package worker
 
 import (
 	"fmt"
-	"github.com/ohsu-comp-bio/funnel/cmd/util"
+	cmdutil "github.com/ohsu-comp-bio/funnel/cmd/util"
 	"github.com/ohsu-comp-bio/funnel/config"
+	"github.com/ohsu-comp-bio/funnel/events"
+	"github.com/ohsu-comp-bio/funnel/server/elastic"
+	"github.com/ohsu-comp-bio/funnel/storage"
+	"github.com/ohsu-comp-bio/funnel/util"
+	"github.com/ohsu-comp-bio/funnel/worker"
 	"github.com/spf13/cobra"
+	"path"
 )
 
 // NewCommand returns the worker command
@@ -36,12 +42,12 @@ func newCommandHooks() (*cobra.Command, *hooks) {
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 			var err error
 
-			flagConf, err = util.ParseServerAddressFlag(serverAddress, flagConf)
+			flagConf, err = cmdutil.ParseServerAddressFlag(serverAddress, flagConf)
 			if err != nil {
 				return fmt.Errorf("error parsing the server address: %v", err)
 			}
 
-			conf, err = util.MergeConfigFileWithFlags(configFile, flagConf)
+			conf, err = cmdutil.MergeConfigFileWithFlags(configFile, flagConf)
 			if err != nil {
 				return fmt.Errorf("error processing config: %v", err)
 			}
@@ -73,4 +79,57 @@ func newCommandHooks() (*cobra.Command, *hooks) {
 	cmd.AddCommand(run)
 
 	return cmd, hooks
+}
+
+// NewDefaultWorker returns a new configured DefaultWorker instance.
+func NewDefaultWorker(conf config.Worker, taskID string) (worker.Worker, error) {
+	var err error
+	var reader worker.TaskReader
+	var writer events.Writer
+
+	// Map files into this baseDir
+	baseDir := path.Join(conf.WorkDir, taskID)
+
+	err = util.EnsureDir(baseDir)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create worker baseDir: %v", err)
+	}
+
+	switch conf.TaskReader {
+	case "rpc":
+		reader, err = worker.NewRPCTaskReader(conf, taskID)
+	case "dynamodb":
+		reader, err = worker.NewDynamoDBTaskReader(conf.TaskReaders.DynamoDB, taskID)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to instantiate TaskReader: %v", err)
+	}
+
+	writers := []events.Writer{}
+	for _, w := range conf.ActiveEventWriters {
+		switch w {
+		case "dynamodb":
+			writer, err = events.NewDynamoDBEventWriter(conf.EventWriters.DynamoDB)
+		case "log":
+			writer = events.NewLogger("worker")
+		case "rpc":
+			writer, err = events.NewRPCWriter(conf)
+		case "elastic":
+			writer, err = elastic.NewElastic(conf.EventWriters.Elastic)
+		default:
+			err = fmt.Errorf("unknown EventWriter")
+		}
+		if err != nil {
+			return nil, fmt.Errorf("failed to instantiate EventWriter: %v", err)
+		}
+		writers = append(writers, writer)
+	}
+
+	return &worker.DefaultWorker{
+		Conf:       conf,
+		Mapper:     worker.NewFileMapper(baseDir),
+		Store:      storage.Storage{},
+		TaskReader: reader,
+		Event:      events.NewTaskWriter(taskID, 0, conf.Logger.Level, events.MultiWriter(writers...)),
+	}, nil
 }

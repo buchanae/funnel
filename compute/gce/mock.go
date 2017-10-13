@@ -65,7 +65,7 @@ func (m *MockBackend) InsertInstance(project, zone string, i *compute.Instance) 
 		return nil, cerr
 	}
 
-	n, err := scheduler.NewNode(c)
+	n, err := scheduler.NewNode(c, scheduler.NoopWorkerFactory)
 	if err != nil {
 		return nil, err
 	}
