@@ -22,14 +22,14 @@ import (
 // The gs url protocol
 const gsscheme = "gs"
 
-// GSBackend provides access to an GS object store.
-type GSBackend struct {
+// GS provides access to an GS object store.
+type GS struct {
 	svc *storage.Service
 }
 
-// NewGSBackend creates an GSBackend client instance, give an endpoint URL
+// NewGS creates an GS client instance, give an endpoint URL
 // and a set of authentication credentials.
-func NewGSBackend(conf config.GSStorage) (*GSBackend, error) {
+func NewGS(conf config.GSStorage) (*GS, error) {
 	ctx := context.Background()
 	client := &http.Client{}
 
@@ -62,11 +62,11 @@ func NewGSBackend(conf config.GSStorage) (*GSBackend, error) {
 		return nil, cerr
 	}
 
-	return &GSBackend{svc}, nil
+	return &GS{svc}, nil
 }
 
 // Get copies an object from GS to the host path.
-func (gs *GSBackend) Get(ctx context.Context, rawurl string, hostPath string, class tes.FileType) error {
+func (gs *GS) Get(ctx context.Context, rawurl string, hostPath string, class tes.FileType) error {
 	url, perr := parse(rawurl)
 	if perr != nil {
 		return perr
@@ -115,7 +115,7 @@ func download(call *storage.ObjectsGetCall, hostPath string) error {
 }
 
 // Put copies an object (file) from the host path to GS.
-func (gs *GSBackend) Put(ctx context.Context, rawurl string, hostPath string, class tes.FileType) ([]*tes.OutputFileLog, error) {
+func (gs *GS) Put(ctx context.Context, rawurl string, hostPath string, class tes.FileType) ([]*tes.OutputFileLog, error) {
 	var out []*tes.OutputFileLog
 
 	switch class {
@@ -157,7 +157,7 @@ func (gs *GSBackend) Put(ctx context.Context, rawurl string, hostPath string, cl
 	return out, nil
 }
 
-func (gs *GSBackend) put(ctx context.Context, rawurl, hostPath string) error {
+func (gs *GS) put(ctx context.Context, rawurl, hostPath string) error {
 
 	url, perr := parse(rawurl)
 	if perr != nil {
@@ -179,7 +179,7 @@ func (gs *GSBackend) put(ctx context.Context, rawurl, hostPath string) error {
 
 // Supports returns true if this backend supports the given storage request.
 // The Google Storage backend supports URLs which have a "gs://" scheme.
-func (gs *GSBackend) Supports(rawurl string, hostPath string, class tes.FileType) bool {
+func (gs *GS) Supports(rawurl string, hostPath string, class tes.FileType) bool {
 	_, err := parse(rawurl)
 	if err != nil {
 		return false

@@ -19,13 +19,13 @@ import (
 // S3Protocol defines the expected URL prefix for S3, "s3://"
 const S3Protocol = "s3://"
 
-// S3Backend provides access to an S3 object store.
-type S3Backend struct {
+// S3 provides access to an S3 object store.
+type S3 struct {
 	sess *session.Session
 }
 
-// NewS3Backend creates an S3Backend session instance
-func NewS3Backend(conf config.S3Storage) (*S3Backend, error) {
+// NewS3 creates an S3 session instance
+func NewS3(conf config.S3Storage) (*S3, error) {
 
 	c := aws.NewConfig().WithMaxRetries(5)
 
@@ -43,11 +43,11 @@ func NewS3Backend(conf config.S3Storage) (*S3Backend, error) {
 		return nil, err
 	}
 
-	return &S3Backend{sess}, nil
+	return &S3{sess}, nil
 }
 
 // Get copies an object from S3 to the host path.
-func (s3b *S3Backend) Get(ctx context.Context, url string, hostPath string, class tes.FileType) error {
+func (s3b *S3) Get(ctx context.Context, url string, hostPath string, class tes.FileType) error {
 
 	path := strings.TrimPrefix(url, S3Protocol)
 	split := strings.SplitN(path, "/", 2)
@@ -129,7 +129,7 @@ func (s3b *S3Backend) Get(ctx context.Context, url string, hostPath string, clas
 }
 
 // Put copies an object (file) from the host path to S3.
-func (s3b *S3Backend) Put(ctx context.Context, url string, hostPath string, class tes.FileType) ([]*tes.OutputFileLog, error) {
+func (s3b *S3) Put(ctx context.Context, url string, hostPath string, class tes.FileType) ([]*tes.OutputFileLog, error) {
 
 	path := strings.TrimPrefix(url, S3Protocol)
 	split := strings.SplitN(path, "/", 2)
@@ -208,6 +208,6 @@ func (s3b *S3Backend) Put(ctx context.Context, url string, hostPath string, clas
 
 // Supports indicates whether this backend supports the given storage request.
 // For S3, the url must start with "s3://".
-func (s3b *S3Backend) Supports(url string, hostPath string, class tes.FileType) bool {
+func (s3b *S3) Supports(url string, hostPath string, class tes.FileType) bool {
 	return strings.HasPrefix(url, S3Protocol)
 }

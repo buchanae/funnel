@@ -16,14 +16,14 @@ import (
 
 const swiftScheme = "swift"
 
-// SwiftBackend provides access to an sw object store.
-type SwiftBackend struct {
+// Swift provides access to an sw object store.
+type Swift struct {
 	conn *swift.Connection
 }
 
-// NewSwiftBackend creates an SwiftBackend client instance, give an endpoint URL
+// NewSwift creates an Swift client instance, give an endpoint URL
 // and a set of authentication credentials.
-func NewSwiftBackend(conf config.SwiftStorage) (*SwiftBackend, error) {
+func NewSwift(conf config.SwiftStorage) (*Swift, error) {
 
 	// Create a connection
 	c := swift.Connection{
@@ -40,11 +40,11 @@ func NewSwiftBackend(conf config.SwiftStorage) (*SwiftBackend, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &SwiftBackend{&c}, nil
+	return &Swift{&c}, nil
 }
 
 // Get copies an object from storage to the host path.
-func (sw *SwiftBackend) Get(ctx context.Context, rawurl string, hostPath string, class tes.FileType) error {
+func (sw *Swift) Get(ctx context.Context, rawurl string, hostPath string, class tes.FileType) error {
 
 	url, perr := sw.parse(rawurl)
 	if perr != nil {
@@ -99,7 +99,7 @@ func (sw *SwiftBackend) Get(ctx context.Context, rawurl string, hostPath string,
 	}
 }
 
-func (sw *SwiftBackend) get(src io.Reader, hostPath string) error {
+func (sw *Swift) get(src io.Reader, hostPath string) error {
 	util.EnsurePath(hostPath)
 	dest, cerr := os.Create(hostPath)
 	if cerr != nil {
@@ -114,7 +114,7 @@ func (sw *SwiftBackend) get(src io.Reader, hostPath string) error {
 }
 
 // Put copies an object (file) from the host path to storage.
-func (sw *SwiftBackend) Put(ctx context.Context, rawurl string, hostPath string, class tes.FileType) ([]*tes.OutputFileLog, error) {
+func (sw *Swift) Put(ctx context.Context, rawurl string, hostPath string, class tes.FileType) ([]*tes.OutputFileLog, error) {
 
 	var out []*tes.OutputFileLog
 
@@ -158,7 +158,7 @@ func (sw *SwiftBackend) Put(ctx context.Context, rawurl string, hostPath string,
 	return out, nil
 }
 
-func (sw *SwiftBackend) put(rawurl, hostPath string) error {
+func (sw *Swift) put(rawurl, hostPath string) error {
 
 	url, perr := sw.parse(rawurl)
 	if perr != nil {
@@ -183,7 +183,7 @@ func (sw *SwiftBackend) put(rawurl, hostPath string) error {
 	return writer.Close()
 }
 
-func (sw *SwiftBackend) parse(rawurl string) (*urlparts, error) {
+func (sw *Swift) parse(rawurl string) (*urlparts, error) {
 	url, err := urllib.Parse(rawurl)
 	if err != nil {
 		return nil, err
@@ -199,7 +199,7 @@ func (sw *SwiftBackend) parse(rawurl string) (*urlparts, error) {
 
 // Supports indicates whether this backend supports the given storage request.
 // For sw, the url must start with "sw://".
-func (sw *SwiftBackend) Supports(rawurl string, hostPath string, class tes.FileType) bool {
+func (sw *Swift) Supports(rawurl string, hostPath string, class tes.FileType) bool {
 	_, err := sw.parse(rawurl)
 	if err != nil {
 		return false

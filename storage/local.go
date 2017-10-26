@@ -13,14 +13,14 @@ import (
 	"syscall"
 )
 
-// LocalBackend provides access to a local-disk storage system.
-type LocalBackend struct {
+// Local provides access to a local-disk storage system.
+type Local struct {
 	allowedDirs []string
 }
 
-// NewLocalBackend returns a LocalBackend instance, configured to limit
+// NewLocal returns a Local instance, configured to limit
 // file system access to the given allowed directories.
-func NewLocalBackend(conf config.LocalStorage) (*LocalBackend, error) {
+func NewLocal(conf config.LocalStorage) (*Local, error) {
 	allowed := []string{}
 	for _, d := range conf.AllowedDirs {
 		a, err := filepath.Abs(d)
@@ -29,11 +29,11 @@ func NewLocalBackend(conf config.LocalStorage) (*LocalBackend, error) {
 		}
 		allowed = append(allowed, a)
 	}
-	return &LocalBackend{allowed}, nil
+	return &Local{allowed}, nil
 }
 
 // Get copies a file from storage into the given hostPath.
-func (local *LocalBackend) Get(ctx context.Context, url string, hostPath string, class tes.FileType) error {
+func (local *Local) Get(ctx context.Context, url string, hostPath string, class tes.FileType) error {
 	path, ok := getPath(url)
 
 	if !ok {
@@ -69,7 +69,7 @@ func (local *LocalBackend) Get(ctx context.Context, url string, hostPath string,
 }
 
 // Put copies a file from the hostPath into storage.
-func (local *LocalBackend) Put(ctx context.Context, url string, hostPath string, class tes.FileType) ([]*tes.OutputFileLog, error) {
+func (local *Local) Put(ctx context.Context, url string, hostPath string, class tes.FileType) ([]*tes.OutputFileLog, error) {
 	path, ok := getPath(url)
 
 	if !ok {
@@ -124,8 +124,8 @@ func (local *LocalBackend) Put(ctx context.Context, url string, hostPath string,
 }
 
 // Supports indicates whether this backend supports the given storage request.
-// For the LocalBackend, the url must start with "file://"
-func (local *LocalBackend) Supports(rawurl string, hostPath string, class tes.FileType) bool {
+// For the Local, the url must start with "file://"
+func (local *Local) Supports(rawurl string, hostPath string, class tes.FileType) bool {
 	_, ok := getPath(rawurl)
 	return ok
 }

@@ -89,7 +89,7 @@ func TestS3StorageTask(t *testing.T) {
 
 	expected := "/opt/inputs/test-file.txt /opt/inputs/test-directory/bar.txt /opt/inputs/test-directory/foo.txt\n"
 
-	s := storage.Storage{}
+	s := storage.MultiStorage{}
 	s, err = s.WithConfig(conf.Worker.Storage)
 	if err != nil {
 		t.Fatal("Error configuring storage", err)

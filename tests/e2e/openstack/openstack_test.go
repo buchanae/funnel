@@ -50,7 +50,7 @@ func TestSwiftStorageTask(t *testing.T) {
 		t.Fatal("Unexpected task failure")
 	}
 
-	s := storage.Storage{}
+	s := storage.MultiStorage{}
 	s, serr := s.WithConfig(conf.Worker.Storage)
 	if serr != nil {
 		t.Fatal("Error configuring storage", serr)
@@ -86,7 +86,7 @@ func TestSwiftDirStorageTask(t *testing.T) {
 		t.Fatal("Unexpected task failure")
 	}
 
-	s := storage.Storage{}
+	s := storage.MultiStorage{}
 	s, serr := s.WithConfig(conf.Worker.Storage)
 	if serr != nil {
 		t.Fatal("Error configuring storage", serr)

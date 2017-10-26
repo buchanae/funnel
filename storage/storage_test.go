@@ -14,7 +14,7 @@ func TestStorageWithConfig(t *testing.T) {
 		GS: []config.GSStorage{},
 		S3: config.S3Storage{},
 	}
-	s := Storage{}
+	s := MultiStorage{}
 	sc, err := s.WithConfig(c)
 	if err != nil {
 		t.Fatal(err)
