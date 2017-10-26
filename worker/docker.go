@@ -28,6 +28,7 @@ type DockerCmd struct {
 	Stdout          io.Writer
 	Stderr          io.Writer
 	Event           *events.ExecutorWriter
+	Resources       *tes.Resources
 }
 
 // Run runs the Docker command and blocks until done.
@@ -52,6 +53,13 @@ func (dcmd DockerCmd) Run() error {
 		for k, v := range dcmd.Environ {
 			args = append(args, "-e", fmt.Sprintf("%s=%s", k, v))
 		}
+	}
+
+	if dcmd.Resources.GetCpuCores() > 0 {
+		args = append(args, "--cpus", fmt.Sprintf("%f", dcmd.Resources.CpuCores))
+	}
+	if dcmd.Resources.GetRamGb() > 0 {
+		args = append(args, "--memory", fmt.Sprintf("%dg", dcmd.Resources.RamGb))
 	}
 
 	if dcmd.Ports != nil {

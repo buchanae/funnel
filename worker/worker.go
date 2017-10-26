@@ -209,6 +209,7 @@ func (r *DefaultWorker) Run(pctx context.Context) {
 				// TODO make RemoveContainer configurable
 				RemoveContainer: true,
 				Event:           r.Event.NewExecutorWriter(uint32(i)),
+				Resources:       task.Resources,
 			},
 		}
 
