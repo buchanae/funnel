@@ -172,18 +172,24 @@ func (r *DefaultWorker) Run(pctx context.Context) {
 	// Upload outputs
 	var outputs []*tes.OutputFileLog
 	for _, output := range r.Mapper.Outputs {
-		if run.ok() {
-			r.Event.Info("Starting upload", "url", output.Url)
-			r.fixLinks(output.Path)
-			out, err := r.Store.Put(ctx, output.Url, output.Path, output.Type)
-			if err != nil {
-				run.syserr = err
-				r.Event.Error("Upload failed", "url", output.Url, "error", err)
-			} else {
-				r.Event.Info("Upload finished", "url", output.Url)
-			}
-			outputs = append(outputs, out...)
-		}
+    for i := 0; i < 3; i++ {
+      if run.ok() {
+        r.Event.Info("Starting upload", "url", output.Url)
+        r.fixLinks(output.Path)
+        out, err := r.Store.Put(ctx, output.Url, output.Path, output.Type)
+        if err != nil {
+          run.syserr = err
+          r.Event.Error("Upload failed", "url", output.Url, "error", err)
+          continue
+        } else {
+          r.Event.Info("Upload finished", "url", output.Url)
+        }
+        outputs = append(outputs, out...)
+        if err == nil {
+          break
+        }
+      }
+    }
 	}
 
 	if run.ok() {
