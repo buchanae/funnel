@@ -14,16 +14,16 @@ type MockBackend struct {
 	*Backend
 	InstancesInserted []*compute.Instance
 	conf              config.Config
-	fac               scheduler.WorkerFactory
+	runner            scheduler.TaskRunner
 }
 
 // NewMockBackend returns a GCE scheduler backend that doesn't
 // communicate with Google Cloud APIs,
 // Useful for testing.
-func NewMockBackend(conf config.Config, fac scheduler.WorkerFactory) (*MockBackend, error) {
+func NewMockBackend(conf config.Config, runner scheduler.TaskRunner) (*MockBackend, error) {
 	// Set up a GCE scheduler backend that has a mock client
 	// so that it doesn't actually communicate with GCE.
-	m := &MockBackend{conf: conf, fac: fac}
+	m := &MockBackend{conf: conf, runner: runner}
 
 	gceClient := &gceClient{
 		wrapper: m,
@@ -66,7 +66,7 @@ func (m *MockBackend) InsertInstance(project, zone string, i *compute.Instance) 
 		return nil, cerr
 	}
 
-	n, err := scheduler.NewNode(c, logger.NewLogger("gce-mock-node", m.conf.Scheduler.Node.Logger), m.fac)
+	n, err := scheduler.NewNode(c, logger.NewLogger("gce-mock-node", m.conf.Scheduler.Node.Logger), m.runner)
 	if err != nil {
 		return nil, err
 	}

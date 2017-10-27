@@ -12,7 +12,7 @@ import (
 )
 
 // NewNode returns a new Node instance
-func NewNode(conf config.Config, log *logger.Logger, factory WorkerFactory) (*Node, error) {
+func NewNode(conf config.Config, log *logger.Logger, fac worker.Factory) (*Node, error) {
 	log = log.WithFields("nodeID", conf.Scheduler.Node.ID)
 
 	cli, err := NewClient(conf.Scheduler)
@@ -34,36 +34,25 @@ func NewNode(conf config.Config, log *logger.Logger, factory WorkerFactory) (*No
 	timeout := util.NewIdleTimeout(conf.Scheduler.Node.Timeout)
 	state := pbs.NodeState_UNINITIALIZED
 
-	workerConf := conf.Worker
-	workerConf.WorkDir = conf.Scheduler.Node.WorkDir
-
 	return &Node{
 		conf:       conf.Scheduler.Node,
-		workerConf: workerConf,
 		client:     cli,
 		log:        log,
 		resources:  res,
-		newWorker:  factory,
+    fac:        fac,
 		workers:    newRunSet(),
 		timeout:    timeout,
 		state:      state,
 	}, nil
 }
 
-// NewNoopNode returns a new node that doesn't have any side effects
-// (e.g. storage access, docker calls, etc.) which is useful for testing.
-func NewNoopNode(conf config.Config, log *logger.Logger) (*Node, error) {
-	return NewNode(conf, log, NoopWorkerFactory)
-}
-
 // Node is a structure used for tracking available resources on a compute resource.
 type Node struct {
 	conf       config.Node
-	workerConf config.Worker
 	client     Client
 	log        *logger.Logger
 	resources  pbs.Resources
-	newWorker  WorkerFactory
+  fac        worker.Factory
 	workers    *runSet
 	timeout    util.IdleTimeout
 	state      pbs.NodeState
@@ -179,11 +168,10 @@ func (n *Node) sync(ctx context.Context) {
 }
 
 func (n *Node) runTask(ctx context.Context, id string) {
-	log := n.log.WithFields("ns", "worker", "taskID", id)
-	// TODO handle error
-	r, _ := n.newWorker(n.workerConf, id, log)
-	r.Run(ctx)
 	defer n.workers.Remove(id)
+
+  n.log.Info("Running task", "taskID", id)
+  worker.Run(ctx, n.fac, id)
 
 	// task cannot fully complete until it has successfully removed the
 	// assigned ID from the node database. this helps prevent tasks from

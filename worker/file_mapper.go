@@ -7,7 +7,6 @@ import (
 	"github.com/ohsu-comp-bio/funnel/util"
 	"io/ioutil"
 	"os"
-	"path"
 	"path/filepath"
 	"strings"
 )
@@ -23,7 +22,14 @@ type FileMapper struct {
 	Volumes []Volume
 	Inputs  []*tes.TaskParameter
 	Outputs []*tes.TaskParameter
+  Stdio   []*Stdio
 	dir     string
+}
+
+type Stdio struct {
+  Stdin io.Reader
+  Stdout io.Writer
+  Stderr io.Writer
 }
 
 // Volume represents a volume mounted into a docker container.
@@ -38,27 +44,33 @@ type Volume struct {
 	Readonly      bool
 }
 
-// NewFileMapper returns a new FileMapper, which maps files into the given
-// base directory.
-func NewFileMapper(dir string) *FileMapper {
-	// TODO error handling
-	dir, _ = filepath.Abs(dir)
-	return &FileMapper{
+// MapTask returns a new FileMapper, mapping all the volumes, inputs, and outputs
+// in the given Task to a working directory.
+func MapTask(task *tes.Task, dir string) (*FileMapper, error) {
+  mapper := &FileMapper{
 		Volumes: []Volume{},
 		Inputs:  []*tes.TaskParameter{},
 		Outputs: []*tes.TaskParameter{},
-		dir:     dir,
 	}
-}
 
-// MapTask adds all the volumes, inputs, and outputs in the given Task to the FileMapper.
-func (mapper *FileMapper) MapTask(task *tes.Task) error {
+	// Map files into this baseDir
+	baseDir := filepath.Join(dir, task.Id)
+	baseDir, err := filepath.Abs(baseDir)
+  if err != nil {
+		return nil, fmt.Errorf("failed to create worker baseDir: %v", err)
+  }
+
+	err = util.EnsureDir(baseDir)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create worker baseDir: %v", err)
+	}
+  mapper.dir = baseDir
 
 	// Add all the volumes to the mapper
 	for _, vol := range task.Volumes {
 		err := mapper.AddTmpVolume(vol)
 		if err != nil {
-			return err
+			return nil, err
 		}
 	}
 
@@ -66,7 +78,7 @@ func (mapper *FileMapper) MapTask(task *tes.Task) error {
 	for _, input := range task.Inputs {
 		err := mapper.AddInput(input)
 		if err != nil {
-			return err
+			return nil, err
 		}
 	}
 
@@ -74,11 +86,11 @@ func (mapper *FileMapper) MapTask(task *tes.Task) error {
 	for _, output := range task.Outputs {
 		err := mapper.AddOutput(output)
 		if err != nil {
-			return err
+			return nil, err
 		}
 	}
 
-	return nil
+	return mapper, nil
 }
 
 // AddVolume adds a mapped volume to the mapper. A corresponding Volume record
@@ -125,52 +137,12 @@ func (mapper *FileMapper) AddVolume(hostPath string, mountPoint string, readonly
 // The mapped path is required to be a subpath of the mapper's base directory.
 // e.g. mapper.HostPath("../../foo") should fail with an error.
 func (mapper *FileMapper) HostPath(src string) (string, error) {
-	p := path.Join(mapper.dir, src)
-	p = path.Clean(p)
+	p := filepath.Join(mapper.dir, src)
+	p = filepath.Clean(p)
 	if !mapper.IsSubpath(p, mapper.dir) {
 		return "", fmt.Errorf("Invalid path: %s is not a valid subpath of %s", p, mapper.dir)
 	}
 	return p, nil
-}
-
-// OpenHostFile opens a file on the host file system at a mapped path.
-// "src" is an unmapped path. This function will handle mapping the path.
-//
-// This function calls os.Open
-//
-// If the path can't be mapped or the file can't be opened, an error is returned.
-func (mapper *FileMapper) OpenHostFile(src string) (*os.File, error) {
-	p, perr := mapper.HostPath(src)
-	if perr != nil {
-		return nil, perr
-	}
-	f, oerr := os.Open(p)
-	if oerr != nil {
-		return nil, oerr
-	}
-	return f, nil
-}
-
-// CreateHostFile creates a file on the host file system at a mapped path.
-// "src" is an unmapped path. This function will handle mapping the path.
-//
-// This function calls os.Create
-//
-// If the path can't be mapped or the file can't be created, an error is returned.
-func (mapper *FileMapper) CreateHostFile(src string) (*os.File, error) {
-	p, perr := mapper.HostPath(src)
-	if perr != nil {
-		return nil, perr
-	}
-	err := util.EnsurePath(p)
-	if err != nil {
-		return nil, err
-	}
-	f, oerr := os.Create(p)
-	if oerr != nil {
-		return nil, oerr
-	}
-	return f, nil
 }
 
 // AddTmpVolume creates a directory on the host based on the declared path in
@@ -247,8 +219,8 @@ func (mapper *FileMapper) AddOutput(output *tes.TaskParameter) error {
 	hostDir := hostPath
 	mountDir := output.Path
 	if output.Type == tes.FileType_FILE {
-		hostDir = path.Dir(hostPath)
-		mountDir = path.Dir(output.Path)
+		hostDir = filepath.Dir(hostPath)
+		mountDir = filepath.Dir(output.Path)
 	}
 
 	err = util.EnsureDir(hostDir)

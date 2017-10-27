@@ -4,30 +4,17 @@ import (
 	"context"
 	"fmt"
 	"github.com/ohsu-comp-bio/funnel/cmd/version"
-	"github.com/ohsu-comp-bio/funnel/config"
-	"github.com/ohsu-comp-bio/funnel/events"
 	"github.com/ohsu-comp-bio/funnel/proto/tes"
+	"github.com/ohsu-comp-bio/funnel/events"
 	"github.com/ohsu-comp-bio/funnel/storage"
-	"github.com/ohsu-comp-bio/funnel/util"
 	"os"
 	"path/filepath"
 	"time"
 )
 
-// DefaultWorker is the default task worker, which follows a basic,
-// sequential process of task initialization, execution, finalization,
-// and logging.
-type DefaultWorker struct {
-	Conf       config.Worker
-	Mapper     *FileMapper
-	Store      storage.Storage
-	TaskReader TaskReader
-	Event      *events.TaskWriter
-}
-
 // Run runs the Worker.
 // TODO document behavior of slow consumer of task log updates
-func (r *DefaultWorker) Run(pctx context.Context) {
+func Run(pctx context.Context, w Worker, taskID string) {
 
 	// The code here is verbose, but simple; mainly loops and simple error checking.
 	//
@@ -42,38 +29,50 @@ func (r *DefaultWorker) Run(pctx context.Context) {
 	// - upload the outputs
 
 	var run helper
+  var reader TaskReader
 	var task *tes.Task
+  var store storage.Storage
+  conf := w.Config()
 
-	r.Event.Info("Version", version.LogFields()...)
+  writer, werr := w.EventWriter()
+  if writer == nil {
+    // There's no event writer, which means no way to communicate
+    // that the task failed or log the error. Just give up.
+    return
+  }
+  if werr != nil {
+    // There was an error creating a writer. This is a system error,
+    // but there's still a non-nil writer which might be useful for
+    // logging the error or event the failed task state.
+    // Set run.syserr so that the normal failure flow happens.
+    run.syserr = werr
+  }
+  event := events.NewTaskWriter(taskID, 0, conf.Logger.Level, writer)
 
-	task, run.syserr = r.TaskReader.Task()
+	event.Info("Version", version.LogFields()...)
+	event.StartTime(time.Now())
 
-	if run.ok() {
-		r.Event.State(tes.State_INITIALIZING)
-	}
-
-	r.Event.StartTime(time.Now())
 	// Run the final logging/state steps in a deferred function
 	// to ensure they always run, even if there's a missed error.
 	defer func() {
-		r.Event.EndTime(time.Now())
+		event.EndTime(time.Now())
 
 		switch {
 		case run.taskCanceled:
 			// The task was canceled.
-			r.Event.Info("Canceled")
-			r.Event.State(tes.State_CANCELED)
+			event.Info("Canceled")
+			event.State(tes.State_CANCELED)
 		case run.execerr != nil:
 			// One of the executors failed
-			r.Event.Error("Exec error", "error", run.execerr)
-			r.Event.State(tes.State_ERROR)
+			event.Error("Exec error", "error", run.execerr)
+			event.State(tes.State_ERROR)
 		case run.syserr != nil:
 			// Something else failed
 			// TODO should we do something special for run.err == context.Canceled?
-			r.Event.Error("System error", "error", run.syserr)
-			r.Event.State(tes.State_SYSTEM_ERROR)
+			event.Error("System error", "error", run.syserr)
+			event.State(tes.State_SYSTEM_ERROR)
 		default:
-			r.Event.State(tes.State_COMPLETE)
+			event.State(tes.State_COMPLETE)
 		}
 	}()
 
@@ -82,23 +81,27 @@ func (r *DefaultWorker) Run(pctx context.Context) {
 		run.syserr = e
 	})
 
-	ctx := r.pollForCancel(pctx, func() {
+  if run.ok() {
+    reader, run.syserr = w.TaskReader()
+  }
+
+	ctx := pollForCancel(pctx, reader, conf.UpdateRate, func() {
 		run.taskCanceled = true
 	})
 	run.ctx = ctx
 
-	// Create working dir
-	var dir string
-	if run.ok() {
-		dir, run.syserr = filepath.Abs(r.Conf.WorkDir)
-	}
-	if run.ok() {
-		run.syserr = util.EnsureDir(dir)
-	}
+  if run.ok() {
+	  task, run.syserr = reader.Task()
+  }
 
-	// Prepare file mapper, which maps task file URLs to host filesystem paths
+	// Configure a task-specific storage backend.
+	// This provides download/upload for inputs/outputs.
+  if run.ok() {
+    store, run.syserr = w.Storage(task)
+  }
+
 	if run.ok() {
-		run.syserr = r.Mapper.MapTask(task)
+		event.State(tes.State_INITIALIZING)
 	}
 
 	// Grab the IP address of this host. Used to send task metadata updates.
@@ -107,173 +110,145 @@ func (r *DefaultWorker) Run(pctx context.Context) {
 		ip, run.syserr = externalIP()
 	}
 
-	// Configure a task-specific storage backend.
-	// This provides download/upload for inputs/outputs.
 	if run.ok() {
-		r.Store, run.syserr = r.Store.WithConfig(r.Conf.Storage)
+		run.syserr = validateInputs(task.Inputs, store)
 	}
 
 	if run.ok() {
-		run.syserr = r.validateInputs()
-	}
-
-	if run.ok() {
-		run.syserr = r.validateOutputs()
+		run.syserr = validateOutputs(task.Outputs, store)
 	}
 
 	// Download inputs
-	for _, input := range r.Mapper.Inputs {
+	for _, input := range task.Inputs {
 		if run.ok() {
-			r.Event.Info("Starting download", "url", input.Url)
-			err := r.Store.Get(ctx, input.Url, input.Path, input.Type)
+			event.Info("Starting download", "url", input.Url)
+			err := store.Get(ctx, input.Url, input.Path, input.Type)
 			if err != nil {
 				run.syserr = err
-				r.Event.Error("Download failed", "url", input.Url, "error", err)
+				event.Error("Download failed", "url", input.Url, "error", err)
 			} else {
-				r.Event.Info("Download finished", "url", input.Url)
+				event.Info("Download finished", "url", input.Url)
 			}
 		}
 	}
 
 	if run.ok() {
-		r.Event.State(tes.State_RUNNING)
+		event.State(tes.State_RUNNING)
 	}
 
 	// Run steps
 	for i, d := range task.Executors {
-		s := &stepWorker{
-			Conf:  r.Conf,
-			Event: r.Event.NewExecutorWriter(uint32(i)),
-			IP:    ip,
-			Cmd: &DockerCmd{
-				ImageName:     d.ImageName,
-				Cmd:           d.Cmd,
-				Environ:       d.Environ,
-				Volumes:       r.Mapper.Volumes,
-				Workdir:       d.Workdir,
-				Ports:         d.Ports,
-				ContainerName: fmt.Sprintf("%s-%d", task.Id, i),
-				// TODO make RemoveContainer configurable
-				RemoveContainer: true,
-				Event:           r.Event.NewExecutorWriter(uint32(i)),
-			},
-		}
-
-		// Opens stdin/out/err files and updates those fields on "cmd".
+    var stdio *Stdio
 		if run.ok() {
-			run.syserr = r.openStepLogs(s, d)
-		}
+      stdio, run.syserr = w.Stdio(d)
+    }
 
 		if run.ok() {
+      s := &stepWorker{
+        Conf:  conf,
+        Event: event.NewExecutorWriter(uint32(i)),
+        IP:    ip,
+        Exec:  w.Executor(task, i),
+      }
 			run.execerr = s.Run(ctx)
 		}
 	}
 
 	// Upload outputs
 	var outputs []*tes.OutputFileLog
-	for _, output := range r.Mapper.Outputs {
+	for _, output := range task.Outputs {
 		if run.ok() {
-			r.Event.Info("Starting upload", "url", output.Url)
-			r.fixLinks(output.Path)
-			out, err := r.Store.Put(ctx, output.Url, output.Path, output.Type)
+			event.Info("Starting upload", "url", output.Url)
+			out, err := store.Put(ctx, output.Url, output.Path, output.Type)
 			if err != nil {
 				run.syserr = err
-				r.Event.Error("Upload failed", "url", output.Url, "error", err)
+				event.Error("Upload failed", "url", output.Url, "error", err)
 			} else {
-				r.Event.Info("Upload finished", "url", output.Url)
+				event.Info("Upload finished", "url", output.Url)
 			}
 			outputs = append(outputs, out...)
 		}
 	}
 
 	if run.ok() {
-		r.Event.Outputs(outputs)
+		event.Outputs(outputs)
 	}
 }
 
-// fixLinks walks the output paths, fixing cases where a symlink is
-// broken because it's pointing to a path inside a container volume.
-func (r *DefaultWorker) fixLinks(basepath string) {
-	filepath.Walk(basepath, func(p string, f os.FileInfo, err error) error {
-		if err != nil {
-			// There's an error, so be safe and give up on this file
-			return nil
-		}
+func openStdio() {
+  stdio := Stdio{}
+  var err error
 
-		// Only bother to check symlinks
-		if f.Mode()&os.ModeSymlink != 0 {
-			// Test if the file can be opened because it doesn't exist
-			fh, rerr := os.Open(p)
-			fh.Close()
+  // Find the path for task stdin
+  if ex.Stdin != "" {
+    stdio.Stdin, err = mapper.OpenFile(ex.Stdin)
+    if err != nil {
+      return nil, fmt.Errorf("couldn't open stdin", err)
+    }
+  }
 
-			if rerr != nil && os.IsNotExist(rerr) {
+  // Create file for task stdout
+  if ex.Stdout != "" {
+    stdio.Stdout, err = mapper.CreateFile(ex.Stdout)
+    if err != nil {
+      return nil, fmt.Errorf("couldn't create stdout", err)
+    }
+  }
 
-				// Get symlink source path
-				src, err := os.Readlink(p)
-				if err != nil {
-					return nil
-				}
-				// Map symlink source (possible container path) to host path
-				mapped, err := r.Mapper.HostPath(src)
-				if err != nil {
-					return nil
-				}
-
-				// Check whether the mapped path exists
-				fh, err := os.Open(mapped)
-				fh.Close()
-
-				// If the mapped path exists, fix the symlink
-				if err == nil {
-					err := os.Remove(p)
-					if err != nil {
-						return nil
-					}
-					os.Symlink(mapped, p)
-				}
-			}
-		}
-		return nil
-	})
+  // Create file for task stderr
+  if ex.Stderr != "" {
+    stdio.Stderr, err = mapper.CreateFile(ex.Stderr)
+    if err != nil {
+      return nil, fmt.Errorf("couldn't create stderr", err)
+    }
+  }
+  return &stdio, nil
 }
 
-// openLogs opens/creates the logs files for a step and updates those fields.
-func (r *DefaultWorker) openStepLogs(s *stepWorker, d *tes.Executor) error {
-
-	// Find the path for task stdin
-	var err error
-	if d.Stdin != "" {
-		s.Cmd.Stdin, err = r.Mapper.OpenHostFile(d.Stdin)
-		if err != nil {
-			s.Event.Error("Couldn't prepare log files", err)
-			return err
-		}
+// OpenHostFile opens a file on the host file system at a mapped path.
+// "src" is an unmapped path. This function will handle mapping the path.
+//
+// This function calls os.Open
+//
+// If the path can't be mapped or the file can't be opened, an error is returned.
+func (mapper *FileMapper) OpenHostFile(src string) (*os.File, error) {
+	p, perr := mapper.HostPath(src)
+	if perr != nil {
+		return nil, perr
 	}
-
-	// Create file for task stdout
-	if d.Stdout != "" {
-		s.Cmd.Stdout, err = r.Mapper.CreateHostFile(d.Stdout)
-		if err != nil {
-			s.Event.Error("Couldn't prepare log files", err)
-			return err
-		}
+	f, oerr := os.Open(p)
+	if oerr != nil {
+		return nil, oerr
 	}
+	return f, nil
+}
 
-	// Create file for task stderr
-	if d.Stderr != "" {
-		s.Cmd.Stderr, err = r.Mapper.CreateHostFile(d.Stderr)
-		if err != nil {
-			s.Event.Error("Couldn't prepare log files", err)
-			return err
-		}
+// CreateHostFile creates a file on the host file system at a mapped path.
+// "src" is an unmapped path. This function will handle mapping the path.
+//
+// This function calls os.Create
+//
+// If the path can't be mapped or the file can't be created, an error is returned.
+func (mapper *FileMapper) CreateHostFile(src string) (*os.File, error) {
+	p, perr := mapper.HostPath(src)
+	if perr != nil {
+		return nil, perr
 	}
-	return nil
+	err := util.EnsurePath(p)
+	if err != nil {
+		return nil, err
+	}
+	f, oerr := os.Create(p)
+	if oerr != nil {
+		return nil, oerr
+	}
+	return f, nil
 }
 
 // Validate the input downloads
-func (r *DefaultWorker) validateInputs() error {
-	for _, input := range r.Mapper.Inputs {
-		if !r.Store.Supports(input.Url, input.Path, input.Type) {
+func validateInputs(inputs []*tes.TaskParameter, s storage.Storage) error {
+	for _, input := range inputs {
+		if !s.Supports(input.Url, input.Path, input.Type) {
 			return fmt.Errorf("Input download not supported by storage: %v", input)
 		}
 	}
@@ -281,22 +256,22 @@ func (r *DefaultWorker) validateInputs() error {
 }
 
 // Validate the output uploads
-func (r *DefaultWorker) validateOutputs() error {
-	for _, output := range r.Mapper.Outputs {
-		if !r.Store.Supports(output.Url, output.Path, output.Type) {
+func validateOutputs(outputs []*tes.TaskParameter, s storage.Storage) error {
+	for _, output := range outputs {
+		if !s.Supports(output.Url, output.Path, output.Type) {
 			return fmt.Errorf("Output upload not supported by storage: %v", output)
 		}
 	}
 	return nil
 }
 
-func (r *DefaultWorker) pollForCancel(ctx context.Context, f func()) context.Context {
+func pollForCancel(ctx context.Context, r TaskReader, rate time.Duration, f func()) context.Context {
 	taskctx, cancel := context.WithCancel(ctx)
 
 	// Start a goroutine that polls the server to watch for a canceled state.
 	// If a cancel state is found, "taskctx" is canceled.
 	go func() {
-		ticker := time.NewTicker(r.Conf.UpdateRate)
+		ticker := time.NewTicker(rate)
 		defer ticker.Stop()
 
 		for {
@@ -304,7 +279,7 @@ func (r *DefaultWorker) pollForCancel(ctx context.Context, f func()) context.Con
 			case <-taskctx.Done():
 				return
 			case <-ticker.C:
-				state, _ := r.TaskReader.State()
+				state, _ := r.State()
 				if tes.TerminalState(state) {
 					cancel()
 					f()

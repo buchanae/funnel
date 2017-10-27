@@ -1,13 +1,27 @@
 package worker
 
 import (
-	"context"
+  "context"
 	"github.com/ohsu-comp-bio/funnel/proto/tes"
+	"github.com/ohsu-comp-bio/funnel/storage"
+	"github.com/ohsu-comp-bio/funnel/events"
+	"github.com/ohsu-comp-bio/funnel/config"
 )
 
-// Worker is a type which runs a task.
-type Worker interface {
-	Run(context.Context)
+type Executor interface {
+  Run() error
+  String() string
+  Inspect(context.Context) ([]*tes.Ports, error)
+  Stop() error
+}
+
+type Factory interface {
+  Storage(*tes.Task) (storage.Storage, error)
+  EventWriter() (events.Writer, error)
+  TaskReader() (TaskReader, error)
+  Config() config.Worker
+  FileMapper(*tes.Task) (*FileMapper, error)
+  Executor() Executor
 }
 
 // TaskReader is a type which reads task information

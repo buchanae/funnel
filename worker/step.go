@@ -2,7 +2,6 @@ package worker
 
 import (
 	"context"
-	"github.com/docker/docker/client"
 	"github.com/ohsu-comp-bio/funnel/config"
 	"github.com/ohsu-comp-bio/funnel/events"
 	"io"
@@ -11,7 +10,7 @@ import (
 
 type stepWorker struct {
 	Conf  config.Worker
-	Cmd   *DockerCmd
+	Cmd   Executor
 	Event *events.ExecutorWriter
 	IP    string
 }
@@ -37,6 +36,7 @@ func (s *stepWorker) Run(ctx context.Context) error {
 	defer ticker.Stop()
 
 	go func() {
+    s.Event.Info("Running command", "cmd", s.Cmd.String())
 		done <- s.Cmd.Run()
 	}()
 	go s.inspectContainer(subctx)
@@ -45,6 +45,7 @@ func (s *stepWorker) Run(ctx context.Context) error {
 		select {
 		case <-ctx.Done():
 			// Likely the task was canceled.
+      s.Event.Info("Stopping executor")
 			s.Cmd.Stop()
 			s.Event.EndTime(time.Now())
 			return ctx.Err()
@@ -86,15 +87,12 @@ func (s *stepWorker) inspectContainer(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-t.C:
-			s.Event.Info("Inspecting container")
-
 			ports, err := s.Cmd.Inspect(ctx)
-			if err != nil && !client.IsErrContainerNotFound(err) {
-				s.Event.Error("Error inspecting container", err)
-				break
+			if err == nil {
+			  s.Event.Ports(ports)
+			  return
 			}
-			s.Event.Ports(ports)
-			return
+			s.Event.Error("Error inspecting container", err)
 		}
 	}
 }
