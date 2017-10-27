@@ -95,7 +95,7 @@ func NewServer(conf config.Config, log *logger.Logger) (*Server, error) {
 		return nil, fmt.Errorf("unknown compute backend: '%s'", conf.Backend)
 	}
 
-  if !conf.Scheduler.Disabled {
+	if !conf.Scheduler.Disabled {
 		switch strings.ToLower(conf.Backend) {
 		case "gce":
 			sbackend, err = gce.NewBackend(conf, log.Sub("gce"))
@@ -116,7 +116,7 @@ func NewServer(conf config.Config, log *logger.Logger) (*Server, error) {
 			Conf:    conf.Scheduler,
 			Backend: sbackend,
 		}
-  }
+	}
 
 	db.WithComputeBackend(backend)
 	srv := server.DefaultServer(db, conf.Server)

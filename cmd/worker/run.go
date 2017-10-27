@@ -67,6 +67,10 @@ func NewDefaultWorker(conf config.Worker, taskID string, log *logger.Logger) (wo
 		writers = append(writers, writer)
 	}
 
+	for i, w := range writers {
+		writers[i] = events.Retrier{Writer: w}
+	}
+
 	return &worker.DefaultWorker{
 		Conf:       conf,
 		Mapper:     worker.NewFileMapper(baseDir),
