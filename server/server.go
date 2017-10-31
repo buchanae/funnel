@@ -1,7 +1,7 @@
 package server
 
 import (
-	"context"
+	"github.com/grpc-ecosystem/go-grpc-middleware"
 	"github.com/grpc-ecosystem/grpc-gateway/runtime"
 	"github.com/ohsu-comp-bio/funnel/config"
 	"github.com/ohsu-comp-bio/funnel/events"
@@ -9,6 +9,7 @@ import (
 	pbs "github.com/ohsu-comp-bio/funnel/proto/scheduler"
 	"github.com/ohsu-comp-bio/funnel/proto/tes"
 	"github.com/ohsu-comp-bio/funnel/webdash"
+	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	"net"
 	"net/http"
@@ -50,6 +51,19 @@ func DefaultServer(db Database, conf config.Server) *Server {
 	}
 }
 
+// Return a new interceptor function that logs all requests at the Debug level
+func newDebugInterceptor(log *logger.Logger) grpc.UnaryServerInterceptor {
+	// Return a function that is the interceptor.
+	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo,
+		handler grpc.UnaryHandler) (interface{}, error) {
+		log.Debug(
+			"received request",
+			"request", req,
+		)
+		return handler(ctx, req)
+	}
+}
+
 // Serve starts the server and does not block. This will open TCP ports
 // for both RPC and HTTP.
 func (s *Server) Serve(pctx context.Context) error {
@@ -63,8 +77,13 @@ func (s *Server) Serve(pctx context.Context) error {
 	}
 
 	grpcServer := grpc.NewServer(
-		// API auth check.
-		grpc.UnaryInterceptor(newAuthInterceptor(s.Password)),
+		grpc.UnaryInterceptor(
+			grpc_middleware.ChainUnaryServer(
+				// API auth check.
+				newAuthInterceptor(s.Password),
+				newDebugInterceptor(s.Log),
+			),
+		),
 	)
 
 	// Set up HTTP proxy of gRPC API

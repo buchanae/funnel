@@ -136,3 +136,6 @@
 [submodule "vendor/github.com/pkg/errors"]
 	path = vendor/github.com/pkg/errors
 	url = https://github.com/pkg/errors
+[submodule "vendor/github.com/grpc-ecosystem/go-grpc-middleware"]
+	path = vendor/github.com/grpc-ecosystem/go-grpc-middleware
+	url = https://github.com/grpc-ecosystem/go-grpc-middleware

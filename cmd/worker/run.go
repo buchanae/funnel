@@ -25,6 +25,8 @@ func Run(conf config.Worker, taskID string, log *logger.Logger) error {
 
 // NewDefaultWorker returns a new configured DefaultWorker instance.
 func NewDefaultWorker(conf config.Worker, taskID string, log *logger.Logger) (worker.Worker, error) {
+	log.Debug("NewDefaultWorker", "config", conf, "taskID", taskID)
+
 	var err error
 	var reader worker.TaskReader
 	var writer events.Writer
