@@ -16,9 +16,11 @@ import (
 type Database interface {
 	QueueTask(*tes.Task) error
 	ReadQueue(int) []*tes.Task
+
 	ListNodes(context.Context, *pbs.ListNodesRequest) (*pbs.ListNodesResponse, error)
 	PutNode(context.Context, *pbs.Node) (*pbs.PutNodeResponse, error)
 	DeleteNode(context.Context, *pbs.Node) error
+
 	WriteContext(context.Context, *events.Event) error
 }
 

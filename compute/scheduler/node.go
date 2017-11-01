@@ -182,7 +182,10 @@ func (n *Node) sync(ctx context.Context) {
 func (n *Node) runTask(ctx context.Context, id string) {
 	log := n.log.WithFields("ns", "worker", "taskID", id)
 	// TODO handle error
-	r, _ := n.newWorker(n.workerConf, id, log)
+	r, err := n.newWorker(n.workerConf, id, log)
+	if err != nil {
+		log.Error("Error newWorker", err)
+	}
 	r.Run(ctx)
 	defer n.workers.Remove(id)
 

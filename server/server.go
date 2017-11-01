@@ -57,10 +57,16 @@ func newDebugInterceptor(log *logger.Logger) grpc.UnaryServerInterceptor {
 	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo,
 		handler grpc.UnaryHandler) (interface{}, error) {
 		log.Debug(
-			"received request",
+			"request: "+info.FullMethod,
 			"request", req,
 		)
-		return handler(ctx, req)
+		resp, err := handler(ctx, req)
+		log.Debug(
+			"responding: "+info.FullMethod,
+			"resp", resp,
+			"err", err,
+		)
+		return resp, err
 	}
 }
 
