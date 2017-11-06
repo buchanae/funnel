@@ -25,6 +25,7 @@ func Run(conf config.Worker, taskID string, log *logger.Logger) error {
 
 // NewDefaultWorker returns a new configured DefaultWorker instance.
 func NewDefaultWorker(conf config.Worker, taskID string, log *logger.Logger) (worker.Worker, error) {
+
 	var err error
 	var reader worker.TaskReader
 	var writer events.Writer
@@ -67,11 +68,14 @@ func NewDefaultWorker(conf config.Worker, taskID string, log *logger.Logger) (wo
 		writers = append(writers, writer)
 	}
 
+	m := events.MultiWriter(writers...)
+	ew := &events.ErrLogger{Writer: m, Log: log}
+
 	return &worker.DefaultWorker{
 		Conf:       conf,
 		Mapper:     worker.NewFileMapper(baseDir),
 		Store:      storage.Storage{},
 		TaskReader: reader,
-		Event:      events.NewTaskWriter(taskID, 0, conf.Logger.Level, events.MultiWriter(writers...)),
+		Event:      events.NewTaskWriter(taskID, 0, conf.Logger.Level, ew),
 	}, nil
 }
