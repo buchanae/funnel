@@ -12,6 +12,7 @@ import (
 	"github.com/ohsu-comp-bio/funnel/webdash"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 	"net"
 	"net/http"
 )
@@ -20,9 +21,13 @@ import (
 // RPC traffic via gRPC, HTTP traffic for the TES API,
 // and also serves the web dashboard.
 type Server struct {
-	RPCAddress             string
-	HTTPPort               string
-	Password               string
+	RPCAddress string
+	HTTPPort   string
+	Password   string
+	// Path to SSL cert file.
+	Cert string
+	// Path to SSL key file.
+	Key                    string
 	TaskServiceServer      tes.TaskServiceServer
 	EventServiceServer     events.EventServiceServer
 	SchedulerServiceServer pbs.SchedulerServiceServer
@@ -41,9 +46,6 @@ func DefaultServer(db Database, conf config.Server) *Server {
 		EventServiceServer:     db,
 		SchedulerServiceServer: db,
 		DisableHTTPCache:       conf.DisableHTTPCache,
-		DialOptions: []grpc.DialOption{
-			grpc.WithInsecure(),
-		},
 	}
 }
 
@@ -78,7 +80,7 @@ func (s *Server) Serve(pctx context.Context) error {
 		return err
 	}
 
-	grpcServer := grpc.NewServer(
+	srvOpts := []grpc.ServerOption{
 		grpc.UnaryInterceptor(
 			grpc_middleware.ChainUnaryServer(
 				// API auth check.
@@ -86,7 +88,25 @@ func (s *Server) Serve(pctx context.Context) error {
 				newDebugInterceptor(s.Log),
 			),
 		),
-	)
+	}
+	dialOpts := []grpc.DialOption{}
+
+	if s.Cert != "" {
+		creds, err := credentials.NewServerTLSFromFile(s.Cert, s.Key)
+		if err != nil {
+			return err
+		}
+		clicreds, err := credentials.NewClientTLSFromFile(s.Cert, "")
+		if err != nil {
+			return err
+		}
+		srvOpts = append(srvOpts, grpc.Creds(creds))
+		dialOpts = append(dialOpts, grpc.WithTransportCredentials(clicreds))
+	} else {
+		dialOpts = append(dialOpts, grpc.WithInsecure())
+	}
+
+	grpcServer := grpc.NewServer(srvOpts...)
 
 	// Set up HTTP proxy of gRPC API
 	mux := http.NewServeMux()
@@ -120,7 +140,7 @@ func (s *Server) Serve(pctx context.Context) error {
 	if s.TaskServiceServer != nil {
 		tes.RegisterTaskServiceServer(grpcServer, s.TaskServiceServer)
 		err := tes.RegisterTaskServiceHandlerFromEndpoint(
-			ctx, grpcMux, s.RPCAddress, s.DialOptions,
+			ctx, grpcMux, s.RPCAddress, dialOpts,
 		)
 		if err != nil {
 			return err
@@ -136,7 +156,7 @@ func (s *Server) Serve(pctx context.Context) error {
 	if s.SchedulerServiceServer != nil {
 		pbs.RegisterSchedulerServiceServer(grpcServer, s.SchedulerServiceServer)
 		err := pbs.RegisterSchedulerServiceHandlerFromEndpoint(
-			ctx, grpcMux, s.RPCAddress, s.DialOptions,
+			ctx, grpcMux, s.RPCAddress, dialOpts,
 		)
 		if err != nil {
 			return err
@@ -155,7 +175,11 @@ func (s *Server) Serve(pctx context.Context) error {
 	}()
 
 	go func() {
-		srverr = httpServer.ListenAndServe()
+		if s.Cert != "" {
+			srverr = httpServer.ListenAndServeTLS(s.Cert, s.Key)
+		} else {
+			srverr = httpServer.ListenAndServe()
+		}
 		cancel()
 	}()
 

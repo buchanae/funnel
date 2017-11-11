@@ -186,6 +186,12 @@ type Server struct {
 	}
 	DisableHTTPCache bool
 	Logger           logger.Config
+	TLS              struct {
+		// Path to cert file.
+		Cert string
+		// Path to key file.
+		Key string
+	}
 }
 
 // HTTPAddress returns the HTTP address based on HostName and HTTPPort
