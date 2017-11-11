@@ -5,7 +5,7 @@ import (
 	schedmock "github.com/ohsu-comp-bio/funnel/compute/scheduler/mocks"
 	"github.com/ohsu-comp-bio/funnel/logger"
 	pbs "github.com/ohsu-comp-bio/funnel/proto/scheduler"
-	"github.com/ohsu-comp-bio/funnel/proto/tes"
+	"github.com/ohsu-comp-bio/funnel/tes"
 	"github.com/stretchr/testify/mock"
 	"testing"
 )

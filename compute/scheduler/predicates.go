@@ -3,7 +3,7 @@ package scheduler
 import (
 	"fmt"
 	pbs "github.com/ohsu-comp-bio/funnel/proto/scheduler"
-	"github.com/ohsu-comp-bio/funnel/proto/tes"
+	"github.com/ohsu-comp-bio/funnel/tes"
 )
 
 // Predicate is a function that checks whether a task fits a node.

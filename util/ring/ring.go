@@ -1,3 +1,4 @@
+// Package ring contains a ring buffer data structure.
 package ring
 
 // Copied and modified from: https://github.com/armon/circbuf

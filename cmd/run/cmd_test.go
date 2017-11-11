@@ -3,7 +3,7 @@ package run
 import (
 	"github.com/go-test/deep"
 	"github.com/golang/protobuf/jsonpb"
-	"github.com/ohsu-comp-bio/funnel/proto/tes"
+	"github.com/ohsu-comp-bio/funnel/tes"
 	"os"
 	"testing"
 )

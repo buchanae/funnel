@@ -4,7 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/kballard/go-shellquote"
-	"github.com/ohsu-comp-bio/funnel/proto/tes"
+	"github.com/ohsu-comp-bio/funnel/tes"
 	"io/ioutil"
 	"path/filepath"
 	"regexp"

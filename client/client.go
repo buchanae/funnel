@@ -1,3 +1,4 @@
+// Package client contains an HTTP client for the Task API.
 package client
 
 import (
@@ -5,7 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/golang/protobuf/jsonpb"
-	"github.com/ohsu-comp-bio/funnel/proto/tes"
+	"github.com/ohsu-comp-bio/funnel/tes"
 	"github.com/ohsu-comp-bio/funnel/util"
 	"golang.org/x/net/context"
 	"net/http"

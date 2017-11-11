@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/ohsu-comp-bio/funnel/config"
-	"github.com/ohsu-comp-bio/funnel/proto/tes"
+	"github.com/ohsu-comp-bio/funnel/tes"
 	"io"
 	"os"
 	"path"

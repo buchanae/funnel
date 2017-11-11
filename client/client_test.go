@@ -2,7 +2,7 @@ package client
 
 import (
 	"github.com/golang/protobuf/jsonpb"
-	"github.com/ohsu-comp-bio/funnel/proto/tes"
+	"github.com/ohsu-comp-bio/funnel/tes"
 	"golang.org/x/net/context"
 	"net"
 	"net/http"

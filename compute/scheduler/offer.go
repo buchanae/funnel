@@ -2,7 +2,7 @@ package scheduler
 
 import (
 	pbs "github.com/ohsu-comp-bio/funnel/proto/scheduler"
-	"github.com/ohsu-comp-bio/funnel/proto/tes"
+	"github.com/ohsu-comp-bio/funnel/tes"
 )
 
 // Offer describes a node offered by a scheduler for a task.

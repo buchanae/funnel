@@ -3,7 +3,7 @@ package worker
 import (
 	"fmt"
 	proto "github.com/golang/protobuf/proto"
-	"github.com/ohsu-comp-bio/funnel/proto/tes"
+	"github.com/ohsu-comp-bio/funnel/tes"
 	"github.com/ohsu-comp-bio/funnel/util"
 	"io/ioutil"
 	"os"

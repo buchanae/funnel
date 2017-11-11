@@ -1,3 +1,4 @@
+// Package cmd contains the command line interface.
 package cmd
 
 import (

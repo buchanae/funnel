@@ -1,3 +1,4 @@
+// Package logger provides structured, leveled logging utilities.
 package logger
 
 import (

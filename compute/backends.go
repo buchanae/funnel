@@ -1,7 +1,7 @@
 package compute
 
 import (
-	"github.com/ohsu-comp-bio/funnel/proto/tes"
+	"github.com/ohsu-comp-bio/funnel/tes"
 )
 
 // Backend is responsible for submitting a task. For some backends such as HtCondor,

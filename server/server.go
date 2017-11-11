@@ -1,3 +1,4 @@
+// Package server contains an HTTP server for the REST/gRPC APIs, web dashboard, etc.
 package server
 
 import (
@@ -8,7 +9,7 @@ import (
 	"github.com/ohsu-comp-bio/funnel/events"
 	"github.com/ohsu-comp-bio/funnel/logger"
 	pbs "github.com/ohsu-comp-bio/funnel/proto/scheduler"
-	"github.com/ohsu-comp-bio/funnel/proto/tes"
+	"github.com/ohsu-comp-bio/funnel/tes"
 	"github.com/ohsu-comp-bio/funnel/webdash"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"

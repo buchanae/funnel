@@ -1,3 +1,4 @@
+// Package config provides global Funnel configuration.
 package config
 
 import (

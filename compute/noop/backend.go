@@ -2,7 +2,7 @@ package noop
 
 import (
 	"github.com/ohsu-comp-bio/funnel/config"
-	"github.com/ohsu-comp-bio/funnel/proto/tes"
+	"github.com/ohsu-comp-bio/funnel/tes"
 )
 
 // NewBackend returns a new noop Backend instance.

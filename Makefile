@@ -26,22 +26,21 @@ install: depends
 
 # Generate the protobuf/gRPC code
 proto:
-	@cd proto/tes && protoc \
+	@cd tes && protoc \
 		$(PROTO_INC) \
 		--go_out=plugins=grpc:. \
 		--grpc-gateway_out=logtostderr=true:. \
 		tes.proto
-	@cd proto/scheduler && protoc \
+	@cd scheduler && protoc \
 		$(PROTO_INC) \
 		--go_out=plugins=grpc:. \
 		--grpc-gateway_out=logtostderr=true:. \
 		scheduler.proto
 	@cd events && protoc \
 		$(PROTO_INC) \
-		-I ../proto/tes \
+		-I ../tes \
 		-I $(shell pwd)/vendor/github.com/golang/protobuf/ptypes/struct/ \
-		-I $(shell pwd)/vendor/github.com/golang/protobuf/ptypes/timestamp/ \
-		--go_out=Mtes.proto=github.com/ohsu-comp-bio/funnel/proto/tes,plugins=grpc:. \
+		--go_out=Mtes.proto=github.com/ohsu-comp-bio/funnel/tes,plugins=grpc:. \
 		--grpc-gateway_out=logtostderr=true:. \
 		events.proto
 
@@ -92,30 +91,30 @@ test-elasticsearch:
 	@docker rm -f funnel-es-test  > /dev/null 2>&1 || echo
 	@docker run -d --name funnel-es-test -p 9200:9200 -p 9300:9300 -e "discovery.type=single-node" -e "xpack.security.enabled=false" docker.elastic.co/elasticsearch/elasticsearch:5.6.3 > /dev/null
 	@sleep 30
-	@go test ./tests/e2e/ -funnel-config es.config.yml
+	@go test ./tests/ -funnel-config es.config.yml
 	@docker rm -f funnel-es-test  > /dev/null 2>&1 || echo
 
 test-mongodb:
 	@docker rm -f funnel-mongodb-test > /dev/null 2>&1 || echo
 	@docker run -d --name funnel-mongodb-test -p 27000:27017 docker.io/mongo:3.5.13 > /dev/null
 	@sleep 10
-	@go test ./tests/e2e/ -funnel-config mongo.config.yml
+	@go test ./tests/ -funnel-config mongo.config.yml
 	@docker rm -f funnel-mongodb-test  > /dev/null 2>&1 || echo 
 
 # Run backend tests
 test-backends:
-	@go test -timeout 120s ./tests/e2e/slurm -run-test
-	@go test -timeout 120s ./tests/e2e/gridengine -run-test
-	@go test -timeout 120s ./tests/e2e/htcondor -run-test
-	@go test -timeout 120s ./tests/e2e/pbs -run-test
+	@go test -timeout 120s ./tests/slurm -run-test
+	@go test -timeout 120s ./tests/gridengine -run-test
+	@go test -timeout 120s ./tests/htcondor -run-test
+	@go test -timeout 120s ./tests/pbs -run-test
 
 # Run s3 tests
 test-s3:
-	@go test ./tests/e2e/s3 -run-test
+	@go test ./tests/s3 -run-test
 
 # Tests meant to run in an OpenStack environment
 test-openstack:
-	@go test ./tests/e2e/openstack -openstack-e2e-config ${FUNNEL_OPENSTACK_TEST_CONFIG}
+	@go test ./tests/openstack -openstack-e2e-config ${FUNNEL_OPENSTACK_TEST_CONFIG}
 
 webdash-install:
 	@npm install --prefix ./webdash
@@ -233,7 +232,7 @@ start-kafka:
 	@docker run -d --name funnel-kafka -p 2181:2181 -p 9092:9092 --env ADVERTISED_HOST="localhost" --env ADVERTISED_PORT=9092 spotify/kafka
 
 test-kafka: start-kafka
-	@go test ./tests/e2e/kafka
+	@go test ./tests/kafka
 	@docker rm -f funnel-kafka > /dev/null || echo
 
 # Remove build/development files.

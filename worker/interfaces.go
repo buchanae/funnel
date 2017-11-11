@@ -2,7 +2,7 @@ package worker
 
 import (
 	"context"
-	"github.com/ohsu-comp-bio/funnel/proto/tes"
+	"github.com/ohsu-comp-bio/funnel/tes"
 )
 
 // Worker is a type which runs a task.

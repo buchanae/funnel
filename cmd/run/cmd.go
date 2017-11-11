@@ -4,7 +4,7 @@ import (
 	"bufio"
 	"github.com/kballard/go-shellquote"
 	"github.com/ohsu-comp-bio/funnel/client"
-	"github.com/ohsu-comp-bio/funnel/proto/tes"
+	"github.com/ohsu-comp-bio/funnel/tes"
 	"github.com/spf13/cobra"
 	"os"
 )

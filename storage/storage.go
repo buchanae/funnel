@@ -1,3 +1,4 @@
+// Package storage provides file storage clients for local and object storage systems (e.g. S3).
 package storage
 
 // NOTE!
@@ -10,7 +11,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/ohsu-comp-bio/funnel/config"
-	"github.com/ohsu-comp-bio/funnel/proto/tes"
+	"github.com/ohsu-comp-bio/funnel/tes"
 	"os"
 	"path/filepath"
 	"strings"

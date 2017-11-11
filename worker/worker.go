@@ -1,3 +1,4 @@
+// Package worker implements per-task processing: storage, command executors, event logging, etc.
 package worker
 
 import (
@@ -6,8 +7,8 @@ import (
 	"github.com/ohsu-comp-bio/funnel/cmd/version"
 	"github.com/ohsu-comp-bio/funnel/config"
 	"github.com/ohsu-comp-bio/funnel/events"
-	"github.com/ohsu-comp-bio/funnel/proto/tes"
 	"github.com/ohsu-comp-bio/funnel/storage"
+	"github.com/ohsu-comp-bio/funnel/tes"
 	"github.com/ohsu-comp-bio/funnel/util"
 	"os"
 	"path/filepath"
@@ -39,7 +40,6 @@ func (r *DefaultWorker) Run(pctx context.Context) {
 	// The steps are:
 	// - prepare the working directory
 	// - map the task files to the working directory
-	// - log the IP address
 	// - set up the storage configuration
 	// - validate input and output files
 	// - download inputs
