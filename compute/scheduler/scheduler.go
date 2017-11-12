@@ -1,13 +1,13 @@
 package scheduler
 
 import (
+	"context"
 	"fmt"
 	"github.com/ohsu-comp-bio/funnel/config"
 	"github.com/ohsu-comp-bio/funnel/events"
 	"github.com/ohsu-comp-bio/funnel/logger"
 	pbs "github.com/ohsu-comp-bio/funnel/proto/scheduler"
 	"github.com/ohsu-comp-bio/funnel/proto/tes"
-	"golang.org/x/net/context"
 	"time"
 )
 
@@ -24,10 +24,18 @@ type Database interface {
 
 // Scheduler handles scheduling tasks to nodes and support many backends.
 type Scheduler struct {
-	Log     *logger.Logger
-	DB      Database
-	Conf    config.Scheduler
-	Backend Backend
+	Log  *logger.Logger
+	DB   Database
+	Conf config.Scheduler
+}
+
+// Submit submits a task via gRPC call to the funnel scheduler backend
+func (s *Scheduler) Submit(task *tes.Task) error {
+	err := s.DB.QueueTask(task)
+	if err != nil {
+		return fmt.Errorf("Failed to submit task %s to the scheduler queue: %s", task.Id, err)
+	}
+	return nil
 }
 
 // Run starts the scheduling loop. This blocks.
@@ -46,10 +54,6 @@ func (s *Scheduler) Run(ctx context.Context) error {
 			err = s.Schedule(ctx)
 			if err != nil {
 				return fmt.Errorf("schedule error: %s", err)
-			}
-			err = s.Scale(ctx)
-			if err != nil {
-				return fmt.Errorf("scale error: %s", err)
 			}
 		}
 	}
@@ -85,7 +89,7 @@ func (s *Scheduler) CheckNodes() error {
 }
 
 // Schedule does a scheduling iteration. It checks the health of nodes
-// in the database, gets a chunk of tasks from the queue (configurable by config.Scheduler.ScheduleChunk),
+// in the database, gets a chunk of tasks from the queue (configurable by config.ScheduleChunk),
 // and calls the given scheduler backend. If the backend returns a valid offer, the
 // task is assigned to the offered node.
 func (s *Scheduler) Schedule(ctx context.Context) error {
@@ -95,7 +99,7 @@ func (s *Scheduler) Schedule(ctx context.Context) error {
 	}
 
 	for _, task := range s.DB.ReadQueue(s.Conf.ScheduleChunk) {
-		offer := s.Backend.GetOffer(task)
+		offer := s.GetOffer(task)
 		if offer != nil {
 			s.Log.Info("Assigning task to node",
 				"taskID", task.Id,
@@ -132,50 +136,38 @@ func (s *Scheduler) Schedule(ctx context.Context) error {
 	return nil
 }
 
-// Scale implements some common logic for allowing scheduler backends
-// to poll the database, looking for nodes that need to be started
-// and shutdown.
-func (s *Scheduler) Scale(ctx context.Context) error {
+// GetOffer returns an offer based on available funnel nodes.
+func (s *Scheduler) GetOffer(j *tes.Task) *Offer {
+	offers := []*Offer{}
 
-	b, isScaler := s.Backend.(Scaler)
-	// If the scheduler backend doesn't implement the Scaler interface,
-	// stop here.
-	if !isScaler {
-		return nil
+	// Get the nodes from the funnel server
+	nodes := []*pbs.Node{}
+	resp, err := s.DB.ListNodes(context.Background(), &pbs.ListNodesRequest{})
+	if err == nil {
+		nodes = resp.Nodes
 	}
 
-	resp, err := s.DB.ListNodes(ctx, &pbs.ListNodesRequest{})
-	if err != nil {
-		s.Log.Error("Failed ListNodes request. Recovering.", err)
-		return nil
-	}
-
-	for _, n := range resp.Nodes {
-
-		if !b.ShouldStartNode(n) {
+	for _, n := range nodes {
+		// Only schedule tasks to nodes that are "ALIVE"
+		if n.State != pbs.NodeState_ALIVE {
+			continue
+		}
+		// Filter out nodes that don't match the task request.
+		// Checks CPU, RAM, disk space, etc.
+		if !Match(n, j, DefaultPredicates) {
 			continue
 		}
 
-		serr := b.StartNode(n)
-		if serr != nil {
-			s.Log.Error("Error starting node", serr)
-			continue
-		}
-
-		// TODO should the Scaler instance handle this? Is it possible
-		//      that Initializing is the wrong state in some cases?
-		n.State = pbs.NodeState_INITIALIZING
-		_, err := s.DB.PutNode(ctx, n)
-
-		if err != nil {
-			// TODO an error here would likely result in multiple nodes
-			//      being started unintentionally. Not sure what the best
-			//      solution is. Possibly a list of failed nodes.
-			//
-			//      If the scheduler and database API live on the same server,
-			//      this *should* be very unlikely.
-			s.Log.Error("Error marking node as initializing", err)
-		}
+		sc := DefaultScores(n, j)
+		offer := NewOffer(n, j, sc)
+		offers = append(offers, offer)
 	}
-	return nil
+
+	// No matching nodes were found.
+	if len(offers) == 0 {
+		return nil
+	}
+
+	SortByAverageScore(offers)
+	return offers[0]
 }
