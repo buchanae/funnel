@@ -4,7 +4,8 @@ import (
 	"fmt"
 	"github.com/ghodss/yaml"
 	"github.com/ohsu-comp-bio/funnel/logger"
-	os_servers "github.com/rackspace/gophercloud/openstack/compute/v2/servers"
+	"github.com/ohsu-comp-bio/funnel/rpc"
+	"github.com/ohsu-comp-bio/funnel/server"
 	"io/ioutil"
 	"os"
 	"path"
@@ -14,7 +15,7 @@ import (
 
 // Config describes configuration for Funnel.
 type Config struct {
-	Server Server
+	Server server.Config
 	// the active compute backend
 	Backend  string
 	Backends struct {
@@ -31,21 +32,16 @@ type Config struct {
 		GridEngine struct {
 			Template string
 		}
-		OpenStack struct {
-			KeyPair    string
-			ConfigPath string
-			Server     os_servers.CreateOpts
-		}
-		GCE struct {
-			AccountFile string
-			Project     string
-			Zone        string
-			Weights     struct {
-				PreferQuickStartup float32
-			}
-			CacheTTL time.Duration
-		}
 		Batch AWSBatch
+	}
+	Database  string
+	Databases struct {
+		BoltDB struct {
+			Path string
+		}
+		DynamoDB DynamoDB
+		Elastic  Elastic
+		MongoDB  MongoDB
 	}
 	Scheduler Scheduler
 	Worker    Worker
@@ -54,13 +50,9 @@ type Config struct {
 // EnsureServerProperties ensures that the server address and server password
 // is consistent between the worker, node, and server.
 func EnsureServerProperties(conf Config) Config {
-	conf.Worker.EventWriters.RPC.ServerAddress = conf.Server.RPCAddress()
-	conf.Worker.TaskReaders.RPC.ServerAddress = conf.Server.RPCAddress()
-	conf.Scheduler.Node.ServerAddress = conf.Server.RPCAddress()
-
-	conf.Worker.EventWriters.RPC.ServerPassword = conf.Server.Password
-	conf.Worker.TaskReaders.RPC.ServerPassword = conf.Server.Password
-	conf.Scheduler.Node.ServerPassword = conf.Server.Password
+	conf.Worker.EventWriters.RPC = conf.Server.RPC
+	conf.Worker.TaskReaders.RPC = conf.Server.RPC
+	conf.Scheduler.Node.RPC = conf.Server.RPC
 	return conf
 }
 
@@ -72,7 +64,6 @@ func DefaultConfig() Config {
 	server := Server{
 		HostName:         "localhost",
 		HTTPPort:         "8000",
-		RPCPort:          "9090",
 		ServiceName:      "Funnel",
 		DisableHTTPCache: true,
 		Logger:           logger.DefaultConfig(),
@@ -88,8 +79,6 @@ func DefaultConfig() Config {
 			NodeInitTimeout: time.Minute * 5,
 			NodeDeadTimeout: time.Minute * 5,
 			Node: Node{
-				ServerAddress:  server.RPCAddress(),
-				ServerPassword: server.Password,
 				WorkDir:        workDir,
 				Timeout:        -1,
 				UpdateRate:     time.Second * 5,
@@ -112,11 +101,7 @@ func DefaultConfig() Config {
 		},
 	}
 
-	rpc := RPC{
-		ServerAddress:  server.RPCAddress(),
-		ServerPassword: server.Password,
-		Timeout:        time.Second,
-	}
+  rpc := rpc.DefaultConfig()
 	dynamo := DynamoDB{
 		TableBasename: "funnel",
 	}
@@ -129,11 +114,13 @@ func DefaultConfig() Config {
 		Database: "funnel",
 	}
 
-	c.Server.Database = "boltdb"
-	c.Server.Databases.BoltDB.Path = path.Join(workDir, "funnel.db")
-	c.Server.Databases.DynamoDB = dynamo
-	c.Server.Databases.Elastic = elastic
-	c.Server.Databases.MongoDB = mongo
+  c.Server.RPC = rpc
+
+	c.Database = "boltdb"
+	c.Databases.BoltDB.Path = path.Join(workDir, "funnel.db")
+	c.Databases.DynamoDB = dynamo
+	c.Databases.Elastic = elastic
+	c.Databases.MongoDB = mongo
 
 	c.Worker.TaskReader = "rpc"
 	c.Worker.TaskReaders.RPC = rpc
@@ -159,55 +146,10 @@ func DefaultConfig() Config {
 	c.Backends.PBS.Template = string(pbsTemplate)
 	c.Backends.GridEngine.Template = string(geTemplate)
 
-	c.Backends.GCE.CacheTTL = time.Minute
-	c.Backends.GCE.Weights.PreferQuickStartup = 1.0
-
 	c.Backends.Batch.JobDefinition = "funnel-job-def"
 	c.Backends.Batch.JobQueue = "funnel-job-queue"
 
 	return c
-}
-
-// Server describes configuration for the server.
-type Server struct {
-	ServiceName string
-	HostName    string
-	HTTPPort    string
-	RPCPort     string
-	Password    string
-	Database    string
-	Databases   struct {
-		BoltDB struct {
-			Path string
-		}
-		DynamoDB DynamoDB
-		Elastic  Elastic
-		MongoDB  MongoDB
-	}
-	DisableHTTPCache bool
-	Logger           logger.Config
-	TLS              struct {
-		// Path to cert file.
-		Cert string
-		// Path to key file.
-		Key string
-	}
-}
-
-// HTTPAddress returns the HTTP address based on HostName and HTTPPort
-func (c Server) HTTPAddress() string {
-	if c.HostName != "" && c.HTTPPort != "" {
-		return "http://" + c.HostName + ":" + c.HTTPPort
-	}
-	return ""
-}
-
-// RPCAddress returns the RPC address based on HostName and RPCPort
-func (c *Server) RPCAddress() string {
-	if c.HostName != "" && c.RPCPort != "" {
-		return c.HostName + ":" + c.RPCPort
-	}
-	return ""
 }
 
 // Scheduler contains funnel's basic scheduler configuration.
@@ -248,11 +190,8 @@ type Node struct {
 	// Timeout duration for PutNode() gRPC calls
 	UpdateTimeout time.Duration
 	Metadata      map[string]string
-	// RPC address of the Funnel server
-	ServerAddress string
-	// Password for basic auth. with the server APIs.
-	ServerPassword string
 	Logger         logger.Config
+  RPC   rpc.Config
 }
 
 // Worker contains worker configuration.
@@ -267,29 +206,19 @@ type Worker struct {
 	Logger      logger.Config
 	TaskReader  string
 	TaskReaders struct {
-		RPC      RPC
+		RPC      rpc.Config
 		DynamoDB DynamoDB
 		Elastic  Elastic
 		MongoDB  MongoDB
 	}
 	ActiveEventWriters []string
 	EventWriters       struct {
-		RPC      RPC
+		RPC      rpc.Config
 		DynamoDB DynamoDB
 		Elastic  Elastic
 		MongoDB  MongoDB
 		Kafka    Kafka
 	}
-}
-
-// RPC configures access to the Funnel RPC server.
-type RPC struct {
-	// RPC address of the Funnel server
-	ServerAddress string
-	// Password for basic auth. with the server APIs.
-	ServerPassword string
-	// Timeout duration for gRPC calls
-	Timeout time.Duration
 }
 
 // MongoDB configures access to an MongoDB database.

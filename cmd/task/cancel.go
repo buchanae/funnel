@@ -10,8 +10,7 @@ import (
 
 // Cancel runs the "task cancel" CLI command, which connects to the server,
 // calls CancelTask() on each ID, and writes output to the given writer.
-func Cancel(server string, ids []string, writer io.Writer) error {
-	cli := client.NewClient(server)
+func Cancel(cli *client.Client, ids []string, writer io.Writer) error {
 	res := []string{}
 
 	for _, taskID := range ids {
@@ -20,7 +19,7 @@ func Cancel(server string, ids []string, writer io.Writer) error {
 			return err
 		}
 		// CancelTaskResponse is an empty struct
-		out, err := cli.Marshaler.MarshalToString(resp)
+		out, err := tes.MarshalToString(resp)
 		if err != nil {
 			return err
 		}

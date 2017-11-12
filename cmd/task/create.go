@@ -13,8 +13,7 @@ import (
 // Create runs the "task create" CLI command, connecting to the server,
 // calling CreateTask, and writing output to the given writer.
 // Tasks are loaded from the "files" arg. "files" are file paths to JSON objects.
-func Create(server string, files []string, writer io.Writer) error {
-	cli := client.NewClient(server)
+func Create(cli *client.Client, files []string, writer io.Writer) error {
 	res := []string{}
 
 	for _, taskFile := range files {

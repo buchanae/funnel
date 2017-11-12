@@ -4,7 +4,9 @@ import (
 	"fmt"
 	"github.com/imdario/mergo"
 	"github.com/ohsu-comp-bio/funnel/config"
+	"github.com/ohsu-comp-bio/funnel/rpc"
 	"strings"
+  "strconv"
 )
 
 // MergeConfigFileWithFlags is a util used by server commands that use flags to set
@@ -32,16 +34,20 @@ func MergeConfigFileWithFlags(file string, flagConf config.Config) (config.Confi
 	return conf, nil
 }
 
-// ParseServerAddressFlag parses a gRPC server address and sets the relevant
+// ParseRPCAddress parses a gRPC address and sets the relevant
 // fields in the config
-func ParseServerAddressFlag(address string, conf config.Config) (config.Config, error) {
+func ParseRPCAddress(address string, conf rpc.Config) (rpc.Config, error) {
 	if address != "" {
 		parts := strings.Split(address, ":")
 		if len(parts) != 2 {
 			return conf, fmt.Errorf("error parsing server address")
 		}
-		conf.Server.HostName = parts[0]
-		conf.Server.RPCPort = parts[1]
+		conf.Host = parts[0]
+    p, err := strconv.Atoi(parts[1])
+    if err != nil {
+			return conf, fmt.Errorf("error parsing server address")
+    }
+		conf.Port = p
 	}
 	return conf, nil
 }

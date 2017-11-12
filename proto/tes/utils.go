@@ -3,9 +3,20 @@ package tes
 import (
 	"fmt"
 	"github.com/getlantern/deepcopy"
+  "github.com/golang/protobuf/jsonpb"
+  "github.com/golang/protobuf/proto"
 	"github.com/rs/xid"
 	"time"
 )
+
+var mar = jsonpb.Marshaler{
+  EmitDefaults: true,
+  Indent:       "   ",
+}
+
+func MarshalToString(m proto.Message) (string, error) {
+  return mar.MarshalToString(m)
+}
 
 // GenerateID generates a task ID string.
 // IDs are globally unique and sortable.

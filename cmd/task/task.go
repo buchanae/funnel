@@ -2,6 +2,7 @@ package task
 
 import (
 	"fmt"
+	"github.com/ohsu-comp-bio/funnel/client"
 	"github.com/spf13/cobra"
 	"io"
 	"os"
@@ -23,30 +24,45 @@ func newCommandHooks() (*cobra.Command, *hooks) {
 		Wait:   Wait,
 	}
 
-	defaultTesServer := "http://localhost:8000"
-	tesServer := defaultTesServer
+  conf := client.DefaultConfig()
+	tesServer := conf.Address()
+  var cli *client.Client
 
 	cmd := &cobra.Command{
 		Use:     "task",
 		Aliases: []string{"tasks"},
 		Short:   "Make API calls to a TES server.",
-		PersistentPreRun: func(cmd *cobra.Command, args []string) {
-			if tesServer == defaultTesServer {
+		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+
+      // If the flag already set the server address, don't look it up in the env.
+			if tesServer == conf.Address() {
 				if val := os.Getenv("FUNNEL_SERVER"); val != "" {
 					tesServer = val
 				}
 			}
+      if user, ok := os.LookupEnv("FUNNEL_SERVER_USER"); ok {
+        conf.User = user
+      }
+      if pass, ok := os.LookupEnv("FUNNEL_SERVER_PASSWORD"); ok {
+        conf.Password = pass
+      }
+
+      var err error
+      cli, err = client.NewClient(conf)
+      return err
 		},
 	}
+
 	f := cmd.PersistentFlags()
-	f.StringVarP(&tesServer, "server", "S", defaultTesServer, "")
+	f.StringVarP(&tesServer, "server", "S", conf.Address(), "")
+	f.StringVar(&conf.Cert, "cert", conf.Cert, "SSL cert file.")
 
 	create := &cobra.Command{
 		Use:   "create [task.json ...]",
 		Short: "Create one or more tasks to run on the server.",
 		Args:  cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return h.Create(tesServer, args, cmd.OutOrStdout())
+			return h.Create(cli, args, cmd.OutOrStdout())
 		},
 	}
 
@@ -61,7 +77,7 @@ func newCommandHooks() (*cobra.Command, *hooks) {
 		Use:   "list",
 		Short: "List all tasks.",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return h.List(tesServer, listView.val, pageToken, pageSize, listAll, cmd.OutOrStdout())
+			return h.List(cli, listView.val, pageToken, pageSize, listAll, cmd.OutOrStdout())
 		},
 	}
 
@@ -78,7 +94,7 @@ func newCommandHooks() (*cobra.Command, *hooks) {
 		Short: "Get one or more tasks by ID.",
 		Args:  cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return h.Get(tesServer, args, getView.val, cmd.OutOrStdout())
+			return h.Get(cli, args, getView.val, cmd.OutOrStdout())
 		},
 	}
 
@@ -91,7 +107,7 @@ func newCommandHooks() (*cobra.Command, *hooks) {
 		Short: "Cancel one or more tasks by ID.",
 		Args:  cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return h.Cancel(tesServer, args, cmd.OutOrStdout())
+			return h.Cancel(cli, args, cmd.OutOrStdout())
 		},
 	}
 
@@ -100,7 +116,7 @@ func newCommandHooks() (*cobra.Command, *hooks) {
 		Short: "Wait for one or more tasks to complete.\n",
 		Args:  cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return h.Wait(tesServer, args)
+			return h.Wait(cli, args)
 		},
 	}
 
@@ -109,11 +125,11 @@ func newCommandHooks() (*cobra.Command, *hooks) {
 }
 
 type hooks struct {
-	Create func(server string, messages []string, w io.Writer) error
-	Get    func(server string, ids []string, view string, w io.Writer) error
-	List   func(server, view, pageToken string, pageSize uint32, all bool, w io.Writer) error
-	Cancel func(server string, ids []string, w io.Writer) error
-	Wait   func(server string, ids []string) error
+	Create func(cli *client.Client, args []string, w io.Writer) error
+	Get    func(cli *client.Client, ids []string, view string, w io.Writer) error
+	List   func(cli *client.Client, view, pageToken string, pageSize uint32, all bool, w io.Writer) error
+	Cancel func(cli *client.Client, ids []string, w io.Writer) error
+	Wait   func(cli *client.Client, ids []string) error
 }
 
 type choiceVar struct {

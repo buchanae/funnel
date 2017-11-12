@@ -11,8 +11,7 @@ import (
 // Get runs the "task get" CLI command, which connects to the server,
 // calls GetTask for each ID, requesting the given task view, and writes
 // output to the given writer.
-func Get(server string, ids []string, taskView string, w io.Writer) error {
-	cli := client.NewClient(server)
+func Get(cli *client.Client, ids []string, taskView string, w io.Writer) error {
 	res := []string{}
 
 	view, ok := tes.TaskView_value[taskView]
@@ -28,7 +27,7 @@ func Get(server string, ids []string, taskView string, w io.Writer) error {
 		if err != nil {
 			return err
 		}
-		out, err := cli.Marshaler.MarshalToString(resp)
+		out, err := tes.MarshalToString(resp)
 		if err != nil {
 			return err
 		}

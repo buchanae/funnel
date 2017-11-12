@@ -12,8 +12,7 @@ import (
 // calls ListTasks() and requests the given task view. Results may be filtered
 // client-side using the "taskState" and "taskName" args. Output is written
 // to the given writer.
-func List(server, taskView, pageToken string, pageSize uint32, all bool, writer io.Writer) error {
-	cli := client.NewClient(server)
+func List(cli *client.Client, taskView, pageToken string, pageSize uint32, all bool, writer io.Writer) error {
 
 	view, ok := tes.TaskView_value[taskView]
 	if !ok {
@@ -41,7 +40,7 @@ func List(server, taskView, pageToken string, pageSize uint32, all bool, writer 
 		}
 	}
 
-	response, err := cli.Marshaler.MarshalToString(output)
+	response, err := tes.MarshalToString(output)
 	if err != nil {
 		return fmt.Errorf("marshaling error: %v", err)
 	}

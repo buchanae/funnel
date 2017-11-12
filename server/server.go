@@ -4,12 +4,12 @@ import (
 	"github.com/golang/gddo/httputil"
 	"github.com/grpc-ecosystem/go-grpc-middleware"
 	"github.com/grpc-ecosystem/grpc-gateway/runtime"
-	"github.com/ohsu-comp-bio/funnel/config"
 	"github.com/ohsu-comp-bio/funnel/events"
 	"github.com/ohsu-comp-bio/funnel/logger"
 	pbs "github.com/ohsu-comp-bio/funnel/proto/scheduler"
 	"github.com/ohsu-comp-bio/funnel/proto/tes"
 	"github.com/ohsu-comp-bio/funnel/webdash"
+	"github.com/ohsu-comp-bio/funnel/rpc"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
@@ -17,55 +17,26 @@ import (
 	"net/http"
 )
 
+type Config struct {
+	ServiceName string
+	HostName    string
+	HTTPPort    string
+	DisableHTTPCache bool
+	Logger           logger.Config
+  RPC rpc.Config
+  Cert string
+  Key string
+}
+
 // Server represents a Funnel server. The server handles
 // RPC traffic via gRPC, HTTP traffic for the TES API,
 // and also serves the web dashboard.
 type Server struct {
-	RPCAddress string
-	HTTPPort   string
-	Password   string
-	// Path to SSL cert file.
-	Cert string
-	// Path to SSL key file.
-	Key                    string
+  Conf Config
 	TaskServiceServer      tes.TaskServiceServer
 	EventServiceServer     events.EventServiceServer
 	SchedulerServiceServer pbs.SchedulerServiceServer
-	DisableHTTPCache       bool
-	DialOptions            []grpc.DialOption
 	Log                    *logger.Logger
-}
-
-// DefaultServer returns a new server instance.
-func DefaultServer(db Database, conf config.Server) *Server {
-	return &Server{
-		RPCAddress:             ":" + conf.RPCPort,
-		HTTPPort:               conf.HTTPPort,
-		Password:               conf.Password,
-		TaskServiceServer:      db,
-		EventServiceServer:     db,
-		SchedulerServiceServer: db,
-		DisableHTTPCache:       conf.DisableHTTPCache,
-	}
-}
-
-// Return a new interceptor function that logs all requests at the Debug level
-func newDebugInterceptor(log *logger.Logger) grpc.UnaryServerInterceptor {
-	// Return a function that is the interceptor.
-	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo,
-		handler grpc.UnaryHandler) (interface{}, error) {
-		log.Debug(
-			"received: "+info.FullMethod,
-			"request", req,
-		)
-		resp, err := handler(ctx, req)
-		log.Debug(
-			"responding: "+info.FullMethod,
-			"resp", resp,
-			"err", err,
-		)
-		return resp, err
-	}
 }
 
 // Serve starts the server and does not block. This will open TCP ports
@@ -74,51 +45,70 @@ func (s *Server) Serve(pctx context.Context) error {
 	ctx, cancel := context.WithCancel(pctx)
 	defer cancel()
 
-	// Open TCP connection for RPC
-	lis, err := net.Listen("tcp", s.RPCAddress)
-	if err != nil {
-		return err
-	}
-
 	srvOpts := []grpc.ServerOption{
 		grpc.UnaryInterceptor(
 			grpc_middleware.ChainUnaryServer(
 				// API auth check.
-				newAuthInterceptor(s.Password),
+				newAuthInterceptor(s.RPC.User, s.RPC.Password),
+				// Debug logs which log every request/response.
 				newDebugInterceptor(s.Log),
 			),
 		),
 	}
-	dialOpts := []grpc.DialOption{}
 
+	// SSL/TLS configuration
 	if s.Cert != "" {
 		creds, err := credentials.NewServerTLSFromFile(s.Cert, s.Key)
 		if err != nil {
 			return err
 		}
-		clicreds, err := credentials.NewClientTLSFromFile(s.Cert, "")
-		if err != nil {
-			return err
-		}
 		srvOpts = append(srvOpts, grpc.Creds(creds))
-		dialOpts = append(dialOpts, grpc.WithTransportCredentials(clicreds))
-	} else {
-		dialOpts = append(dialOpts, grpc.WithInsecure())
 	}
 
+	// Set up RPC APIs and HTTP gateways.
 	grpcServer := grpc.NewServer(srvOpts...)
-
-	// Set up HTTP proxy of gRPC API
-	mux := http.NewServeMux()
 	grpcMux := runtime.NewServeMux()
 	runtime.OtherErrorHandler = s.handleError
 
+	// RPC network connection
+	mux := http.NewServeMux()
+  s.RPC.Host = "localhost"
+	conn, err := rpc.NewConn(ctx, s.RPC)
+	if err != nil {
+		return err
+	}
+
+	// Register TES service
+	if s.TaskServiceServer != nil {
+		tes.RegisterTaskServiceServer(grpcServer, s.TaskServiceServer)
+		err := tes.RegisterTaskServiceHandler(ctx, grpcMux, conn)
+		if err != nil {
+			return err
+		}
+	}
+
+	// Register Events service
+	if s.EventServiceServer != nil {
+		events.RegisterEventServiceServer(grpcServer, s.EventServiceServer)
+	}
+
+	// Register Scheduler RPC service
+	if s.SchedulerServiceServer != nil {
+		pbs.RegisterSchedulerServiceServer(grpcServer, s.SchedulerServiceServer)
+		err := pbs.RegisterSchedulerServiceHandler(ctx, grpcMux, conn)
+		if err != nil {
+			return err
+		}
+	}
+
+	// Set up web dashboard routing.
 	dashmux := http.NewServeMux()
 	dashmux.Handle("/", webdash.RootHandler())
 	dashfs := webdash.FileServer()
 	mux.Handle("/favicon.ico", dashfs)
 	mux.Handle("/static/", http.StripPrefix("/static/", dashfs))
 
+	// Content negotiation for the API vs web dashboard.
 	mux.HandleFunc("/", func(resp http.ResponseWriter, req *http.Request) {
 
 		switch negotiate(req) {
@@ -136,36 +126,15 @@ func (s *Server) Serve(pctx context.Context) error {
 		}
 	})
 
-	// Register TES service
-	if s.TaskServiceServer != nil {
-		tes.RegisterTaskServiceServer(grpcServer, s.TaskServiceServer)
-		err := tes.RegisterTaskServiceHandlerFromEndpoint(
-			ctx, grpcMux, s.RPCAddress, dialOpts,
-		)
-		if err != nil {
-			return err
-		}
-	}
-
-	// Register Events service
-	if s.EventServiceServer != nil {
-		events.RegisterEventServiceServer(grpcServer, s.EventServiceServer)
-	}
-
-	// Register Scheduler RPC service
-	if s.SchedulerServiceServer != nil {
-		pbs.RegisterSchedulerServiceServer(grpcServer, s.SchedulerServiceServer)
-		err := pbs.RegisterSchedulerServiceHandlerFromEndpoint(
-			ctx, grpcMux, s.RPCAddress, dialOpts,
-		)
-		if err != nil {
-			return err
-		}
-	}
-
 	httpServer := &http.Server{
 		Addr:    ":" + s.HTTPPort,
 		Handler: mux,
+	}
+
+	// Open TCP connection for RPC
+	lis, err := net.Listen("tcp", s.RPC.Address())
+	if err != nil {
+		return err
 	}
 
 	var srverr error
@@ -184,7 +153,8 @@ func (s *Server) Serve(pctx context.Context) error {
 	}()
 
 	s.Log.Info("Server listening",
-		"httpPort", s.HTTPPort, "rpcAddress", s.RPCAddress,
+		"httpPort", s.HTTPPort,
+		"rpcAddress", s.RPC.Address,
 	)
 
 	<-ctx.Done()
@@ -222,5 +192,24 @@ func negotiate(req *http.Request) string {
 		return "html"
 	default:
 		return "json"
+	}
+}
+
+// Return a new interceptor function that logs all requests at the Debug level
+func newDebugInterceptor(log *logger.Logger) grpc.UnaryServerInterceptor {
+	// Return a function that is the interceptor.
+	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo,
+		handler grpc.UnaryHandler) (interface{}, error) {
+		log.Debug(
+			"received: "+info.FullMethod,
+			"request", req,
+		)
+		resp, err := handler(ctx, req)
+		log.Debug(
+			"responding: "+info.FullMethod,
+			"resp", resp,
+			"err", err,
+		)
+		return resp, err
 	}
 }

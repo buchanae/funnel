@@ -2,11 +2,8 @@ package worker
 
 import (
 	"context"
-	"github.com/ohsu-comp-bio/funnel/config"
 	"github.com/ohsu-comp-bio/funnel/proto/tes"
-	"github.com/ohsu-comp-bio/funnel/util"
-	"google.golang.org/grpc"
-	"time"
+	"github.com/ohsu-comp-bio/funnel/rpc"
 )
 
 // RPCTaskReader provides read access to tasks from the funnel server over gRPC.
@@ -16,17 +13,8 @@ type RPCTaskReader struct {
 }
 
 // NewRPCTaskReader returns a new RPC-based task reader.
-func NewRPCTaskReader(conf config.RPC, taskID string) (*RPCTaskReader, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
-	defer cancel()
-
-	conn, err := grpc.DialContext(
-		ctx,
-		conf.ServerAddress,
-		grpc.WithInsecure(),
-		grpc.WithBlock(),
-		util.PerRPCPassword(conf.ServerPassword),
-	)
+func NewRPCTaskReader(ctx context.Context, conf rpc.Config, taskID string) (*RPCTaskReader, error) {
+	conn, err := rpc.NewConn(ctx, conf)
 	if err != nil {
 		return nil, err
 	}

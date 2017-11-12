@@ -2,9 +2,7 @@ package events
 
 import (
 	"context"
-	"github.com/ohsu-comp-bio/funnel/config"
-	"github.com/ohsu-comp-bio/funnel/util"
-	"google.golang.org/grpc"
+	"github.com/ohsu-comp-bio/funnel/rpc"
 	"time"
 )
 
@@ -15,16 +13,8 @@ type RPCWriter struct {
 }
 
 // NewRPCWriter returns a new RPCWriter instance.
-func NewRPCWriter(conf config.RPC) (*RPCWriter, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
-	defer cancel()
-
-	conn, err := grpc.DialContext(ctx,
-		conf.ServerAddress,
-		grpc.WithInsecure(),
-		grpc.WithBlock(),
-		util.PerRPCPassword(conf.ServerPassword),
-	)
+func NewRPCWriter(ctx context.Context, conf rpc.Config) (*RPCWriter, error) {
+	conn, err := rpc.NewConn(ctx, conf)
 	if err != nil {
 		return nil, err
 	}

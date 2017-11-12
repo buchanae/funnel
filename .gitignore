@@ -12,3 +12,7 @@ bower_components
 /build
 /website/public
 storage/_test_download
+*.crt
+*.key
+*.pem
+*.cert

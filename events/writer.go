@@ -1,8 +1,12 @@
 package events
 
+import (
+	"golang.org/x/net/context"
+)
+
 // Writer provides write access to a task's events
 type Writer interface {
-	Write(*Event) error
+	WriteEvent(context.Context, *Event) error
 	Close() error
 }
 
@@ -14,9 +18,9 @@ func MultiWriter(ws ...Writer) Writer {
 }
 
 // Write writes an event to all the writers.
-func (mw multiwriter) Write(ev *Event) error {
+func (mw multiwriter) WriteEvent(ctx context.Context, ev *Event) error {
 	for _, w := range mw {
-		err := w.Write(ev)
+		err := w.WriteEvent(ctx, ev)
 		if err != nil {
 			return err
 		}

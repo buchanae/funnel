@@ -1,4 +1,4 @@
-package manual
+package scheduler
 
 import (
 	"github.com/ohsu-comp-bio/funnel/compute/scheduler"

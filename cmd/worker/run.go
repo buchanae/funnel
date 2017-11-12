@@ -45,7 +45,7 @@ func NewDefaultWorker(conf config.Worker, taskID string, log *logger.Logger) (wo
 
 	switch conf.TaskReader {
 	case "rpc":
-		reader, err = worker.NewRPCTaskReader(conf.TaskReaders.RPC, taskID)
+		reader, err = worker.NewRPCTaskReader(context.TODO(), conf.TaskReaders.RPC, taskID)
 	case "dynamodb":
 		db, err = dynamodb.NewDynamoDB(conf.TaskReaders.DynamoDB)
 	case "elastic":
@@ -69,7 +69,7 @@ func NewDefaultWorker(conf config.Worker, taskID string, log *logger.Logger) (wo
 		case "log":
 			writer = &events.Logger{Log: log}
 		case "rpc":
-			writer, err = events.NewRPCWriter(conf.EventWriters.RPC)
+			writer, err = events.NewRPCWriter(context.TODO(), conf.EventWriters.RPC)
 		case "dynamodb":
 			writer, err = dynamodb.NewDynamoDB(conf.EventWriters.DynamoDB)
 		case "elastic":

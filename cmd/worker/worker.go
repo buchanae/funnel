@@ -39,7 +39,7 @@ func newCommandHooks() (*cobra.Command, *hooks) {
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 			var err error
 
-			flagConf, err = util.ParseServerAddressFlag(serverAddress, flagConf)
+			flagConf.Server.RPC, err = util.ParseRPCAddress(serverAddress, flagConf.Server.RPC)
 			if err != nil {
 				return fmt.Errorf("error parsing the server address: %v", err)
 			}

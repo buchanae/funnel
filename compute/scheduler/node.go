@@ -6,6 +6,8 @@ import (
 	"github.com/ohsu-comp-bio/funnel/logger"
 	pbs "github.com/ohsu-comp-bio/funnel/proto/scheduler"
 	"github.com/ohsu-comp-bio/funnel/util"
+	"github.com/ohsu-comp-bio/funnel/rpc"
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"time"
@@ -16,10 +18,11 @@ func NewNode(conf config.Config, log *logger.Logger, factory WorkerFactory) (*No
 	log = log.WithFields("nodeID", conf.Scheduler.Node.ID)
 	log.Debug("NewNode", "config", conf)
 
-	cli, err := NewClient(conf.Scheduler)
+	conn, err := rpc.NewConn(context.TODO(), conf.Scheduler.Node.RPC)
 	if err != nil {
 		return nil, err
 	}
+	client := pbs.NewSchedulerServiceClient(conn)
 
 	err = util.EnsureDir(conf.Scheduler.Node.WorkDir)
 	if err != nil {
@@ -41,7 +44,8 @@ func NewNode(conf config.Config, log *logger.Logger, factory WorkerFactory) (*No
 	return &Node{
 		conf:       conf.Scheduler.Node,
 		workerConf: workerConf,
-		client:     cli,
+    conn: conn,
+		client:     client,
 		log:        log,
 		resources:  res,
 		newWorker:  factory,
@@ -61,7 +65,8 @@ func NewNoopNode(conf config.Config, log *logger.Logger) (*Node, error) {
 type Node struct {
 	conf       config.Node
 	workerConf config.Worker
-	client     Client
+	conn *grpc.ClientConn
+	client     pbs.SchedulerServiceClient
 	log        *logger.Logger
 	resources  pbs.Resources
 	newWorker  WorkerFactory
@@ -96,7 +101,7 @@ func (n *Node) Run(ctx context.Context) {
 			defer cancel()
 			n.state = pbs.NodeState_GONE
 			n.sync(stopCtx)
-			n.client.Close()
+			n.conn.Close()
 
 			// The workers get 10 seconds to finish up.
 			n.workers.Wait(time.Second * 10)

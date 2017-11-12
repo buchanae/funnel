@@ -195,7 +195,6 @@ gen-mocks:
 	@mockery -dir compute/scheduler -name Client -print > compute/scheduler/mocks/Client_mock.go
 	@mockery -dir compute/gce -name Client -print > compute/gce/mocks/Client_mock.go
 	@mockery -dir compute/gce -name Wrapper -print > compute/gce/mocks/Wrapper_mock.go
-	@mockery -dir server -name Database -print > server/mocks/Database_mock.go
 
 # Bundle example task messages into Go code.
 bundle-examples:
@@ -239,5 +238,9 @@ test-kafka: start-kafka
 # Remove build/development files.
 clean:
 	@rm -rf ./bin ./pkg ./test_tmp ./build ./buildtools
+
+gen-certs:
+	@openssl genrsa -out server.key 2048
+	@openssl req -new -x509 -sha256 -key server.key -out server.crt -days 3650
 
 .PHONY: proto website docker webdash
