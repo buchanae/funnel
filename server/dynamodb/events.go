@@ -1,30 +1,23 @@
 package dynamodb
 
 import (
+	"context"
 	"fmt"
 	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/service/dynamodb"
 	"github.com/aws/aws-sdk-go/service/dynamodb/dynamodbattribute"
 	"github.com/ohsu-comp-bio/funnel/events"
 	"github.com/ohsu-comp-bio/funnel/proto/tes"
-	"golang.org/x/net/context"
 	"strconv"
 )
 
-// CreateEvent creates an event for the server to handle.
-func (db *DynamoDB) CreateEvent(ctx context.Context, req *events.Event) (*events.CreateEventResponse, error) {
-	err := db.WriteContext(ctx, req)
-	return &events.CreateEventResponse{}, err
-}
+// WriteEvent creates an event for the server to handle.
+func (db *DynamoDB) WriteEvent(ctx context.Context, e *events.Event) error {
+	if e.Type == events.Type_TASK_CREATED {
+		return db.createTask(ctx, e.GetTask())
+	}
 
-// Write writes task events to the database, updating the task record they
-// are related to. System log events are ignored.
-func (db *DynamoDB) Write(req *events.Event) error {
-	return db.WriteContext(context.Background(), req)
-}
-
-// WriteContext is Write, but with context.
-func (db *DynamoDB) WriteContext(ctx context.Context, e *events.Event) error {
 	item := &dynamodb.UpdateItemInput{
 		TableName: aws.String(db.taskTable),
 		Key: map[string]*dynamodb.AttributeValue{
@@ -57,7 +50,7 @@ func (db *DynamoDB) WriteContext(ctx context.Context, e *events.Event) error {
 	}
 	_, err := db.client.UpdateItem(attemptItem)
 	if err != nil {
-		return err
+		return checkErrNotFound(err)
 	}
 
 	// create the log structure for the executor if it doesnt already exist
@@ -80,10 +73,11 @@ func (db *DynamoDB) WriteContext(ctx context.Context, e *events.Event) error {
 	}
 	_, err = db.client.UpdateItem(indexItem)
 	if err != nil {
-		return err
+		return checkErrNotFound(err)
 	}
 
 	switch e.Type {
+
 	case events.Type_TASK_STATE:
 		item.ExpressionAttributeNames = map[string]*string{
 			"#state": aws.String("state"),
@@ -282,10 +276,14 @@ func (db *DynamoDB) WriteContext(ctx context.Context, e *events.Event) error {
 	}
 
 	_, err = db.client.UpdateItemWithContext(ctx, item)
-	return err
+	return checkErrNotFound(err)
 }
 
-// Close closes the writer.
-func (db *DynamoDB) Close() error {
-	return nil
+func checkErrNotFound(err error) error {
+	if e, ok := err.(awserr.RequestFailure); ok {
+		if e.StatusCode() == 400 {
+			return tes.ErrNotFound
+		}
+	}
+	return err
 }
