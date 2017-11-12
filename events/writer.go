@@ -1,32 +1,32 @@
 package events
 
+import (
+	"context"
+)
+
 // Writer provides write access to a task's events
 type Writer interface {
-	Write(*Event) error
-	Close() error
+	WriteEvent(context.Context, *Event) error
 }
 
-type multiwriter []Writer
+type MultiWriter []Writer
 
 // MultiWriter writes events to all the given writers.
-func MultiWriter(ws ...Writer) Writer {
-	return multiwriter(ws)
+func NewMultiWriter(ws ...Writer) MultiWriter {
+	return MultiWriter(ws)
+}
+
+func (mw *MultiWriter) Add(ws ...Writer) {
+	*mw = append(*mw, ws...)
 }
 
 // Write writes an event to all the writers.
-func (mw multiwriter) Write(ev *Event) error {
-	for _, w := range mw {
-		err := w.Write(ev)
+func (mw *MultiWriter) WriteEvent(ctx context.Context, ev *Event) error {
+	for _, w := range *mw {
+		err := w.WriteEvent(ctx, ev)
 		if err != nil {
 			return err
 		}
-	}
-	return nil
-}
-
-func (mw multiwriter) Close() error {
-	for _, w := range mw {
-		w.Close()
 	}
 	return nil
 }

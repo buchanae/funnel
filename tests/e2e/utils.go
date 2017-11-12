@@ -73,7 +73,6 @@ type Funnel struct {
 	DB        server.Database
 	Server    *server.Server
 	Scheduler *scheduler.Scheduler
-	SDB       scheduler.Database
 	Srv       *servercmd.Server
 
 	// Internal
@@ -149,8 +148,6 @@ func NewFunnel(conf config.Config) *Funnel {
 		Docker:     dcli,
 		Conf:       conf,
 		StorageDir: conf.Worker.Storage.Local.AllowedDirs[0],
-		DB:         srv.DB,
-		SDB:        srv.SDB,
 		Server:     srv.Server,
 		Srv:        srv,
 		Scheduler:  srv.Scheduler,
@@ -510,7 +507,7 @@ func (f *Funnel) ListNodes() []*pbs.Node {
 
 // AddNode starts an in-memory node routine.
 func (f *Funnel) AddNode(conf config.Config) {
-	n, err := scheduler.NewNode(conf, logger.NewLogger("e2e-node", conf.Scheduler.Node.Logger), workercmd.NewDefaultWorker)
+	n, err := scheduler.NewNode(conf, logger.NewLogger("e2e-node", conf.Scheduler.Node.Logger), workercmd.Run)
 	if err != nil {
 		panic(err)
 	}

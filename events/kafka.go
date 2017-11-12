@@ -1,6 +1,7 @@
 package events
 
 import (
+	"context"
 	"github.com/Shopify/sarama"
 	"github.com/ohsu-comp-bio/funnel/config"
 )
@@ -30,7 +31,7 @@ func (k *KafkaWriter) Close() error {
 
 // Write writes the event. Events may be sent in batches in the background by the
 // Kafka client library. Currently stdout, stderr, and system log events are dropped.
-func (k *KafkaWriter) Write(ev *Event) error {
+func (k *KafkaWriter) WriteEvent(ctx context.Context, ev *Event) error {
 
 	switch ev.Type {
 	case Type_EXECUTOR_STDOUT, Type_EXECUTOR_STDERR, Type_SYSTEM_LOG:
@@ -80,7 +81,7 @@ func NewKafkaReader(conf config.Kafka, w Writer) (*KafkaReader, error) {
 				// TODO
 				continue
 			}
-			w.Write(ev)
+			w.WriteEvent(context.Background(), ev)
 		}
 	}()
 	return &KafkaReader{conf, con, p}, nil

@@ -61,12 +61,10 @@ func TestDefaultWorkerRun(t *testing.T) {
     --sh 'echo hello world'
   `)
 
-	w, err := workerCmd.NewDefaultWorker(c.Worker, id, log)
+	err := workerCmd.Run(context.Background(), c.Worker, id, log)
 	if err != nil {
 		t.Fatal("unexpected error", err)
 	}
-
-	w.Run(context.Background())
 	f.Wait(id)
 
 	task, err := f.HTTP.GetTask(context.Background(), &tes.GetTaskRequest{
@@ -108,9 +106,6 @@ func (e *eventCounter) Write(ev *events.Event) error {
 	case events.Type_EXECUTOR_STDERR:
 		e.stderr++
 	}
-	return nil
-}
-func (e *eventCounter) Close() error {
 	return nil
 }
 

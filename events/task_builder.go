@@ -1,6 +1,7 @@
 package events
 
 import (
+	"context"
 	"github.com/ohsu-comp-bio/funnel/proto/tes"
 )
 
@@ -10,7 +11,7 @@ type TaskBuilder struct {
 }
 
 // Write updates the Task object.
-func (tb TaskBuilder) Write(ev *Event) error {
+func (tb TaskBuilder) WriteEvent(ctx context.Context, ev *Event) error {
 	t := tb.Task
 	t.Id = ev.Id
 	attempt := int(ev.Attempt)
@@ -52,10 +53,5 @@ func (tb TaskBuilder) Write(ev *Event) error {
 		t.GetExecLog(attempt, index).Stderr += ev.GetStderr()
 	}
 
-	return nil
-}
-
-// Close is a noop.
-func (tb TaskBuilder) Close() error {
 	return nil
 }

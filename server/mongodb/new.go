@@ -2,7 +2,6 @@ package mongodb
 
 import (
 	"fmt"
-	"github.com/ohsu-comp-bio/funnel/compute"
 	"github.com/ohsu-comp-bio/funnel/config"
 	"golang.org/x/net/context"
 	mgo "gopkg.in/mgo.v2"
@@ -10,11 +9,10 @@ import (
 
 // MongoDB provides an MongoDB database server backend.
 type MongoDB struct {
-	sess    *mgo.Session
-	backend compute.Backend
-	conf    config.MongoDB
-	tasks   *mgo.Collection
-	nodes   *mgo.Collection
+	sess  *mgo.Session
+	conf  config.MongoDB
+	tasks *mgo.Collection
+	nodes *mgo.Collection
 	// events  *mgo.Collection
 }
 
@@ -94,13 +92,6 @@ func (db *MongoDB) Init(ctx context.Context) error {
 	}
 
 	return nil
-}
-
-// WithComputeBackend configures the MongoDB instance to use the given
-// compute.Backend. The compute backend is responsible for dispatching tasks to
-// schedulers / compute resources with its Submit method.
-func (db *MongoDB) WithComputeBackend(backend compute.Backend) {
-	db.backend = backend
 }
 
 // Close closes the database session.

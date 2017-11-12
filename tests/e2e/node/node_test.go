@@ -28,7 +28,7 @@ func TestNodeGoneOnCanceledContext(t *testing.T) {
 	srv.StartServer()
 
 	srv.Conf.Scheduler.Node.ID = "test-node-gone-on-cancel"
-	n, err := scheduler.NewNode(srv.Conf, nil, workercmd.NewDefaultWorker)
+	n, err := scheduler.NewNode(srv.Conf, nil, workercmd.Run)
 	if err != nil {
 		t.Fatal("failed to start node")
 	}

@@ -1,11 +1,15 @@
 package tes
 
 import (
+	"errors"
 	"fmt"
 	"github.com/getlantern/deepcopy"
 	"github.com/rs/xid"
 	"time"
 )
+
+// ErrNotFound is returned when a task is not found.
+var ErrNotFound = errors.New("task not found")
 
 // GenerateID generates a task ID string.
 // IDs are globally unique and sortable.

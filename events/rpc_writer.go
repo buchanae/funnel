@@ -35,14 +35,9 @@ func NewRPCWriter(conf config.RPC) (*RPCWriter, error) {
 
 // Write writes the event. The RPC call may timeout, based on the timeout given
 // by the configuration in NewRPCWriter.
-func (r *RPCWriter) Write(e *Event) error {
-	ctx, cleanup := context.WithTimeout(context.Background(), r.updateTimeout)
-	_, err := r.client.CreateEvent(ctx, e)
+func (r *RPCWriter) WriteEvent(ctx context.Context, e *Event) error {
+	ctx, cleanup := context.WithTimeout(ctx, r.updateTimeout)
+	_, err := r.client.WriteEvent(ctx, e)
 	cleanup()
 	return err
-}
-
-// Close closes the writer.
-func (r *RPCWriter) Close() error {
-	return nil
 }

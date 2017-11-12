@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	workerCmd "github.com/ohsu-comp-bio/funnel/cmd/worker"
-	"github.com/ohsu-comp-bio/funnel/compute"
 	"github.com/ohsu-comp-bio/funnel/compute/batch"
 	"github.com/ohsu-comp-bio/funnel/compute/gridengine"
 	"github.com/ohsu-comp-bio/funnel/compute/htcondor"
@@ -14,7 +13,10 @@ import (
 	"github.com/ohsu-comp-bio/funnel/compute/scheduler"
 	"github.com/ohsu-comp-bio/funnel/compute/slurm"
 	"github.com/ohsu-comp-bio/funnel/config"
+	"github.com/ohsu-comp-bio/funnel/events"
 	"github.com/ohsu-comp-bio/funnel/logger"
+	schedProto "github.com/ohsu-comp-bio/funnel/proto/scheduler"
+	"github.com/ohsu-comp-bio/funnel/proto/tes"
 	"github.com/ohsu-comp-bio/funnel/server"
 	"github.com/ohsu-comp-bio/funnel/server/boltdb"
 	"github.com/ohsu-comp-bio/funnel/server/dynamodb"
@@ -37,80 +39,118 @@ func Run(ctx context.Context, conf config.Config) error {
 type Server struct {
 	*server.Server
 	*scheduler.Scheduler
-	DB  server.Database
-	SDB scheduler.Database
 }
 
 // NewServer returns a new Funnel server + scheduler based on the given config.
 func NewServer(conf config.Config, log *logger.Logger) (*Server, error) {
 	log.Debug("NewServer", "config", conf)
 
-	var backend compute.Backend
-	var db server.Database
-	var sdb scheduler.Database
+	var reader tes.ReadOnlyServer
+	var nodes schedProto.SchedulerServiceServer
 	var sched *scheduler.Scheduler
-	var err error
+	var queue scheduler.TaskQueue
+	writers := events.MultiWriter{}
 
 	switch strings.ToLower(conf.Server.Database) {
 	case "boltdb":
-		db, err = boltdb.NewBoltDB(conf)
-	case "dynamodb":
-		db, err = dynamodb.NewDynamoDB(conf.Server.Databases.DynamoDB)
-	case "elastic":
-		db, err = elastic.NewTES(conf.Server.Databases.Elastic)
-	case "mongodb":
-		db, err = mongodb.NewMongoDB(conf.Server.Databases.MongoDB)
-	}
-	if err != nil {
-		return nil, fmt.Errorf("error occurred while connecting to or creating the database: %v", err)
-	}
+		b, err := boltdb.NewBoltDB(conf)
+		if err != nil {
+			return nil, dberr(err)
+		}
+		reader = b
+		nodes = b
+		queue = b
+		writers.Add(b)
 
-	err = db.Init(context.Background())
-	if err != nil {
-		return nil, fmt.Errorf("error occurred while connecting to or creating the database: %v", err)
+	case "dynamodb":
+		d, err := dynamodb.NewDynamoDB(conf.Server.Databases.DynamoDB)
+		if err != nil {
+			return nil, dberr(err)
+		}
+		reader = d
+		writers.Add(d)
+
+	case "elastic":
+		e, err := elastic.NewElastic(conf.Server.Databases.Elastic)
+		if err != nil {
+			return nil, dberr(err)
+		}
+		reader = e
+		nodes = e
+		queue = e
+		writers.Add(e)
+
+	case "mongodb":
+		m, err := mongodb.NewMongoDB(conf.Server.Databases.MongoDB)
+		if err != nil {
+			return nil, dberr(err)
+		}
+		reader = m
+		nodes = m
+		queue = m
+		writers.Add(m)
 	}
 
 	switch strings.ToLower(conf.Backend) {
 	case "manual":
-		var ok bool
-		sdb, ok = db.(scheduler.Database)
-		if !ok {
-			return nil, fmt.Errorf("database doesn't satisfy the scheduler interface")
+		if nodes == nil {
+			return nil, fmt.Errorf(
+				"cannot enable manual compute backend, database %s does not implement "+
+					"the scheduler service", conf.Server.Database)
 		}
-
+		if queue == nil {
+			return nil, fmt.Errorf(
+				"cannot enable manual compute backend, database %s does not implement "+
+					"a task queue", conf.Server.Database)
+		}
 		sched = &scheduler.Scheduler{
-			Log:  log.Sub("scheduler"),
-			DB:   sdb,
-			Conf: conf.Scheduler,
+			Conf:  conf.Scheduler,
+			Log:   log.Sub("scheduler"),
+			Nodes: nodes,
+			Queue: queue,
+			Event: &writers,
 		}
-		backend = sched
 
 	case "aws-batch":
-		backend, err = batch.NewBackend(conf.Backends.Batch)
+		b, err := batch.NewBackend(conf.Backends.Batch)
 		if err != nil {
 			return nil, err
 		}
+		writers.Add(b)
+
 	case "gridengine":
-		backend = gridengine.NewBackend(conf)
+		writers.Add(gridengine.NewBackend(conf))
 	case "htcondor":
-		backend = htcondor.NewBackend(conf)
+		writers.Add(htcondor.NewBackend(conf))
 	case "local":
-		backend = local.NewBackend(conf, log.Sub("local"), workerCmd.NewDefaultWorker)
+		writers.Add(local.NewBackend(conf, log.Sub("local"), workerCmd.Run))
 	case "noop":
-		backend = noop.NewBackend(conf)
+		writers.Add(noop.NewBackend(conf))
 	case "pbs":
-		backend = pbs.NewBackend(conf)
+		writers.Add(pbs.NewBackend(conf))
 	case "slurm":
-		backend = slurm.NewBackend(conf)
+		writers.Add(slurm.NewBackend(conf))
 	default:
 		return nil, fmt.Errorf("unknown backend: '%s'", conf.Backend)
 	}
 
-	db.WithComputeBackend(backend)
-	srv := server.DefaultServer(db, conf.Server)
-	srv.Log = log
-
-	return &Server{srv, sched, db, sdb}, nil
+	return &Server{
+		Server: &server.Server{
+			RPCAddress:       ":" + conf.Server.RPCPort,
+			HTTPPort:         conf.Server.HTTPPort,
+			Password:         conf.Server.Password,
+			DisableHTTPCache: conf.Server.DisableHTTPCache,
+			Log:              log,
+			Tasks: &server.TaskService{
+				Name:  conf.Server.ServiceName,
+				Event: &writers,
+				Read:  reader,
+			},
+			Events: &events.Service{&writers},
+			Nodes:  nodes,
+		},
+		Scheduler: sched,
+	}, nil
 }
 
 // Run runs a default Funnel server.
@@ -134,4 +174,8 @@ func (s *Server) Run(ctx context.Context) error {
 	// Block until done.
 	// Server and scheduler must be stopped via the context.
 	return <-errch
+}
+
+func dberr(err error) error {
+	return fmt.Errorf("error occurred while connecting to or creating the database: %v", err)
 }

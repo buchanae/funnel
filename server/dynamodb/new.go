@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/dynamodb"
-	"github.com/ohsu-comp-bio/funnel/compute"
 	"github.com/ohsu-comp-bio/funnel/config"
 	"github.com/ohsu-comp-bio/funnel/util"
 	"golang.org/x/net/context"
@@ -14,7 +13,6 @@ import (
 // Data is stored/retrieved from the Amazon DynamoDB NoSQL database.
 type DynamoDB struct {
 	client         *dynamodb.DynamoDB
-	backend        compute.Backend
 	partitionKey   string
 	partitionValue string
 	taskTable      string
@@ -50,11 +48,4 @@ func NewDynamoDB(conf config.DynamoDB) (*DynamoDB, error) {
 // a Debug level log is produced.
 func (db *DynamoDB) Init(ctx context.Context) error {
 	return db.createTables()
-}
-
-// WithComputeBackend configures the DynamoDB instance to use the given
-// compute.Backend. The compute backend is responsible for dispatching tasks to
-// schedulers / compute resources with its Submit method.
-func (db *DynamoDB) WithComputeBackend(backend compute.Backend) {
-	db.backend = backend
 }

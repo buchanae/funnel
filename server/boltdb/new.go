@@ -2,7 +2,6 @@ package boltdb
 
 import (
 	"github.com/boltdb/bolt"
-	"github.com/ohsu-comp-bio/funnel/compute"
 	"github.com/ohsu-comp-bio/funnel/config"
 	"github.com/ohsu-comp-bio/funnel/util"
 	"golang.org/x/net/context"
@@ -42,9 +41,8 @@ var Nodes = []byte("nodes")
 // BoltDB provides handlers for gRPC endpoints.
 // Data is stored/retrieved from the BoltDB key-value database.
 type BoltDB struct {
-	db      *bolt.DB
-	conf    config.Config
-	backend compute.Backend
+	db   *bolt.DB
+	conf config.Config
 }
 
 // NewBoltDB returns a new instance of BoltDB, accessing the database at
@@ -58,7 +56,7 @@ func NewBoltDB(conf config.Config) (*BoltDB, error) {
 		return nil, err
 	}
 
-	return &BoltDB{db: db, conf: conf, backend: nil}, nil
+	return &BoltDB{db: db, conf: conf}, nil
 }
 
 // Init creates the required BoltDB buckets
@@ -91,11 +89,4 @@ func (taskBolt *BoltDB) Init(ctx context.Context) error {
 		}
 		return nil
 	})
-}
-
-// WithComputeBackend configures the BoltDB instance to use the given
-// compute.Backend. The compute backend is responsible for dispatching tasks to
-// schedulers / compute resources with its Submit method.
-func (taskBolt *BoltDB) WithComputeBackend(backend compute.Backend) {
-	taskBolt.backend = backend
 }
