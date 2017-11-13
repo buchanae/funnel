@@ -63,13 +63,13 @@ func NewServer(conf config.Config, log *logger.Logger) (*Server, error) {
 		queue = b
 		writers.Add(b)
 
-  case "datastore":
-    d, err := datastore.NewDatastore(conf.Server.Databases.Datastore)
+	case "datastore":
+		d, err := datastore.NewDatastore(conf.Server.Databases.Datastore)
 		if err != nil {
 			return nil, dberr(err)
 		}
-    reader = d
-    writers.Add(d)
+		reader = d
+		writers.Add(d)
 
 	case "dynamodb":
 		d, err := dynamodb.NewDynamoDB(conf.Server.Databases.DynamoDB)
@@ -139,8 +139,8 @@ func NewServer(conf config.Config, log *logger.Logger) (*Server, error) {
 		writers.Add(pbs.NewBackend(conf))
 	case "slurm":
 		writers.Add(slurm.NewBackend(conf))
-  case "", "none":
-    // Do nothing.
+	case "", "none":
+		// Do nothing.
 	default:
 		return nil, fmt.Errorf("unknown backend: '%s'", conf.Backend)
 	}

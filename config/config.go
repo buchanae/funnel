@@ -162,10 +162,10 @@ type Server struct {
 		BoltDB struct {
 			Path string
 		}
-		DynamoDB DynamoDB
-		Elastic  Elastic
-		MongoDB  MongoDB
-    Datastore Datastore
+		DynamoDB  DynamoDB
+		Elastic   Elastic
+		MongoDB   MongoDB
+		Datastore Datastore
 	}
 	DisableHTTPCache bool
 	Logger           logger.Config
@@ -292,8 +292,8 @@ type Kafka struct {
 }
 
 type Datastore struct {
-  Project string
-  Prefix string
+	Project string
+	Prefix  string
 }
 
 // AWSCredentials describes the configuration for creating AWS Session instances
