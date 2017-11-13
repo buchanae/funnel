@@ -165,6 +165,7 @@ type Server struct {
 		DynamoDB DynamoDB
 		Elastic  Elastic
 		MongoDB  MongoDB
+    Datastore Datastore
 	}
 	DisableHTTPCache bool
 	Logger           logger.Config
@@ -288,6 +289,11 @@ type Elastic struct {
 type Kafka struct {
 	Servers []string
 	Topic   string
+}
+
+type Datastore struct {
+  Project string
+  Prefix string
 }
 
 // AWSCredentials describes the configuration for creating AWS Session instances
