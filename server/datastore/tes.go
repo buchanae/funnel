@@ -10,35 +10,27 @@ import (
 func (d *Datastore) GetTask(ctx context.Context, req *tes.GetTaskRequest) (*tes.Task, error) {
 
 	key := datastore.NameKey("Task", req.Id, nil)
-	q := datastore.NewQuery("TaskChunk").Ancestor(key)
-  task := &tes.Task{}
+	t := &tes.Task{}
 
-	for it := d.client.Run(ctx, q); ; {
+	c := &task{}
+	err := d.client.Get(ctx, key, c)
+	if err != nil {
+		return nil, err
+	}
+	toTask(c, t)
 
-		c := &chunk{}
-		_, err := it.Next(c)
-		if err == iterator.Done {
-			break
-		}
-		if err != nil {
-			return nil, err
-		}
-    toTask(c, task)
-  }
-
-	return task, nil
+	return t, nil
 }
 
 // ListTasks returns a list of taskIDs
 func (d *Datastore) ListTasks(ctx context.Context, req *tes.ListTasksRequest) (*tes.ListTasksResponse, error) {
 
 	resp := &tes.ListTasksResponse{}
-  /*
-	q := datastore.NewQuery("TaskChunk")
+	q := datastore.NewQuery("Task")
 
 	for it := d.client.Run(ctx, q); ; {
 
-		c := &chunk{}
+		c := &task{}
 		_, err := it.Next(c)
 		if err == iterator.Done {
 			break
@@ -46,8 +38,9 @@ func (d *Datastore) ListTasks(ctx context.Context, req *tes.ListTasksRequest) (*
 		if err != nil {
 			return nil, err
 		}
-		resp.Tasks = append(resp.Tasks, toTask(c))
+		t := &tes.Task{}
+		toTask(c, t)
+		resp.Tasks = append(resp.Tasks, t)
 	}
-  */
 	return resp, nil
 }
