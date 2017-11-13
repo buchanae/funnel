@@ -15,7 +15,7 @@ It also allows us to be very selective about what gets saved and indexed.
 
 type task struct {
 	Id, CreationTime  string
-	Name, Description string     `datastore:",noindex"`
+	Name, Description string     `datastore:",noindex,omitempty"`
 	Resources         *resources `datastore:",noindex,omitempty"`
 	Executors         []executor `datastore:",noindex"`
 	Inputs            []param    `datastore:",noindex,omitempty"`
@@ -35,10 +35,10 @@ type param struct {
 }
 
 type resources struct {
-	CpuCores      int64    `datastore:",omitempty"`
-	RamGb, DiskGb float64  `datastore:",omitempty"`
-	Preemptible   bool     `datastore:",omitempty"`
-	Zones         []string `datastore:",omitempty"`
+	CpuCores      int64    `datastore:",noindex,omitempty"`
+	RamGb, DiskGb float64  `datastore:",noindex,omitempty"`
+	Preemptible   bool     `datastore:",noindex,omitempty"`
+	Zones         []string `datastore:",noindex,omitempty"`
 }
 
 func fromTask(t *tes.Task) *task {
