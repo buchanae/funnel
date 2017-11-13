@@ -11,17 +11,12 @@ import (
 /*
 Entity group and key structure:
 
-"Task" is an empty, root entity. This is necessary for getting
-strongly consistent reads.
-
-"TaskBasic" holds the basic task view. It has an index
+"Task" holds the basic task view. It has an index
 on ID and State, which allows projecting the minimal view.
 
 "TaskFull" holds multiple types of documents making up the full view:
 stdout, stderr, system logs, and input content. It does not hold the
-base task document.
-
-Both "TaskBasic" and "TaskFull" have ancestor links to "Task".
+base task document. It has an ancestor links to "Task".
 */
 
 func stdoutKey(e *events.Event) *datastore.Key {
@@ -42,19 +37,15 @@ func syslogKey(e *events.Event) *datastore.Key {
 	return datastore.NameKey("TaskFull", k, taskKey)
 }
 
-func basicKey(id string) *datastore.Key {
-	taskKey := datastore.NameKey("Task", id, nil)
-	return datastore.NameKey("TaskBasic", "basic", taskKey)
-}
-
 func (d *Datastore) WriteEvent(ctx context.Context, e *events.Event) error {
+	taskKey := datastore.NameKey("Task", e.Id, nil)
 	// TODO
 	//contentKey := datastore.NameKey("TaskChunk", "0-content", taskKey)
 
 	switch e.Type {
 
 	case events.Type_TASK_CREATED:
-		_, err := d.client.Put(ctx, basicKey(e.Id), fromTask(e.GetTask()))
+		_, err := d.client.Put(ctx, taskKey, fromTask(e.GetTask()))
 		if err != nil {
 			return err
 		}
@@ -78,7 +69,7 @@ func (d *Datastore) WriteEvent(ctx context.Context, e *events.Event) error {
 	default:
 		_, err := d.client.RunInTransaction(ctx, func(tx *datastore.Transaction) error {
 			res := &task{}
-			err := tx.Get(basicKey(e.Id), res)
+			err := tx.Get(taskKey, res)
 			if err != nil {
 				return err
 			}
@@ -91,7 +82,7 @@ func (d *Datastore) WriteEvent(ctx context.Context, e *events.Event) error {
 				return err
 			}
 
-			_, err = tx.Put(basicKey(e.Id), fromTask(task))
+			_, err = tx.Put(taskKey, fromTask(task))
 			return err
 		})
 		return err

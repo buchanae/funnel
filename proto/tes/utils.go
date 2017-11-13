@@ -11,6 +11,12 @@ import (
 // ErrNotFound is returned when a task is not found.
 var ErrNotFound = errors.New("task not found")
 
+const (
+  Minimal = TaskView_MINIMAL
+  Basic = TaskView_BASIC
+  Full = TaskView_FULL
+)
+
 // GenerateID generates a task ID string.
 // IDs are globally unique and sortable.
 func GenerateID() string {

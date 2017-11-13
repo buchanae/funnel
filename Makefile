@@ -232,6 +232,14 @@ test-kafka: start-kafka
 	@go test ./tests/e2e/kafka
 	@docker rm -f funnel-kafka > /dev/null || echo
 
+start-datastore:
+	@gcloud beta emulators datastore start &
+
+stop-datastore:
+	@curl -XPOST localhost:8081/shutdown
+
+test-datastore: start-datastore
+	
 # Remove build/development files.
 clean:
 	@rm -rf ./bin ./pkg ./test_tmp ./build ./buildtools
