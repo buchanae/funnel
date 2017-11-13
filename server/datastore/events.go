@@ -11,31 +11,66 @@ import (
 /*
 Entity group and key structure:
 
-Task                             initial Task message as given to CreateTask)
-- state                          state string
-- content-INDEX                  input content
-- task-log-ATTEMPT               tes.TaskLog without ExecutorLogs
-- executor-log-ATTEMPT-INDEX:    tes.ExecutorLog without stdout/err
-- executor-stdout-ATTEMPT-INDEX  executor stdout string
-- executor-stderr-ATTEMPT-INDEX  executor stderr string
+The "Task" kind is an empty, root Entity which allows grouping the
+chunks of data which make up the various task views, and allows ListTasks
+to easily query and sort the task IDs for pagination.
+
+The "TaskChunk" kind makes up all of the bits of task data:
+base task, state, basic logs, input content, stdout, and stderr.
+TaskChunk entities have an ancestor ID pointing to the Task entity.
+These chunks have the following design for keys:
+
+  0-content                        input content
+  0-executor-stdout-ATTEMPT-INDEX  executor stdout string
+  0-executor-stderr-ATTEMPT-INDEX  executor stderr string
+  0-syslog-TIMESTAMP               system logs
+  1-base                           the base task, as given to CreateTask
+  1-event-TIMESTAMP                task/exec log events
+  2-state                          state string
+
+The "0-", "1-", and "2-" prefixes are used to filter task data in order
+to provide efficient read/write access to different task views:
+
+  "0-" is full view
+  "1-" is basic view
+  "2-" is minimal view
+
+This is because Datastore allows filtering entity keys with ">" (greater than)
+only in ascending order. A GetTask or ListTasks call may filter entity keys
+this way to get back all chunks in one query. For example, getting the basic view
+means filtering for IDs greater than "0-" (the full view).
+
+Datastore requires that the entire Entity be sent in each call to Put,
+so stdout, stderr, and state are stored separately to allow for easy, efficient updates.
 */
+func stdoutKey(e *events.Event, task *datastore.Key) *datastore.Key {
+	k := fmt.Sprintf("0-executor-stdout-%d-%d", e.Attempt, e.Index)
+	return datastore.NameKey("TaskChunk", k, task)
+}
+
+func stderrKey(e *events.Event, task *datastore.Key) *datastore.Key {
+	k := fmt.Sprintf("0-executor-stderr-%d-%d", e.Attempt, e.Index)
+	return datastore.NameKey("TaskChunk", k, task)
+}
+
+func logEventKey(e *events.Event, task *datastore.Key) *datastore.Key {
+	k := fmt.Sprintf("1-event-%d", e.Timestamp)
+	return datastore.NameKey("TaskChunk", k, task)
+}
 
 func (d *Datastore) WriteEvent(ctx context.Context, e *events.Event) error {
 	taskKey := datastore.NameKey("Task", e.Id, nil)
-	stateKey := datastore.NameKey("TaskState", "state", taskKey)
-	attemptName := fmt.Sprintf("task-log-%d", e.Attempt)
-	attemptKey := datastore.NameKey("TaskLog", attemptName, taskKey)
-	execIndexName := fmt.Sprintf("executor-log-%d-%d", e.Attempt, e.Index)
-	execIndexKey := datastore.NameKey("ExecutorLog", execIndexName, taskKey)
-	execStdoutName := fmt.Sprintf("executor-stdout-%d-%d", e.Attempt, e.Index)
-	execStdoutKey := datastore.NameKey("ExecutorStdout", execStdoutName, taskKey)
-	execStderrName := fmt.Sprintf("executor-stderr-%d-%d", e.Attempt, e.Index)
-	execStderrKey := datastore.NameKey("ExecutorStderr", execStderrName, taskKey)
+	//contentKey := datastore.NameKey("TaskChunk", "0-content", taskKey)
+	baseKey := datastore.NameKey("TaskChunk", "1-base", taskKey)
+	stateKey := datastore.NameKey("TaskChunk", "2-state", taskKey)
 
 	switch e.Type {
+  case events.Type_SYSTEM_LOG:
+    // TODO
+
 	case events.Type_TASK_CREATED:
 		task := e.GetTask()
-		_, err := d.client.Put(ctx, taskKey, fromTask(task))
+		_, err := d.client.Put(ctx, baseKey, fromTask(task))
 		if err != nil {
 			return err
 		}
@@ -48,70 +83,24 @@ func (d *Datastore) WriteEvent(ctx context.Context, e *events.Event) error {
 		return err
 
 	case events.Type_TASK_START_TIME, events.Type_TASK_END_TIME,
-		events.Type_TASK_OUTPUTS, events.Type_TASK_METADATA:
-		return d.updateTaskLog(ctx, attemptKey, e)
-
-	case events.Type_EXECUTOR_START_TIME, events.Type_EXECUTOR_END_TIME,
+		events.Type_TASK_OUTPUTS, events.Type_TASK_METADATA,
+	  events.Type_EXECUTOR_START_TIME, events.Type_EXECUTOR_END_TIME,
 		events.Type_EXECUTOR_EXIT_CODE:
-		return d.updateExecLog(ctx, execIndexKey, e)
+
+    _, err := d.client.RunInTransaction(ctx, func(tx *datastore.Transaction) error {
+      key := logEventKey(e, taskKey)
+      _, err := d.client.Put(ctx, key, fromLogEvent(e))
+      return err
+    })
+    return err
 
 	case events.Type_EXECUTOR_STDOUT:
-		_, err := d.client.Put(ctx, execStdoutKey, fromStdout(e.GetStdout()))
+		_, err := d.client.Put(ctx, stdoutKey(e, taskKey), fromStdout(e.GetStdout()))
 		return err
 
 	case events.Type_EXECUTOR_STDERR:
-		_, err := d.client.Put(ctx, execStderrKey, fromStderr(e.GetStderr()))
+		_, err := d.client.Put(ctx, stderrKey(e, taskKey), fromStderr(e.GetStderr()))
 		return err
 	}
 	return nil
-}
-
-func (d *Datastore) updateTaskLog(ctx context.Context, key *datastore.Key, e *events.Event) error {
-	_, err := d.client.RunInTransaction(ctx, func(tx *datastore.Transaction) error {
-
-		l := &tes.TaskLog{}
-		err := d.client.Get(ctx, key, l)
-		if err != nil {
-			return err
-		}
-
-		switch e.Type {
-		case events.Type_TASK_START_TIME:
-			l.StartTime = e.GetStartTime()
-		case events.Type_TASK_END_TIME:
-			l.EndTime = e.GetEndTime()
-		case events.Type_TASK_OUTPUTS:
-			l.Outputs = e.GetOutputs().Value
-		case events.Type_TASK_METADATA:
-			l.Metadata = e.GetMetadata().Value
-		}
-
-		_, err = d.client.Put(ctx, key, fromTaskLog(l))
-		return err
-	})
-	return err
-}
-
-func (d *Datastore) updateExecLog(ctx context.Context, key *datastore.Key, e *events.Event) error {
-	_, err := d.client.RunInTransaction(ctx, func(tx *datastore.Transaction) error {
-
-		l := &tes.ExecutorLog{}
-		err := d.client.Get(ctx, key, l)
-		if err != nil {
-			return err
-		}
-
-		switch e.Type {
-		case events.Type_EXECUTOR_START_TIME:
-			l.StartTime = e.GetStartTime()
-		case events.Type_EXECUTOR_END_TIME:
-			l.EndTime = e.GetEndTime()
-		case events.Type_EXECUTOR_EXIT_CODE:
-			l.ExitCode = e.GetExitCode()
-		}
-
-		_, err = d.client.Put(ctx, key, fromExecLog(l))
-		return err
-	})
-	return err
 }
