@@ -163,9 +163,10 @@ type Server struct {
 		BoltDB struct {
 			Path string
 		}
-		DynamoDB DynamoDB
-		Elastic  Elastic
-		MongoDB  MongoDB
+		DynamoDB  DynamoDB
+		Elastic   Elastic
+		MongoDB   MongoDB
+		Datastore Datastore
 	}
 	DisableHTTPCache bool
 	Logger           logger.Config
@@ -306,6 +307,10 @@ type AWSConfig struct {
 	MaxRetries int
 	// If both the key and secret are empty AWS credentials will be read from
 	// the environment.
+}
+
+// AWSCredentials describes the configuration for creating AWS Session instances
+type AWSCredentials struct {
 	Key    string
 	Secret string
 }
@@ -317,6 +322,11 @@ type AWSBatch struct {
 	// JobQueue can be either a name or the Amazon Resource Name (ARN).
 	JobQueue string
 	AWS      AWSConfig
+}
+
+type Datastore struct {
+	Project string
+	Prefix  string
 }
 
 // DynamoDB describes the configuration for Amazon DynamoDB backed processes

@@ -19,6 +19,7 @@ import (
 	"github.com/ohsu-comp-bio/funnel/proto/tes"
 	"github.com/ohsu-comp-bio/funnel/server"
 	"github.com/ohsu-comp-bio/funnel/server/boltdb"
+	"github.com/ohsu-comp-bio/funnel/server/datastore"
 	"github.com/ohsu-comp-bio/funnel/server/dynamodb"
 	"github.com/ohsu-comp-bio/funnel/server/elastic"
 	"github.com/ohsu-comp-bio/funnel/server/mongodb"
@@ -62,6 +63,14 @@ func NewServer(conf config.Config, log *logger.Logger) (*Server, error) {
 		nodes = b
 		queue = b
 		writers.Append(b)
+
+	case "datastore":
+		d, err := datastore.NewDatastore(conf.Server.Databases.Datastore)
+		if err != nil {
+			return nil, dberr(err)
+		}
+		reader = d
+		writers.Add(d)
 
 	case "dynamodb":
 		d, err := dynamodb.NewDynamoDB(conf.Server.Databases.DynamoDB)
@@ -132,6 +141,8 @@ func NewServer(conf config.Config, log *logger.Logger) (*Server, error) {
 		writers.Append(pbs.NewBackend(conf))
 	case "slurm":
 		writers.Append(slurm.NewBackend(conf))
+	case "", "none":
+		// Do nothing.
 	default:
 		return nil, fmt.Errorf("unknown backend: '%s'", conf.Backend)
 	}
