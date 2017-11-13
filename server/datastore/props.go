@@ -15,8 +15,10 @@ It also allows us to be very selective about what gets saved and indexed.
 */
 
 type event struct {
-	*events.Event  `datastore:",noindex"`
-	Attempt, Index int
+	Type                       int32
+	Attempt, Index             int    `datastore:",noindex,omitempty"`
+	Stdout, Stderr, Msg, Level string `datastore:",noindex,omitempty"`
+	Fields                     []kv   `datastore:",noindex,omitempty"`
 }
 
 type task struct {
@@ -33,6 +35,13 @@ type task struct {
 	RamGb, DiskGb float64  `datastore:",noindex,omitempty"`
 	Preemptible   bool     `datastore:",noindex,omitempty"`
 	Zones         []string `datastore:",noindex,omitempty"`
+
+	TaskLogs []tasklog `datastore:",noindex,omitempty"`
+}
+
+type tasklog struct {
+	*tes.TaskLog
+	Metadata []kv `datastore:",noindex,omitempty"`
 }
 
 type executor struct {
@@ -92,6 +101,12 @@ func fromTask(t *tes.Task) *task {
 			Type:        int32(i.Type),
 		})
 	}
+	for _, i := range t.Logs {
+		z.TaskLogs = append(z.TaskLogs, tasklog{
+			TaskLog:  i,
+			Metadata: fromMap(i.Metadata),
+		})
+	}
 	return z
 }
 
@@ -139,14 +154,31 @@ func toTask(c *task, z *tes.Task) {
 			Type:        tes.FileType(i.Type),
 		})
 	}
+	for _, i := range c.TaskLogs {
+		tl := i.TaskLog
+		tl.Metadata = toMap(i.Metadata)
+		z.Logs = append(z.Logs, tl)
+	}
 }
 
 func fromEvent(e *events.Event) *event {
-	return &event{
-		Event:   e,
+	z := &event{
+		Type:    int32(e.Type),
 		Attempt: int(e.Attempt),
 		Index:   int(e.Index),
 	}
+	switch e.Type {
+	case events.Type_SYSTEM_LOG:
+		l := e.GetSystemLog()
+		z.Msg = l.Msg
+		z.Level = l.Level
+		z.Fields = fromMap(l.Fields)
+	case events.Type_EXECUTOR_STDOUT:
+		z.Stdout = e.GetStdout()
+	case events.Type_EXECUTOR_STDERR:
+		z.Stdout = e.GetStderr()
+	}
+	return z
 }
 
 type kv struct {

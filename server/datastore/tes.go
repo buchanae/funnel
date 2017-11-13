@@ -9,11 +9,10 @@ import (
 
 func (d *Datastore) GetTask(ctx context.Context, req *tes.GetTaskRequest) (*tes.Task, error) {
 
-	key := datastore.NameKey("Task", req.Id, nil)
 	t := &tes.Task{}
 
 	c := &task{}
-	err := d.client.Get(ctx, key, c)
+	err := d.client.Get(ctx, basicKey(req.Id), c)
 	if err != nil {
 		return nil, err
 	}
@@ -26,7 +25,7 @@ func (d *Datastore) GetTask(ctx context.Context, req *tes.GetTaskRequest) (*tes.
 func (d *Datastore) ListTasks(ctx context.Context, req *tes.ListTasksRequest) (*tes.ListTasksResponse, error) {
 
 	resp := &tes.ListTasksResponse{}
-	q := datastore.NewQuery("Task")
+	q := datastore.NewQuery("TaskBasic")
 
 	for it := d.client.Run(ctx, q); ; {
 

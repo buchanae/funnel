@@ -11,58 +11,74 @@ import (
 /*
 Entity group and key structure:
 
-"Task" holds the basic task view. It has an index
+"Task" is an empty, root entity. This is necessary for getting
+strongly consistent reads.
+
+"TaskBasic" holds the basic task view. It has an index
 on ID and State, which allows projecting the minimal view.
 
 "TaskFull" holds multiple types of documents making up the full view:
-stdout, stderr, system logs, and input content. It has an ancestor
-link to "Task". It does not hold the base task document.
+stdout, stderr, system logs, and input content. It does not hold the
+base task document.
+
+Both "TaskBasic" and "TaskFull" have ancestor links to "Task".
 */
 
-func stdoutKey(e *events.Event, task *datastore.Key) *datastore.Key {
+func stdoutKey(e *events.Event) *datastore.Key {
+	taskKey := datastore.NameKey("Task", e.Id, nil)
 	k := fmt.Sprintf("stdout-%d-%d", e.Attempt, e.Index)
-	return datastore.NameKey("TaskFull", k, task)
+	return datastore.NameKey("TaskFull", k, taskKey)
 }
 
-func stderrKey(e *events.Event, task *datastore.Key) *datastore.Key {
+func stderrKey(e *events.Event) *datastore.Key {
+	taskKey := datastore.NameKey("Task", e.Id, nil)
 	k := fmt.Sprintf("stderr-%d-%d", e.Attempt, e.Index)
-	return datastore.NameKey("TaskFull", k, task)
+	return datastore.NameKey("TaskFull", k, taskKey)
 }
 
-func syslogKey(e *events.Event, task *datastore.Key) *datastore.Key {
+func syslogKey(e *events.Event) *datastore.Key {
+	taskKey := datastore.NameKey("Task", e.Id, nil)
 	k := fmt.Sprintf("syslog-%s", e.Timestamp)
-	return datastore.NameKey("TaskFull", k, task)
+	return datastore.NameKey("TaskFull", k, taskKey)
+}
+
+func basicKey(id string) *datastore.Key {
+	taskKey := datastore.NameKey("Task", id, nil)
+	return datastore.NameKey("TaskBasic", "basic", taskKey)
 }
 
 func (d *Datastore) WriteEvent(ctx context.Context, e *events.Event) error {
-	taskKey := datastore.NameKey("Task", e.Id, nil)
 	// TODO
 	//contentKey := datastore.NameKey("TaskChunk", "0-content", taskKey)
 
 	switch e.Type {
 
 	case events.Type_TASK_CREATED:
-		_, err := d.client.Put(ctx, taskKey, fromTask(e.GetTask()))
+		_, err := d.client.Put(ctx, basicKey(e.Id), fromTask(e.GetTask()))
 		if err != nil {
 			return err
 		}
 
 	case events.Type_SYSTEM_LOG:
-		_, err := d.client.Put(ctx, syslogKey(e, taskKey), fromEvent(e))
+		// Just in case there's a system log that isn't task-specific.
+		if e.Id == "" {
+			return nil
+		}
+		_, err := d.client.Put(ctx, syslogKey(e), fromEvent(e))
 		return err
 
 	case events.Type_EXECUTOR_STDOUT:
-		_, err := d.client.Put(ctx, stdoutKey(e, taskKey), fromEvent(e))
+		_, err := d.client.Put(ctx, stdoutKey(e), fromEvent(e))
 		return err
 
 	case events.Type_EXECUTOR_STDERR:
-		_, err := d.client.Put(ctx, stderrKey(e, taskKey), fromEvent(e))
+		_, err := d.client.Put(ctx, stderrKey(e), fromEvent(e))
 		return err
 
 	default:
 		_, err := d.client.RunInTransaction(ctx, func(tx *datastore.Transaction) error {
 			res := &task{}
-			err := d.client.Get(ctx, taskKey, res)
+			err := tx.Get(basicKey(e.Id), res)
 			if err != nil {
 				return err
 			}
@@ -70,9 +86,12 @@ func (d *Datastore) WriteEvent(ctx context.Context, e *events.Event) error {
 			task := &tes.Task{}
 			toTask(res, task)
 			tb := events.TaskBuilder{task}
-			tb.WriteEvent(context.Background(), e)
+			err = tb.WriteEvent(context.Background(), e)
+			if err != nil {
+				return err
+			}
 
-			_, err = d.client.Put(ctx, taskKey, fromTask(task))
+			_, err = tx.Put(basicKey(e.Id), fromTask(task))
 			return err
 		})
 		return err
