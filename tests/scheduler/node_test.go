@@ -22,6 +22,7 @@ func TestNodeGoneOnCanceledContext(t *testing.T) {
 	conf.Scheduler.NodePingTimeout = time.Second * 10
 	conf.Scheduler.NodeDeadTimeout = time.Second * 10
 
+	bg := context.Background()
 	log := logger.NewLogger("node", tests.LogConfig())
 	tests.SetLogOutput(log, t)
 	srv := tests.NewFunnel(conf)
@@ -32,14 +33,14 @@ func TestNodeGoneOnCanceledContext(t *testing.T) {
 	if err != nil {
 		t.Fatal("failed to start node")
 	}
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(bg)
 	defer cancel()
 	go n.Run(ctx)
 
 	srv.Scheduler.CheckNodes()
 	time.Sleep(conf.Scheduler.Node.UpdateRate * 2)
 
-	resp, err := srv.Scheduler.Nodes.ListNodes(ctx, &pbs.ListNodesRequest{})
+	resp, err := srv.Scheduler.Nodes.ListNodes(bg, &pbs.ListNodesRequest{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -53,7 +54,7 @@ func TestNodeGoneOnCanceledContext(t *testing.T) {
 	time.Sleep(conf.Scheduler.Node.UpdateRate * 2)
 	srv.Scheduler.CheckNodes()
 
-	resp, err = srv.Scheduler.Nodes.ListNodes(ctx, &pbs.ListNodesRequest{})
+	resp, err = srv.Scheduler.Nodes.ListNodes(bg, &pbs.ListNodesRequest{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -88,7 +89,7 @@ func TestManualBackend(t *testing.T) {
 	go n.Run(ctx)
 
 	tasks := []string{}
-	for i := 0; i < 1; i++ {
+	for i := 0; i < 10; i++ {
 		id := srv.Run(`
       --sh 'echo hello world'
     `)

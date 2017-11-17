@@ -20,7 +20,7 @@ type Elastic struct {
 }
 
 // NewElastic returns a new Elastic instance.
-func NewElastic(conf config.Elastic) (*Elastic, error) {
+func NewElastic(ctx context.Context, conf config.Elastic) (*Elastic, error) {
 	client, err := elastic.NewClient(
 		elastic.SetURL(conf.URL),
 		elastic.SetSniff(false),
@@ -33,12 +33,16 @@ func NewElastic(conf config.Elastic) (*Elastic, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Elastic{
+	es := &Elastic{
 		client,
 		conf,
 		conf.IndexPrefix + "-tasks",
 		conf.IndexPrefix + "-nodes",
-	}, nil
+	}
+	if err := es.init(ctx); err != nil {
+		return nil, err
+	}
+	return es, nil
 }
 
 // Close closes the database client.
@@ -62,8 +66,8 @@ func (es *Elastic) initIndex(ctx context.Context, name, body string) error {
 	return nil
 }
 
-// Init initializing the Elasticsearch indices.
-func (es *Elastic) Init(ctx context.Context) error {
+// init initializing the Elasticsearch indices.
+func (es *Elastic) init(ctx context.Context) error {
 	taskMappings := `{
     "mappings": {
       "task":{

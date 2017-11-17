@@ -39,7 +39,7 @@ func Run(ctx context.Context, conf config.Worker, taskID string, log *logger.Log
 	case "dynamodb":
 		db, err = dynamodb.NewDynamoDB(conf.TaskReaders.DynamoDB)
 	case "elastic":
-		db, err = elastic.NewElastic(conf.EventWriters.Elastic)
+		db, err = elastic.NewElastic(ctx, conf.EventWriters.Elastic)
 	case "mongodb":
 		db, err = mongodb.NewMongoDB(conf.TaskReaders.MongoDB)
 	default:
@@ -63,7 +63,7 @@ func Run(ctx context.Context, conf config.Worker, taskID string, log *logger.Log
 		case "dynamodb":
 			writer, err = dynamodb.NewDynamoDB(conf.EventWriters.DynamoDB)
 		case "elastic":
-			writer, err = elastic.NewElastic(conf.EventWriters.Elastic)
+			writer, err = elastic.NewElastic(ctx, conf.EventWriters.Elastic)
 		case "mongodb":
 			writer, err = mongodb.NewMongoDB(conf.EventWriters.MongoDB)
 		case "kafka":

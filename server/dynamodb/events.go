@@ -281,7 +281,7 @@ func (db *DynamoDB) WriteEvent(ctx context.Context, e *events.Event) error {
 
 func checkErrNotFound(err error) error {
 	if e, ok := err.(awserr.RequestFailure); ok {
-		if e.StatusCode() == 400 {
+		if e.Code() == "ValidationException" {
 			return tes.ErrNotFound
 		}
 	}

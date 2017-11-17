@@ -72,11 +72,8 @@ func NewServer(conf config.Config, log *logger.Logger) (*Server, error) {
 		writers.Append(d)
 
 	case "elastic":
-		e, err := elastic.NewElastic(conf.Server.Databases.Elastic)
+		e, err := elastic.NewElastic(ctx, conf.Server.Databases.Elastic)
 		if err != nil {
-			return nil, dberr(err)
-		}
-		if err := e.Init(ctx); err != nil {
 			return nil, dberr(err)
 		}
 		reader = e
