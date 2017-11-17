@@ -29,38 +29,9 @@ type Server struct {
 	Log              *logger.Logger
 }
 
-// Return a new interceptor function that logs all requests at the Debug level
-func newDebugInterceptor(log *logger.Logger) grpc.UnaryServerInterceptor {
-	// Return a function that is the interceptor.
-	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo,
-		handler grpc.UnaryHandler) (interface{}, error) {
-		log.Debug(
-			"received: "+info.FullMethod,
-			"request", req,
-		)
-		resp, err := handler(ctx, req)
-		log.Debug(
-			"responding: "+info.FullMethod,
-			"resp", resp,
-			"err", err,
-		)
-		return resp, err
-	}
-}
+func (s *Server) Handler(ctx context.Context) (http.Handler, error) {
 
-// Serve starts the server and does not block. This will open TCP ports
-// for both RPC and HTTP.
-func (s *Server) Serve(pctx context.Context) error {
-	ctx, cancel := context.WithCancel(pctx)
-	defer cancel()
-
-	// Open TCP connection for RPC
-	lis, err := net.Listen("tcp", s.RPCAddress)
-	if err != nil {
-		return err
-	}
-
-	grpcServer := grpc.NewServer(
+  grpcServerOpts := []grpc.ServerOption{
 		grpc.UnaryInterceptor(
 			grpc_middleware.ChainUnaryServer(
 				// API auth check.
@@ -68,7 +39,7 @@ func (s *Server) Serve(pctx context.Context) error {
 				newDebugInterceptor(s.Log),
 			),
 		),
-	)
+  }
 
 	dialOpts := []grpc.DialOption{
 		grpc.WithInsecure(),
@@ -103,6 +74,8 @@ func (s *Server) Serve(pctx context.Context) error {
 		}
 	})
 
+  grpcServer := grpc.NewServer(grpcServerOpts...)
+
 	// Register TES service
 	if s.Tasks != nil {
 		tes.RegisterTaskServiceServer(grpcServer, s.Tasks)
@@ -110,7 +83,7 @@ func (s *Server) Serve(pctx context.Context) error {
 			ctx, grpcMux, s.RPCAddress, dialOpts,
 		)
 		if err != nil {
-			return err
+			return nil, err
 		}
 	}
 
@@ -126,21 +99,40 @@ func (s *Server) Serve(pctx context.Context) error {
 			ctx, grpcMux, s.RPCAddress, dialOpts,
 		)
 		if err != nil {
-			return err
+			return nil, err
 		}
 	}
 
-	httpServer := &http.Server{
-		Addr:    ":" + s.HTTPPort,
-		Handler: mux,
+	// Open TCP connection for RPC
+	lis, err := net.Listen("tcp", s.RPCAddress)
+	if err != nil {
+		return nil, err
 	}
 
-	var srverr error
 	go func() {
-		srverr = grpcServer.Serve(lis)
-		cancel()
+    err := grpcServer.Serve(lis)
+    panic(err)
 	}()
 
+  return mux, nil
+}
+
+// Serve starts the server and does not block. This will open TCP ports
+// for both RPC and HTTP.
+func (s *Server) Serve(pctx context.Context) error {
+	ctx, cancel := context.WithCancel(pctx)
+	defer cancel()
+
+  h, err := s.Handler(ctx)
+  if err != nil {
+    return err
+  }
+	httpServer := &http.Server{
+		Addr:    ":" + s.HTTPPort,
+		Handler: h,
+	}
+
+  var srverr error
 	go func() {
 		srverr = httpServer.ListenAndServe()
 		cancel()
@@ -151,7 +143,7 @@ func (s *Server) Serve(pctx context.Context) error {
 	)
 
 	<-ctx.Done()
-	grpcServer.GracefulStop()
+	//grpcServer.GracefulStop()
 	httpServer.Shutdown(context.TODO())
 
 	return srverr
@@ -185,5 +177,24 @@ func negotiate(req *http.Request) string {
 		return "html"
 	default:
 		return "json"
+	}
+}
+
+// Return a new interceptor function that logs all requests at the Debug level
+func newDebugInterceptor(log *logger.Logger) grpc.UnaryServerInterceptor {
+	// Return a function that is the interceptor.
+	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo,
+		handler grpc.UnaryHandler) (interface{}, error) {
+		log.Debug(
+			"received: "+info.FullMethod,
+			"request", req,
+		)
+		resp, err := handler(ctx, req)
+		log.Debug(
+			"responding: "+info.FullMethod,
+			"resp", resp,
+			"err", err,
+		)
+		return resp, err
 	}
 }

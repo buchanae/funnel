@@ -11,7 +11,7 @@ import (
 	"github.com/ohsu-comp-bio/funnel/server/elastic"
 	"github.com/ohsu-comp-bio/funnel/server/mongodb"
 	"github.com/ohsu-comp-bio/funnel/storage"
-	"github.com/ohsu-comp-bio/funnel/util"
+	"github.com/ohsu-comp-bio/funnel/util/fsutil"
 	"github.com/ohsu-comp-bio/funnel/worker"
 	"path"
 )
@@ -28,7 +28,7 @@ func Run(ctx context.Context, conf config.Worker, taskID string, log *logger.Log
 	// Map files into this baseDir
 	baseDir := path.Join(conf.WorkDir, taskID)
 
-	err = util.EnsureDir(baseDir)
+	err = fsutil.EnsureDir(baseDir)
 	if err != nil {
 		return fmt.Errorf("failed to create worker baseDir: %v", err)
 	}

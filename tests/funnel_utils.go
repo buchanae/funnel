@@ -14,7 +14,7 @@ import (
 	"github.com/ohsu-comp-bio/funnel/logger"
 	"github.com/ohsu-comp-bio/funnel/proto/tes"
 	"github.com/ohsu-comp-bio/funnel/server"
-	"github.com/ohsu-comp-bio/funnel/util"
+	"github.com/ohsu-comp-bio/funnel/util/dockerutil"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	"io/ioutil"
@@ -63,7 +63,7 @@ type Funnel struct {
 func NewFunnel(conf config.Config) *Funnel {
 	conf = config.EnsureServerProperties(conf)
 
-	dcli, derr := util.NewDockerClient()
+	dcli, derr := dockerutil.NewDockerClient()
 	if derr != nil {
 		panic(derr)
 	}

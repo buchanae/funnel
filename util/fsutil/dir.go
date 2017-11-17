@@ -1,9 +1,8 @@
-package util
+package fsutil
 
 import (
 	"os"
 	"path"
-	"syscall"
 )
 
 // exists returns whether the given file or directory exists or not
@@ -25,8 +24,6 @@ func EnsureDir(p string) error {
 		return err
 	}
 	if !e {
-		// TODO configurable mode?
-		_ = syscall.Umask(0000)
 		err := os.MkdirAll(p, 0775)
 		if err != nil {
 			return err
