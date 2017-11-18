@@ -1,9 +1,44 @@
 package datastore
 
 import (
+	"cloud.google.com/go/datastore"
+	"fmt"
 	"github.com/ohsu-comp-bio/funnel/events"
 	"github.com/ohsu-comp-bio/funnel/proto/tes"
 )
+
+/*
+Entity group and key structure:
+
+"Task" holds the basic task view.
+
+"TaskPart" holds the various parts of the full view:
+stdout, stderr, system logs, and input content.
+It has an parent link to the "Task".
+*/
+
+func taskKey(id string) *datastore.Key {
+	return datastore.NameKey("Task", id, nil)
+}
+
+func contentKey(task *datastore.Key) *datastore.Key {
+	return datastore.NameKey("TaskPart", "input-content", task)
+}
+
+func syslogKey(task *datastore.Key, attempt uint32) *datastore.Key {
+	k := fmt.Sprintf("syslog-%d", attempt)
+	return datastore.NameKey("TaskPart", k, task)
+}
+
+func stdoutKey(task *datastore.Key, attempt, index uint32) *datastore.Key {
+	k := fmt.Sprintf("stdout-%d-%d", attempt, index)
+	return datastore.NameKey("TaskPart", k, task)
+}
+
+func stderrKey(task *datastore.Key, attempt, index uint32) *datastore.Key {
+	k := fmt.Sprintf("stderr-%d-%d", attempt, index)
+	return datastore.NameKey("TaskPart", k, task)
+}
 
 /*
 Datastore is missing support for some types we need:
@@ -14,11 +49,22 @@ So we need to do some extra work to map a task to/from a []datastore.Property.
 It also allows us to be very selective about what gets saved and indexed.
 */
 
-type event struct {
-	Type                       int32
-	Attempt, Index             int    `datastore:",noindex,omitempty"`
-	Stdout, Stderr, Msg, Level string `datastore:",noindex,omitempty"`
-	Fields                     []kv   `datastore:",noindex,omitempty"`
+type partType int
+
+const (
+	contentPart partType = iota
+	stdoutPart
+	stderrPart
+	syslogPart
+)
+
+type part struct {
+	Type partType `datastore:",noindex"`
+	// Index is used for both input content and executor stdout/err
+	Attempt, Index int      `datastore:",noindex,omitempty"`
+	Stdout, Stderr string   `datastore:",noindex,omitempty"`
+	Content        string   `datastore:",noindex,omitempty"`
+	SystemLogs     []string `datastore:",noindex,omitempty"`
 }
 
 type task struct {
@@ -30,18 +76,20 @@ type task struct {
 	Outputs           []param    `datastore:",noindex,omitempty"`
 	Volumes           []string   `datastore:",noindex,omitempty"`
 	Tags              []kv
-
-	CpuCores      int64    `datastore:",noindex,omitempty"`
-	RamGb, DiskGb float64  `datastore:",noindex,omitempty"`
-	Preemptible   bool     `datastore:",noindex,omitempty"`
-	Zones         []string `datastore:",noindex,omitempty"`
-
-	TaskLogs []tasklog `datastore:",noindex,omitempty"`
+	Resources         *resources `datastore:",noindex,omitempty"`
+	TaskLogs          []tasklog  `datastore:",noindex,omitempty"`
 }
 
 type tasklog struct {
 	*tes.TaskLog
 	Metadata []kv `datastore:",noindex,omitempty"`
+}
+
+type resources struct {
+	CpuCores      int64    `datastore:",noindex,omitempty"`
+	RamGb, DiskGb float64  `datastore:",noindex,omitempty"`
+	Preemptible   bool     `datastore:",noindex,omitempty"`
+	Zones         []string `datastore:",noindex,omitempty"`
 }
 
 type executor struct {
@@ -55,7 +103,7 @@ type param struct {
 	Type                                  int32  `datastore:",noindex,omitempty"`
 }
 
-func fromTask(t *tes.Task) *task {
+func marshalTask(t *tes.Task) *task {
 	z := &task{
 		Id:           t.Id,
 		State:        int32(t.State),
@@ -63,14 +111,16 @@ func fromTask(t *tes.Task) *task {
 		Name:         t.Name,
 		Description:  t.Description,
 		Volumes:      t.Volumes,
-		Tags:         fromMap(t.Tags),
+		Tags:         marshalMap(t.Tags),
 	}
 	if t.Resources != nil {
-		z.CpuCores = int64(t.Resources.CpuCores)
-		z.RamGb = t.Resources.RamGb
-		z.DiskGb = t.Resources.DiskGb
-		z.Preemptible = t.Resources.Preemptible
-		z.Zones = t.Resources.Zones
+		z.Resources = &resources{
+			CpuCores:    int64(t.Resources.CpuCores),
+			RamGb:       t.Resources.RamGb,
+			DiskGb:      t.Resources.DiskGb,
+			Preemptible: t.Resources.Preemptible,
+			Zones:       t.Resources.Zones,
+		}
 	}
 	for _, e := range t.Executors {
 		z.Executors = append(z.Executors, executor{
@@ -80,7 +130,7 @@ func fromTask(t *tes.Task) *task {
 			Stdout:  e.Stdout,
 			Stderr:  e.Stderr,
 			Command: e.Command,
-			Env:     fromMap(e.Env),
+			Env:     marshalMap(e.Env),
 		})
 	}
 	for _, i := range t.Inputs {
@@ -104,26 +154,34 @@ func fromTask(t *tes.Task) *task {
 	for _, i := range t.Logs {
 		z.TaskLogs = append(z.TaskLogs, tasklog{
 			TaskLog:  i,
-			Metadata: fromMap(i.Metadata),
+			Metadata: marshalMap(i.Metadata),
 		})
 	}
 	return z
 }
 
-func toTask(c *task, z *tes.Task) {
+func unmarshalTask(z *tes.Task, props datastore.PropertyList) error {
+	c := &task{}
+	err := datastore.LoadStruct(c, props)
+	if err != nil {
+		return err
+	}
+
 	z.Id = c.Id
 	z.CreationTime = c.CreationTime
 	z.State = tes.State(c.State)
 	z.Name = c.Name
 	z.Description = c.Description
 	z.Volumes = c.Volumes
-	z.Tags = toMap(c.Tags)
-	z.Resources = &tes.Resources{
-		CpuCores:    uint32(c.CpuCores),
-		RamGb:       c.RamGb,
-		DiskGb:      c.DiskGb,
-		Preemptible: c.Preemptible,
-		Zones:       c.Zones,
+	z.Tags = unmarshalMap(c.Tags)
+	if c.Resources != nil {
+		z.Resources = &tes.Resources{
+			CpuCores:    uint32(c.Resources.CpuCores),
+			RamGb:       c.Resources.RamGb,
+			DiskGb:      c.Resources.DiskGb,
+			Preemptible: c.Resources.Preemptible,
+			Zones:       c.Resources.Zones,
+		}
 	}
 	for _, e := range c.Executors {
 		z.Executors = append(z.Executors, &tes.Executor{
@@ -133,7 +191,7 @@ func toTask(c *task, z *tes.Task) {
 			Stdout:  e.Stdout,
 			Stderr:  e.Stderr,
 			Command: e.Command,
-			Env:     toMap(e.Env),
+			Env:     unmarshalMap(e.Env),
 		})
 	}
 	for _, i := range c.Inputs {
@@ -156,27 +214,41 @@ func toTask(c *task, z *tes.Task) {
 	}
 	for _, i := range c.TaskLogs {
 		tl := i.TaskLog
-		tl.Metadata = toMap(i.Metadata)
+		tl.Metadata = unmarshalMap(i.Metadata)
 		z.Logs = append(z.Logs, tl)
 	}
+	return nil
 }
 
-func fromEvent(e *events.Event) *event {
-	z := &event{
-		Type:    int32(e.Type),
+func unmarshalPart(t *tes.Task, props datastore.PropertyList) error {
+	e := &part{}
+	err := datastore.LoadStruct(e, props)
+	if err != nil {
+		return err
+	}
+	switch e.Type {
+	case contentPart:
+		t.Inputs[e.Index].Content = e.Content
+	case stdoutPart:
+		t.GetExecLog(e.Attempt, e.Index).Stdout = e.Stdout
+	case stderrPart:
+		t.GetExecLog(e.Attempt, e.Index).Stderr = e.Stderr
+	}
+	return nil
+}
+
+func marshalEvent(e *events.Event) *part {
+	z := &part{
 		Attempt: int(e.Attempt),
 		Index:   int(e.Index),
 	}
 	switch e.Type {
-	case events.Type_SYSTEM_LOG:
-		l := e.GetSystemLog()
-		z.Msg = l.Msg
-		z.Level = l.Level
-		z.Fields = fromMap(l.Fields)
 	case events.Type_EXECUTOR_STDOUT:
+		z.Type = stdoutPart
 		z.Stdout = e.GetStdout()
 	case events.Type_EXECUTOR_STDERR:
-		z.Stdout = e.GetStderr()
+		z.Type = stderrPart
+		z.Stderr = e.GetStderr()
 	}
 	return z
 }
@@ -185,7 +257,7 @@ type kv struct {
 	Key, Value string
 }
 
-func fromMap(m map[string]string) []kv {
+func marshalMap(m map[string]string) []kv {
 	var out []kv
 	for k, v := range m {
 		out = append(out, kv{k, v})
@@ -193,7 +265,7 @@ func fromMap(m map[string]string) []kv {
 	return out
 }
 
-func toMap(kvs []kv) map[string]string {
+func unmarshalMap(kvs []kv) map[string]string {
 	out := map[string]string{}
 	for _, kv := range kvs {
 		out[kv.Key] = kv.Value

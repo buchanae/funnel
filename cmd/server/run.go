@@ -70,7 +70,7 @@ func NewServer(conf config.Config, log *logger.Logger) (*Server, error) {
 			return nil, dberr(err)
 		}
 		reader = d
-		writers.Add(d)
+		writers.Append(d)
 
 	case "dynamodb":
 		d, err := dynamodb.NewDynamoDB(conf.Server.Databases.DynamoDB)

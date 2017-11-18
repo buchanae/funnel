@@ -23,9 +23,9 @@ func MarshalToString(t *Task) (string, error) {
 var ErrNotFound = errors.New("task not found")
 
 const (
-  Minimal = TaskView_MINIMAL
-  Basic = TaskView_BASIC
-  Full = TaskView_FULL
+	Minimal = TaskView_MINIMAL
+	Basic   = TaskView_BASIC
+	Full    = TaskView_FULL
 )
 
 // GenerateID generates a task ID string.

@@ -6,6 +6,10 @@ import (
 	"github.com/ohsu-comp-bio/funnel/config"
 )
 
+type KV interface {
+	GetMulti()
+}
+
 type Datastore struct {
 	client *datastore.Client
 }

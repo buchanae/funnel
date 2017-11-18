@@ -307,10 +307,6 @@ type AWSConfig struct {
 	MaxRetries int
 	// If both the key and secret are empty AWS credentials will be read from
 	// the environment.
-}
-
-// AWSCredentials describes the configuration for creating AWS Session instances
-type AWSCredentials struct {
 	Key    string
 	Secret string
 }
@@ -324,16 +320,15 @@ type AWSBatch struct {
 	AWS      AWSConfig
 }
 
-type Datastore struct {
-	Project string
-	Prefix  string
-}
-
 // DynamoDB describes the configuration for Amazon DynamoDB backed processes
 // such as the event writer and server.
 type DynamoDB struct {
 	AWS           AWSConfig
 	TableBasename string
+}
+
+type Datastore struct {
+	Project string
 }
 
 // StorageConfig describes configuration for all storage types
