@@ -147,21 +147,24 @@ func NewServer(conf config.Config, log *logger.Logger) (*Server, error) {
 		return nil, fmt.Errorf("unknown backend: '%s'", conf.Backend)
 	}
 
-	return &Server{
-		Server: &server.Server{
-			RPCAddress:       ":" + conf.Server.RPCPort,
-			HTTPPort:         conf.Server.HTTPPort,
-			Password:         conf.Server.Password,
-			DisableHTTPCache: conf.Server.DisableHTTPCache,
-			Log:              log,
-			Tasks: &server.TaskService{
-				Name:  conf.Server.ServiceName,
-				Event: &writers,
-				Read:  reader,
-			},
-			Events: &events.Service{Writer: &writers},
-			Nodes:  nodes,
+	sconf := server.Config{
+		RPCAddress:       ":" + conf.Server.RPCPort,
+		HTTPPort:         conf.Server.HTTPPort,
+		Password:         conf.Server.Password,
+		DisableHTTPCache: conf.Server.DisableHTTPCache,
+		Tasks: &server.TaskService{
+			Name:  conf.Server.ServiceName,
+			Event: &writers,
+			Read:  reader,
 		},
+		Events: &events.Service{Writer: &writers},
+		Nodes:  nodes,
+	}
+	srv := server.NewServer(sconf)
+	srv.Log = log
+
+	return &Server{
+		Server:    srv,
 		Scheduler: sched,
 	}, nil
 }

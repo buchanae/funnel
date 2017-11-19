@@ -18,7 +18,7 @@ import (
 // Server represents a Funnel server. The server handles
 // RPC traffic via gRPC, HTTP traffic for the TES API,
 // and also serves the web dashboard.
-type Server struct {
+type Config struct {
 	RPCAddress       string
 	HTTPPort         string
 	Password         string
@@ -26,59 +26,21 @@ type Server struct {
 	Events           events.EventServiceServer
 	Nodes            pbs.SchedulerServiceServer
 	DisableHTTPCache bool
-	Log              *logger.Logger
 }
 
-// Return a new interceptor function that logs all requests at the Debug level
-func newDebugInterceptor(log *logger.Logger) grpc.UnaryServerInterceptor {
-	// Return a function that is the interceptor.
-	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo,
-		handler grpc.UnaryHandler) (interface{}, error) {
-		log.Debug(
-			"received: "+info.FullMethod,
-			"request", req,
-		)
-		resp, err := handler(ctx, req)
-		log.Debug(
-			"responding: "+info.FullMethod,
-			"resp", resp,
-			"err", err,
-		)
-		return resp, err
-	}
+type Server struct {
+	Log     *logger.Logger
+	conf    Config
+	httpMux http.Handler
+	rpcMux  *runtime.ServeMux
 }
 
-// Serve starts the server and does not block. This will open TCP ports
-// for both RPC and HTTP.
-func (s *Server) Serve(pctx context.Context) error {
-	ctx, cancel := context.WithCancel(pctx)
-	defer cancel()
-
-	// Open TCP connection for RPC
-	lis, err := net.Listen("tcp", s.RPCAddress)
-	if err != nil {
-		return err
-	}
-
-	grpcServer := grpc.NewServer(
-		grpc.UnaryInterceptor(
-			grpc_middleware.ChainUnaryServer(
-				// API auth check.
-				newAuthInterceptor(s.Password),
-				newDebugInterceptor(s.Log),
-			),
-		),
-	)
-
-	dialOpts := []grpc.DialOption{
-		grpc.WithInsecure(),
-	}
+func NewServer(conf Config) *Server {
 
 	// Set up HTTP proxy of gRPC API
 	mux := http.NewServeMux()
 	mar := runtime.JSONPb(tes.Marshaler)
-	grpcMux := runtime.NewServeMux(runtime.WithMarshalerOption("*/*", &mar))
-	runtime.OtherErrorHandler = s.handleError
+	rpcMux := runtime.NewServeMux(runtime.WithMarshalerOption("*/*", &mar))
 
 	dashmux := http.NewServeMux()
 	dashmux.Handle("/", webdash.RootHandler())
@@ -96,43 +58,86 @@ func (s *Server) Serve(pctx context.Context) error {
 			// Set "cache-control: no-store" to disable response caching.
 			// Without this, some servers (e.g. GCE) will cache a response from ListTasks, GetTask, etc.
 			// which results in confusion about the stale data.
-			if s.DisableHTTPCache {
+			if conf.DisableHTTPCache {
 				resp.Header().Set("Cache-Control", "no-store")
 			}
-			grpcMux.ServeHTTP(resp, req)
+			rpcMux.ServeHTTP(resp, req)
 		}
 	})
+	return &Server{
+		conf:    conf,
+		httpMux: mux,
+		rpcMux:  rpcMux,
+	}
+}
+
+func (s *Server) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
+	s.httpMux.ServeHTTP(resp, req)
+}
+
+// Serve starts the server and does not block. This will open TCP ports
+// for both RPC and HTTP.
+func (s *Server) Serve(pctx context.Context) error {
+	ctx, cancel := context.WithCancel(pctx)
+	defer cancel()
+
+	runtime.OtherErrorHandler = s.handleError
+
+	// Open TCP connection for RPC
+	lis, err := net.Listen("tcp", s.conf.RPCAddress)
+	if err != nil {
+		return err
+	}
+	defer lis.Close()
+
+	grpcServerOpts := []grpc.ServerOption{
+		grpc.UnaryInterceptor(
+			grpc_middleware.ChainUnaryServer(
+				// API auth check.
+				newAuthInterceptor(s.conf.Password),
+				newDebugInterceptor(s.Log),
+			),
+		),
+	}
+	grpcServer := grpc.NewServer(grpcServerOpts...)
+
+	// Dial to grpc server, in order to make the http API a client
+	// of the grpc API (how grpc-gateway works).
+	dialOpts := []grpc.DialOption{
+		grpc.WithInsecure(),
+	}
+	conn, err := grpc.DialContext(ctx, s.conf.RPCAddress, dialOpts...)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
 
 	// Register TES service
-	if s.Tasks != nil {
-		tes.RegisterTaskServiceServer(grpcServer, s.Tasks)
-		err := tes.RegisterTaskServiceHandlerFromEndpoint(
-			ctx, grpcMux, s.RPCAddress, dialOpts,
-		)
+	if s.conf.Tasks != nil {
+		tes.RegisterTaskServiceServer(grpcServer, s.conf.Tasks)
+		err := tes.RegisterTaskServiceHandler(ctx, s.rpcMux, conn)
 		if err != nil {
 			return err
 		}
 	}
 
 	// Register Events service
-	if s.Events != nil {
-		events.RegisterEventServiceServer(grpcServer, s.Events)
+	if s.conf.Events != nil {
+		events.RegisterEventServiceServer(grpcServer, s.conf.Events)
 	}
 
 	// Register Scheduler RPC service
-	if s.Nodes != nil {
-		pbs.RegisterSchedulerServiceServer(grpcServer, s.Nodes)
-		err := pbs.RegisterSchedulerServiceHandlerFromEndpoint(
-			ctx, grpcMux, s.RPCAddress, dialOpts,
-		)
+	if s.conf.Nodes != nil {
+		pbs.RegisterSchedulerServiceServer(grpcServer, s.conf.Nodes)
+		err := pbs.RegisterSchedulerServiceHandler(ctx, s.rpcMux, conn)
 		if err != nil {
 			return err
 		}
 	}
 
 	httpServer := &http.Server{
-		Addr:    ":" + s.HTTPPort,
-		Handler: mux,
+		Addr:    ":" + s.conf.HTTPPort,
+		Handler: s.httpMux,
 	}
 
 	var srverr error
@@ -147,7 +152,8 @@ func (s *Server) Serve(pctx context.Context) error {
 	}()
 
 	s.Log.Info("Server listening",
-		"httpPort", s.HTTPPort, "rpcAddress", s.RPCAddress,
+		"httpPort", s.conf.HTTPPort,
+		"rpcAddress", s.conf.RPCAddress,
 	)
 
 	<-ctx.Done()
@@ -185,5 +191,24 @@ func negotiate(req *http.Request) string {
 		return "html"
 	default:
 		return "json"
+	}
+}
+
+// Return a new interceptor function that logs all requests at the Debug level
+func newDebugInterceptor(log *logger.Logger) grpc.UnaryServerInterceptor {
+	// Return a function that is the interceptor.
+	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo,
+		handler grpc.UnaryHandler) (interface{}, error) {
+		log.Debug(
+			"received: "+info.FullMethod,
+			"request", req,
+		)
+		resp, err := handler(ctx, req)
+		log.Debug(
+			"responding: "+info.FullMethod,
+			"resp", resp,
+			"err", err,
+		)
+		return resp, err
 	}
 }
