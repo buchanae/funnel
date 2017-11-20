@@ -1,37 +1,36 @@
 package datastore
 
 import (
-	"cloud.google.com/go/datastore"
-	"context"
+  "google.golang.org/appengine/datastore"
+	oldctx "golang.org/x/net/context"
+  "context"
 	"github.com/ohsu-comp-bio/funnel/events"
 	"github.com/ohsu-comp-bio/funnel/proto/tes"
 )
 
 func (d *Datastore) WriteEvent(ctx context.Context, e *events.Event) error {
-	taskKey := datastore.NameKey("Task", e.Id, nil)
-	// TODO
-	//contentKey := datastore.NameKey("TaskChunk", "0-content", taskKey)
+  tk := taskKey(ctx, e.Id)
 
 	switch e.Type {
 
 	case events.Type_TASK_CREATED:
-		_, err := d.client.Put(ctx, taskKey, marshalTask(e.GetTask()))
+		_, err := datastore.Put(ctx, tk, marshalTask(e.GetTask()))
 		if err != nil {
 			return err
 		}
 
 	case events.Type_EXECUTOR_STDOUT:
-		_, err := d.client.Put(ctx, stdoutKey(taskKey, e.Attempt, e.Index), marshalEvent(e))
+		_, err := datastore.Put(ctx, stdoutKey(ctx, tk, e.Attempt, e.Index), marshalEvent(e))
 		return err
 
 	case events.Type_EXECUTOR_STDERR:
-		_, err := d.client.Put(ctx, stderrKey(taskKey, e.Attempt, e.Index), marshalEvent(e))
+		_, err := datastore.Put(ctx, stderrKey(ctx, tk, e.Attempt, e.Index), marshalEvent(e))
 		return err
 
 	default:
-		_, err := d.client.RunInTransaction(ctx, func(tx *datastore.Transaction) error {
+    err := datastore.RunInTransaction(ctx, func(ctx oldctx.Context) error {
 			props := datastore.PropertyList{}
-			err := tx.Get(taskKey, &props)
+			err := datastore.Get(ctx, tk, &props)
 			if err != nil {
 				return err
 			}
@@ -44,9 +43,9 @@ func (d *Datastore) WriteEvent(ctx context.Context, e *events.Event) error {
 				return err
 			}
 
-			_, err = tx.Put(taskKey, marshalTask(task))
+			_, err = datastore.Put(ctx, tk, marshalTask(task))
 			return err
-		})
+		}, nil)
 		return err
 	}
 	return nil

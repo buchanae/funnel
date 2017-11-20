@@ -30,7 +30,7 @@ proto:
 	@cd proto/tes && protoc \
 		$(PROTO_INC) \
 		--go_out=plugins=grpc:. \
-		--grpc-gateway_out=logtostderr=true:. \
+		--grpc-gateway_out=logtostderr=true,request_context=true:. \
 		tes.proto
 	@cd proto/scheduler && protoc \
 		$(PROTO_INC) \

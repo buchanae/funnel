@@ -1,15 +1,15 @@
 package datastore
 
 import (
-	"cloud.google.com/go/datastore"
+  "google.golang.org/appengine"
+  "google.golang.org/appengine/datastore"
 	"github.com/ohsu-comp-bio/funnel/proto/tes"
 	"golang.org/x/net/context"
-	"google.golang.org/api/iterator"
 )
 
 func (d *Datastore) GetTask(ctx context.Context, req *tes.GetTaskRequest) (*tes.Task, error) {
-	key := datastore.NameKey("Task", req.Id, nil)
-	res, err := d.GetTasks(ctx, []*datastore.Key{key}, req.View)
+  tk := taskKey(ctx, req.Id)
+	res, err := d.GetTasks(ctx, []*datastore.Key{tk}, req.View)
 	if err != nil {
 		return nil, err
 	}
@@ -19,7 +19,7 @@ func (d *Datastore) GetTask(ctx context.Context, req *tes.GetTaskRequest) (*tes.
 func (d *Datastore) GetTasks(ctx context.Context, keys []*datastore.Key, view tes.TaskView) ([]*tes.Task, error) {
 
 	proplists := make([]datastore.PropertyList, len(keys), len(keys))
-	err := d.client.GetMulti(ctx, keys, proplists)
+	err := datastore.GetMulti(ctx, keys, proplists)
 	if err != nil {
 		return nil, err
 	}
@@ -40,14 +40,14 @@ func (d *Datastore) GetTasks(ctx context.Context, keys []*datastore.Key, view te
 		case tes.Minimal:
 			task = task.GetMinimalView()
 		case tes.Full:
-			tk := taskKey(task.Id)
+			tk := taskKey(ctx, task.Id)
 			byID[task.Id] = task
-			parts = append(parts, contentKey(tk))
+			parts = append(parts, contentKey(ctx, tk))
 			for attempt, a := range task.Logs {
-				parts = append(parts, syslogKey(tk, uint32(attempt)))
+				parts = append(parts, syslogKey(ctx, tk, uint32(attempt)))
 				for index := range a.Logs {
-					parts = append(parts, stdoutKey(tk, uint32(attempt), uint32(index)))
-					parts = append(parts, stderrKey(tk, uint32(attempt), uint32(index)))
+					parts = append(parts, stdoutKey(ctx, tk, uint32(attempt), uint32(index)))
+					parts = append(parts, stderrKey(ctx, tk, uint32(attempt), uint32(index)))
 				}
 			}
 		}
@@ -58,8 +58,8 @@ func (d *Datastore) GetTasks(ctx context.Context, keys []*datastore.Key, view te
 	// Load the full view parts
 	if view == tes.Full {
 		proplists := make([]datastore.PropertyList, len(parts), len(parts))
-		err := d.client.GetMulti(ctx, parts, proplists)
-		merr, isMerr := err.(datastore.MultiError)
+		err := datastore.GetMulti(ctx, parts, proplists)
+		merr, isMerr := err.(appengine.MultiError)
 		if err != nil && !isMerr {
 			return nil, err
 		}
@@ -70,7 +70,7 @@ func (d *Datastore) GetTasks(ctx context.Context, keys []*datastore.Key, view te
 				// That's ok, skip this part.
 				continue
 			}
-			id := parts[i].Parent.Name
+			id := parts[i].Parent().StringID()
 			task := byID[id]
 			if err := unmarshalPart(task, props); err != nil {
 				return nil, err
@@ -108,10 +108,10 @@ func (d *Datastore) ListTasks(ctx context.Context, req *tes.ListTasksRequest) (*
 
 	var keys []*datastore.Key
 
-	it := d.client.Run(ctx, q)
+	it := q.Run(ctx)
 	for {
 		key, err := it.Next(nil)
-		if err == iterator.Done {
+		if err == datastore.Done {
 			break
 		}
 		if err != nil {

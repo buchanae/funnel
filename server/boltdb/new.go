@@ -4,7 +4,6 @@ import (
 	"github.com/boltdb/bolt"
 	"github.com/ohsu-comp-bio/funnel/config"
 	"github.com/ohsu-comp-bio/funnel/util/fsutil"
-	"golang.org/x/net/context"
 	"time"
 )
 

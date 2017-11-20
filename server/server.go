@@ -115,7 +115,7 @@ func (s *Server) Serve(pctx context.Context) error {
 	// Register TES service
 	if s.conf.Tasks != nil {
 		tes.RegisterTaskServiceServer(grpcServer, s.conf.Tasks)
-		err := tes.RegisterTaskServiceHandler(ctx, s.rpcMux, conn)
+		err := tes.RegisterTaskServiceHandler(s.rpcMux, s.conf.Tasks)
 		if err != nil {
 			return err
 		}

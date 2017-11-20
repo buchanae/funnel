@@ -1,7 +1,8 @@
 package datastore
 
 import (
-	"cloud.google.com/go/datastore"
+  "golang.org/x/net/context"
+  "google.golang.org/appengine/datastore"
 	"fmt"
 	"github.com/ohsu-comp-bio/funnel/events"
 	"github.com/ohsu-comp-bio/funnel/proto/tes"
@@ -17,27 +18,27 @@ stdout, stderr, system logs, and input content.
 It has an parent link to the "Task".
 */
 
-func taskKey(id string) *datastore.Key {
-	return datastore.NameKey("Task", id, nil)
+func taskKey(ctx context.Context, id string) *datastore.Key {
+	return datastore.NewKey(ctx, "Task", id, 0, nil)
 }
 
-func contentKey(task *datastore.Key) *datastore.Key {
-	return datastore.NameKey("TaskPart", "input-content", task)
+func contentKey(ctx context.Context, task *datastore.Key) *datastore.Key {
+	return datastore.NewKey(ctx, "TaskPart", "input-content", 0, task)
 }
 
-func syslogKey(task *datastore.Key, attempt uint32) *datastore.Key {
+func syslogKey(ctx context.Context, task *datastore.Key, attempt uint32) *datastore.Key {
 	k := fmt.Sprintf("syslog-%d", attempt)
-	return datastore.NameKey("TaskPart", k, task)
+	return datastore.NewKey(ctx, "TaskPart", k, 0, task)
 }
 
-func stdoutKey(task *datastore.Key, attempt, index uint32) *datastore.Key {
+func stdoutKey(ctx context.Context, task *datastore.Key, attempt, index uint32) *datastore.Key {
 	k := fmt.Sprintf("stdout-%d-%d", attempt, index)
-	return datastore.NameKey("TaskPart", k, task)
+	return datastore.NewKey(ctx, "TaskPart", k, 0, task)
 }
 
-func stderrKey(task *datastore.Key, attempt, index uint32) *datastore.Key {
+func stderrKey(ctx context.Context, task *datastore.Key, attempt, index uint32) *datastore.Key {
 	k := fmt.Sprintf("stderr-%d-%d", attempt, index)
-	return datastore.NameKey("TaskPart", k, task)
+	return datastore.NewKey(ctx, "TaskPart", k, 0, task)
 }
 
 /*

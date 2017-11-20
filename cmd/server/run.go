@@ -65,10 +65,7 @@ func NewServer(conf config.Config, log *logger.Logger) (*Server, error) {
 		writers.Append(b)
 
 	case "datastore":
-		d, err := datastore.NewDatastore(conf.Server.Databases.Datastore)
-		if err != nil {
-			return nil, dberr(err)
-		}
+		d := &datastore.Datastore{}
 		reader = d
 		writers.Append(d)
 
