@@ -1,8 +1,11 @@
 package worker
 
 import (
+	"fmt"
+	"github.com/golang/protobuf/jsonpb"
 	"github.com/ohsu-comp-bio/funnel/proto/tes"
 	"golang.org/x/net/context"
+	"os"
 )
 
 // GenericTaskReader provides read access to tasks.
@@ -31,4 +34,33 @@ func (r *GenericTaskReader) State() (tes.State, error) {
 		View: tes.TaskView_MINIMAL,
 	})
 	return t.GetState(), err
+}
+
+type FileTaskReader struct {
+	task *tes.Task
+}
+
+func NewFileTaskReader(path string) (*FileTaskReader, error) {
+	var task tes.Task
+
+	f, err := os.Open(path)
+	defer f.Close()
+	if err != nil {
+		return nil, err
+	}
+
+	err = jsonpb.Unmarshal(f, &task)
+	if err != nil {
+		return nil, fmt.Errorf("can't load task: %s", err)
+	}
+	task.Id = tes.GenerateID()
+	return &FileTaskReader{&task}, nil
+}
+
+func (f *FileTaskReader) Task() (*tes.Task, error) {
+	return f.task, nil
+}
+
+func (f *FileTaskReader) State() (tes.State, error) {
+	return tes.Unknown, nil
 }

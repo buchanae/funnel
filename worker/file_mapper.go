@@ -53,6 +53,10 @@ func NewFileMapper(dir string) *FileMapper {
 
 // MapTask adds all the volumes, inputs, and outputs in the given Task to the FileMapper.
 func (mapper *FileMapper) MapTask(task *tes.Task) error {
+	err := fsutil.EnsureDir(mapper.dir)
+	if err != nil {
+		return fmt.Errorf("failed to create worker baseDir: %v", err)
+	}
 
 	// Add all the volumes to the mapper
 	for _, vol := range task.Volumes {

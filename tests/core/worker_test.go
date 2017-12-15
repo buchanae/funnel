@@ -129,7 +129,6 @@ func TestLargeLogRate(t *testing.T) {
 		},
 	}
 
-	baseDir := path.Join(conf.WorkDir, task.Id)
 	reader := taskReader{&task}
 
 	counts := &eventCounter{}
@@ -138,7 +137,6 @@ func TestLargeLogRate(t *testing.T) {
 
 	w := worker.DefaultWorker{
 		Conf:       conf,
-		Mapper:     worker.NewFileMapper(baseDir),
 		Store:      storage.Storage{},
 		TaskReader: reader,
 		Event:      events.NewTaskWriter(task.Id, 0, conf.Logger.Level, m),
