@@ -1,25 +1,38 @@
 package task
 
 import (
+  "context"
 	"fmt"
 	"github.com/ohsu-comp-bio/funnel/client"
 	"github.com/ohsu-comp-bio/funnel/proto/tes"
-	"golang.org/x/net/context"
 	"io"
 )
 
-// Cancel runs the "task cancel" CLI command, which connects to the server,
-// calls CancelTask() on each ID, and writes output to the given writer.
-func Cancel(server string, ids []string, writer io.Writer) error {
-	cli, err := client.NewClient(server)
+type CancelOpts struct {
+  TaskOpts
+  IDs []string `args`
+}
+
+func DefaultCancelOpts() CancelOpts {
+  return CancelOpts{TaskOpts: DefaultTaskOpts()}
+}
+
+// Cancel tasks by ID.
+func Cancel(ctx context.Context, opts CancelOpts) error {
+//func Cancel(server string, ids []string, writer io.Writer) error {
+  if len(opts.IDs) == 0 {
+    return fmt.Errorf("zero task IDs given")
+  }
+
+	cli, err := client.NewClient(opts.Server)
 	if err != nil {
 		return err
 	}
 
 	res := []string{}
 
-	for _, taskID := range ids {
-		resp, err := cli.CancelTask(context.Background(), &tes.CancelTaskRequest{Id: taskID})
+	for _, taskID := range opts.IDs {
+		resp, err := cli.CancelTask(ctx, &tes.CancelTaskRequest{Id: taskID})
 		if err != nil {
 			return err
 		}
@@ -32,7 +45,7 @@ func Cancel(server string, ids []string, writer io.Writer) error {
 	}
 
 	for _, x := range res {
-		fmt.Fprintln(writer, x)
+		fmt.Fprintln(opts.Out, x)
 	}
 	return nil
 }

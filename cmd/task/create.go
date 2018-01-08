@@ -1,20 +1,40 @@
 package task
 
 import (
+  "context"
 	"fmt"
 	"github.com/golang/protobuf/jsonpb"
 	"github.com/ohsu-comp-bio/funnel/client"
 	"github.com/ohsu-comp-bio/funnel/proto/tes"
-	"golang.org/x/net/context"
-	"io"
 	"os"
 )
 
-// Create runs the "task create" CLI command, connecting to the server,
-// calling CreateTask, and writing output to the given writer.
-// Tasks are loaded from the "files" arg. "files" are file paths to JSON objects.
-func Create(server string, files []string, writer io.Writer) error {
-	cli, err := client.NewClient(server)
+var DefaultCreate = Create{
+  Task: DefaultTask,
+  Command: util.Command{
+    Names: []string{
+      "task create",
+      "create tasks",
+    },
+		Short: "Create one or more tasks to run on the server.",
+  },
+}
+
+// Create tasks.
+type Create struct {
+  Task
+  util.Command
+}
+
+// Run the command.
+func (c *Create) Run(ctx context.Context) error {
+  files := c.Args
+
+  if len(files) == 0 {
+    return fmt.Errorf("zero task files given")
+  }
+
+	cli, err := client.NewClient(c.Server)
 	if err != nil {
 		return err
 	}
@@ -36,7 +56,7 @@ func Create(server string, files []string, writer io.Writer) error {
 			return fmt.Errorf("can't load task: %s", err)
 		}
 
-		r, err := cli.CreateTask(context.Background(), &task)
+		r, err := cli.CreateTask(ctx, &task)
 		if err != nil {
 			return err
 		}
@@ -44,7 +64,7 @@ func Create(server string, files []string, writer io.Writer) error {
 	}
 
 	for _, x := range res {
-		fmt.Fprintln(writer, x)
+		fmt.Fprintln(c.Out, x)
 	}
 
 	return nil

@@ -1,18 +1,30 @@
 package task
 
 import (
+  "context"
 	"github.com/ohsu-comp-bio/funnel/client"
-	"golang.org/x/net/context"
 )
 
-// Wait runs the "task wait" CLI command, which polls the server,
-// calling GetTask() for each ID, and blocking until the tasks have
-// reached a terminal state.
-func Wait(server string, ids []string) error {
-	cli, err := client.NewClient(server)
+type WaitOpts struct {
+  TaskOpts
+  IDs []string `args`
+}
+
+func DefaultWaitOpts() WaitOpts {
+  return WaitOpts{TaskOpts: DefaultTaskOpts()}
+}
+
+// Wait for a task to finish.
+func Wait(ctx context.Context, opts WaitOpts) error {
+//func Wait(server string, ids []string) error {
+  if len(opts.IDs) == 0 {
+    return fmt.Errorf("zero task IDs given")
+  }
+
+	cli, err := client.NewClient(opts.Server)
 	if err != nil {
 		return err
 	}
 
-	return cli.WaitForTask(context.Background(), ids...)
+	return cli.WaitForTask(ctx, opts.IDs...)
 }
