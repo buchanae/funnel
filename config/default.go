@@ -29,6 +29,7 @@ func DefaultConfig() Config {
 		DisableHTTPCache:    true,
 		RPCClientTimeout:    time.Second * 60,
 		RPCClientMaxRetries: 10,
+		User:                "funnel",
 	}
 
 	c := Config{
