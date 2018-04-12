@@ -13,6 +13,7 @@ import (
 	"github.com/alecthomas/units"
 	"github.com/ncw/swift"
 	"github.com/ohsu-comp-bio/funnel/config"
+	"github.com/ohsu-comp-bio/funnel/logger"
 	"github.com/ohsu-comp-bio/funnel/tes"
 	"github.com/ohsu-comp-bio/funnel/util"
 	"github.com/ohsu-comp-bio/funnel/util/fsutil"
@@ -176,7 +177,10 @@ func (sw *SwiftBackend) PutFile(ctx context.Context, rawurl string, hostPath str
 	if err != nil {
 		return err
 	}
-	defer reader.Close()
+	defer func() {
+    err := reader.Close()
+    logger.Debug("READER CLOSE", err)
+  }()
 
 	var writer io.WriteCloser
 	var checkHash = true
@@ -202,12 +206,14 @@ func (sw *SwiftBackend) PutFile(ctx context.Context, rawurl string, hostPath str
 	}
 	defer func() {
 		cerr := writer.Close()
+    logger.Debug("CLOSE", err)
 		if cerr != nil {
 			err = fmt.Errorf("%v; %v", err, cerr)
 		}
 	}()
 
 	_, err = io.Copy(writer, fsutil.Reader(ctx, reader))
+  logger.Debug("COPY", err)
 	return err
 }
 
