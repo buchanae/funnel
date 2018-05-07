@@ -214,6 +214,19 @@ func NewServer(ctx context.Context, conf config.Config, log *logger.Logger) (*Se
 
 	writer = &events.ErrLogger{Writer: writer, Log: log}
 
+	var taskService tes.TaskServiceServer
+	taskService = &server.TaskService{
+		Name:    conf.Server.ServiceName,
+		Event:   writer,
+		Compute: compute,
+		Read:    reader,
+		Log:     log,
+	}
+
+	if conf.Server.CallCaching {
+		taskService = &server.TaskCache{TaskServiceServer: taskService}
+	}
+
 	return &Server{
 		Server: &server.Server{
 			RPCAddress:       ":" + conf.Server.RPCPort,
@@ -222,15 +235,9 @@ func NewServer(ctx context.Context, conf config.Config, log *logger.Logger) (*Se
 			Password:         conf.Server.Password,
 			DisableHTTPCache: conf.Server.DisableHTTPCache,
 			Log:              log,
-			Tasks: &server.TaskService{
-				Name:    conf.Server.ServiceName,
-				Event:   writer,
-				Compute: compute,
-				Read:    reader,
-				Log:     log,
-			},
-			Events: &events.Service{Writer: writer},
-			Nodes:  nodes,
+			Tasks:            taskService,
+			Events:           &events.Service{Writer: writer},
+			Nodes:            nodes,
 		},
 		Scheduler: sched,
 	}, nil

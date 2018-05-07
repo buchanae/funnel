@@ -61,6 +61,8 @@ type Server struct {
 	// Time between retries follows an exponential backoff starting at 5 seconds
 	// up to 1 minute
 	RPCClientMaxRetries uint
+
+	CallCaching bool
 }
 
 // HTTPAddress returns the HTTP address based on HostName and HTTPPort
