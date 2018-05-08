@@ -2,6 +2,8 @@ package events
 
 import (
 	"bytes"
+	"context"
+	"io"
 
 	"github.com/golang/protobuf/jsonpb"
 )
@@ -22,4 +24,19 @@ func Marshal(ev *Event) (string, error) {
 func Unmarshal(b []byte, ev *Event) error {
 	r := bytes.NewReader(b)
 	return jsonpb.Unmarshal(r, ev)
+}
+
+var CompactMarshaler = &jsonpb.Marshaler{}
+
+type JSONWriter struct {
+	Output io.Writer
+}
+
+func (j *JSONWriter) WriteEvent(ctx context.Context, ev *Event) error {
+	err := CompactMarshaler.Marshal(j.Output, ev)
+	if err != nil {
+		return err
+	}
+	_, err = io.WriteString(j.Output, "\n")
+	return err
 }

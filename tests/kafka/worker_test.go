@@ -50,7 +50,7 @@ func TestKafkaWorkerRun(t *testing.T) {
 	m := &events.MultiWriter{b, l}
 
 	// Read events from kafka, write into task builder.
-	_, err := events.NewKafkaReader(ctx, conf.Kafka, m)
+	_, err := events.NewKafkaReader(ctx, conf.Kafka, events.KafkaOffsetNewest, m)
 	if err != nil {
 		t.Fatal(err)
 	}

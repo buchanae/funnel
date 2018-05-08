@@ -7,6 +7,11 @@ import (
 	"github.com/ohsu-comp-bio/funnel/config"
 )
 
+const (
+	KafkaOffsetOldest = sarama.OffsetOldest
+	KafkaOffsetNewest = sarama.OffsetNewest
+)
+
 // KafkaWriter writes events to a Kafka topic.
 type KafkaWriter struct {
 	conf     config.Kafka
@@ -58,14 +63,13 @@ type KafkaReader struct {
 }
 
 // NewKafkaReader creates a new event reader for reading events from a Kafka topic and writing them to the given Writer.
-func NewKafkaReader(ctx context.Context, conf config.Kafka, w Writer) (*KafkaReader, error) {
+func NewKafkaReader(ctx context.Context, conf config.Kafka, offset int64, w Writer) (*KafkaReader, error) {
 	con, err := sarama.NewConsumer(conf.Servers, nil)
 	if err != nil {
 		return nil, err
 	}
 
-	// TODO better handling of partition and offset.
-	p, err := con.ConsumePartition(conf.Topic, 0, sarama.OffsetNewest)
+	p, err := con.ConsumePartition(conf.Topic, 0, offset)
 	if err != nil {
 		return nil, err
 	}
