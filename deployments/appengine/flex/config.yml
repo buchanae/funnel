@@ -1,0 +1,29 @@
+Database: datastore
+
+Compute: local
+
+EventWriters: 
+  - datastore
+
+Logger:
+  # Logging levels: debug, info, error
+  Level: info
+
+Server:
+  # Hostname of the Funnel server.
+  HostName: localhost
+
+  # Port used for HTTP communication and the web dashboard.
+  HTTPPort: 8080
+
+  # Port used for RPC communication.
+  RPCPort: 9090
+
+# Google Cloud Datastore task database.
+Datastore:
+  Project: "funnel-165618"
+
+# Local file system.
+LocalStorage:
+  # Whitelist of local directory paths which Funnel is allowed to access.
+  AllowedDirs: []
