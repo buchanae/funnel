@@ -1,0 +1,7 @@
+FROM docker:stable-dind
+ADD funnel /opt/funnel/funnel
+ADD start.sh /opt/funnel/start.sh
+VOLUME /opt/funnel/funnel-work-dir
+WORKDIR /opt/funnel
+ENTRYPOINT ["/opt/funnel/start.sh"]
+CMD []

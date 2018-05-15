@@ -30,9 +30,17 @@ archive:
 
 dockers:
   - image: ohsucompbio/funnel
+    binary: funnel
     dockerfile: ./docker/Dockerfile
     tag_templates:
       - "{{ .Version }}"
+  - image: ohsucompbio/funnel-dind
+    binary: funnel
+    dockerfile: ./deployments/dind/Dockerfile-dind
+    tag_templates:
+      - "{{ .Version }}"
+    extra_files:
+      - ./deployments/dind/start.sh
 
 brew:
   github:
